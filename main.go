@@ -91,6 +91,7 @@ func main() {
 	}
 
 	// check directories or create it
+	fmt.Println(os.Getenv("WG_CLIENTS_DIR"))
 	if !util.DirectoryExists(filepath.Join(os.Getenv("WG_CLIENTS_DIR"))) {
 		err := os.Mkdir(filepath.Join(os.Getenv("WG_CLIENTS_DIR")), 0755)
 		if err != nil {
@@ -139,10 +140,9 @@ func main() {
 	if os.Getenv("HTTP_PORT") != "" {
 		// creates a gin router with default middleware: logger and recovery (crash-free) middleware
 		ginApp := gin.Default()
-
 		// cors middleware
 		config := cors.DefaultConfig()
-		config.AllowAllOrigins = true
+		config.AllowOrigins = []string{os.Getenv("GATEWAY_DOMAIN")}
 		ginApp.Use(cors.New(config))
 
 		// protection middleware

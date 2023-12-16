@@ -15,7 +15,7 @@ import (
 // Erebrus Version
 var Version = "1.0"
 
-//Hostname
+// Hostname
 var hostname, _ = os.Hostname()
 
 var (
@@ -146,7 +146,7 @@ func GetIPFromCidr(cidr string) (string, error) {
 	return ip.String(), nil
 }
 
-//  http://play.golang.org/p/m8TNTtygK0
+// http://play.golang.org/p/m8TNTtygK0
 func inc(ip net.IP) {
 	for j := len(ip) - 1; j >= 0; j-- {
 		ip[j]++

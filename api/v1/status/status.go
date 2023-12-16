@@ -17,14 +17,15 @@ func ApplyRoutes(r *gin.RouterGroup) {
 
 // swagger:route GET /server/status Server statusServer
 //
-// Get Server status
+// # Get Server status
 //
 // Retrieves the server  status details.
 // responses:
-//  200: serverStatusResponse
-//  400: badRequestResponse
-//	401: unauthorizedResponse
-//  500: serverErrorResponse
+//
+//	 200: serverStatusResponse
+//	 400: badRequestResponse
+//		401: unauthorizedResponse
+//	 500: serverErrorResponse
 func GetStatus(c *gin.Context) {
 	status_data, err := core.GetServerStatus()
 	if err != nil {
