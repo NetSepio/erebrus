@@ -1,14 +1,8 @@
 name: "[MAIN] Docker Image Build and Publish"
 
 on:
-  # schedule:
-  #   - cron: '16 3 * * *'
   push:
-    branches: [ "main" ]
-    # Publish semver tags as releases.
-    tags: [ 'v*.*.*' ]
-  # pull_request:
-  #   branches: [ "main" ]
+    branches: ["main"]
 
 env:
   # Use docker.io for Docker Hub if empty
@@ -16,11 +10,8 @@ env:
   # github.repository as <account>/<repo>
   IMAGE_NAME: ${{ github.repository }}
 
-
 jobs:
-
   ghcr:
-
     name: Deploy to GitHub Container Registry
     runs-on: ubuntu-latest
 
@@ -35,74 +26,30 @@ jobs:
       - name: Checkout repository
         uses: actions/checkout@v3
 
-      # Install the cosign tool except on PR
-      # https://github.com/sigstore/cosign-installer
-      - name: Install cosign
-        if: github.event_name != 'pull_request'
-        uses: sigstore/cosign-installer@f3c664df7af409cb4873aa5068053ba9d61a57b6 #v2.6.0
-        with:
-          cosign-release: 'v1.11.0'
-
-
       # Workaround: https://github.com/docker/build-push-action/issues/461
       - name: Setup Docker buildx
-        uses: docker/setup-buildx-action@79abd3f86f79a9d68a23c75a09a9a85889262adf
+        uses: sigstore/cosign-installer@v3.1.1
+      - name: Check install!
+        run: cosign version
 
-      # Login against a Docker registry except on PR
-      # https://github.com/docker/login-action
-      - name: Log into registry ${{ env.REGISTRY }}
+      - name: Login to GitHub Container Registry ${{ env.REGISTRY }}
         if: github.event_name != 'pull_request'
         uses: docker/login-action@v1
         with:
           registry: ${{ env.REGISTRY }}
-          username: ${{ github.actor }}
-          password: ${{ secrets.GITHUB_TOKEN }}
-
-      # Extract metadata (tags, labels) for Docker
-      # https://github.com/docker/metadata-action
-      - name: Extract Docker metadata
-        id: meta
-        uses: docker/metadata-action@98669ae865ea3cffbcbaa878cf57c20bbf1c6c38
-        with:
-          images: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}
+          username: ${{ secrets.GHCR_USERNAME }}
+          password: ${{ secrets.GHCR_TOKEN }}
 
       - name: downcase REPO
         run: echo "REPO=${GITHUB_REPOSITORY,,}" >>${GITHUB_ENV}
 
-      # Build and push Docker image with Buildx (don't push on PR)
-      # https://github.com/docker/build-push-action
-      - name: Build and push Docker image
+      - name: Build and Push Docker Image
         run: |
           export CURRENT_BRANCH=${GITHUB_REF#refs/heads/}
           export TAG=$([[ $CURRENT_BRANCH == "main" ]] && echo $CURRENT_BRANCH || echo "latest")
-          export GITHUB_REF_IMAGE=ghcr.io/thelazarusnetwork/erebrus:$GITHUB_SHA
-          export GITHUB_BRANCH_IMAGE=ghcr.io/thelazarusnetwork/erebrus:$TAG
+          export GITHUB_REF_IMAGE=ghcr.io/netsepio/erebrus:$GITHUB_SHA
+          export GITHUB_BRANCH_IMAGE=ghcr.io/netsepio/erebrus:$TAG
           docker build -t $GITHUB_REF_IMAGE -t $GITHUB_BRANCH_IMAGE .
           echo "Pushing Image to GitHub Container Registry"
           docker push $GITHUB_REF_IMAGE
           docker push $GITHUB_BRANCH_IMAGE
-
-  dockerhub:
-  
-    name: Deploy to Docker Hub
-    runs-on: ubuntu-latest
-
-    steps:
-    
-    - name: Checkout
-      uses: actions/checkout@v2
-    
-    - name: Login to DockerHub
-      uses: docker/login-action@v1
-      with:
-        username: ${{ secrets.DOCKERHUB_USERNAME }}
-        password: ${{ secrets.DOCKERHUB_TOKEN }}
-      
-    - name: Build and push
-      id: docker_build
-      uses: docker/build-push-action@v2
-      with:
-        context: .
-        file: ./Dockerfile
-        push: true
-        tags: lazarusnetwork/erebrus:latest
