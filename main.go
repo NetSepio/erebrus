@@ -81,7 +81,7 @@ func main() {
 
 	// check directories or create it
 	if !util.DirectoryExists(filepath.Join(os.Getenv("WG_CONF_DIR"))) {
-		err := os.Mkdir(filepath.Join(os.Getenv("WG_CONF_DIR")), 0755)
+		err := os.Mkdir(os.Getenv("WG_CONF_DIR"), 0755)
 		if err != nil {
 			log.WithFields(log.Fields{
 				"err": err,
@@ -93,7 +93,7 @@ func main() {
 	// check directories or create it
 	fmt.Println(os.Getenv("WG_CLIENTS_DIR"))
 	if !util.DirectoryExists(filepath.Join(os.Getenv("WG_CLIENTS_DIR"))) {
-		err := os.Mkdir(filepath.Join(os.Getenv("WG_CLIENTS_DIR")), 0755)
+		err := os.Mkdir(os.Getenv("WG_CLIENTS_DIR"), 0755)
 		if err != nil {
 			log.WithFields(log.Fields{
 				"err": err,
