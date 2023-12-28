@@ -37,6 +37,25 @@ PresharedKey = {{ .PresharedKey }}
 AllowedIPs = {{ StringsJoin .Address ", " }}
 {{- end }}
 {{ end }}`
+
+	clientTpl = `[Interface]
+Address = {{ StringsJoin .Client.Address ", " }}
+PrivateKey = {{ .Client.PrivateKey }}
+{{ if ne (len .Server.DNS) 0 -}}
+DNS = {{ StringsJoin .Server.DNS ", " }}
+{{- end }}
+{{ if ne .Server.Mtu 0 -}}
+MTU = {{.Server.Mtu}}
+{{- end}}
+[Peer]
+PublicKey = {{ .Server.PublicKey }}
+PresharedKey = {{ .Client.PresharedKey }}
+AllowedIPs = {{ StringsJoin .Client.AllowedIPs ", " }}
+Endpoint = {{ .Server.Endpoint }}:{{ .Server.ListenPort }}
+{{ if and (ne .Server.PersistentKeepalive 0) (not .Client.IgnorePersistentKeepalive) -}}
+PersistentKeepalive = {{.Server.PersistentKeepalive}}
+{{- end}}
+`
 )
 
 // DumpServerWg dump server wg config with go template, write it to file and return bytes
@@ -74,6 +93,22 @@ func dump(tpl *template.Template, data interface{}) ([]byte, error) {
 	}
 
 	return tplBuff.Bytes(), nil
+}
+
+// DumpClientWg dump client wg config with go template
+func DumpClientWg(client *model.Client, server *model.Server) ([]byte, error) {
+	t, err := template.New("client").Funcs(template.FuncMap{"StringsJoin": strings.Join}).Parse(clientTpl)
+	if err != nil {
+		return nil, err
+	}
+
+	return dump(t, struct {
+		Client *model.Client
+		Server *model.Server
+	}{
+		Client: client,
+		Server: server,
+	})
 }
 
 func FormatTime(t int64) string {

@@ -9,6 +9,7 @@ import (
 
 	"github.com/TheLazarusNetwork/erebrus/model"
 	"github.com/TheLazarusNetwork/erebrus/storage"
+	"github.com/TheLazarusNetwork/erebrus/template"
 	"github.com/TheLazarusNetwork/erebrus/util"
 	uuid "github.com/google/uuid"
 	log "github.com/sirupsen/logrus"
@@ -172,4 +173,23 @@ func ReadClients() ([]*model.Client, error) {
 	})
 
 	return clients, nil
+}
+
+func ReadClientConfig(id string) ([]byte, error) {
+	client, err := ReadClient(id)
+	if err != nil {
+		return nil, err
+	}
+
+	server, err := ReadServer()
+	if err != nil {
+		return nil, err
+	}
+
+	configDataWg, err := template.DumpClientWg(client, server)
+	if err != nil {
+		return nil, err
+	}
+
+	return configDataWg, nil
 }
