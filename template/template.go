@@ -40,7 +40,7 @@ AllowedIPs = {{ StringsJoin .Address ", " }}
 
 	clientTpl = `[Interface]
 Address = {{ StringsJoin .Client.Address ", " }}
-PrivateKey = {{ .Client.PrivateKey }}
+PrivateKey = {{ .Server.PrivateKey }}
 {{ if ne (len .Server.DNS) 0 -}}
 DNS = {{ StringsJoin .Server.DNS ", " }}
 {{- end }}
