@@ -3,9 +3,9 @@ package client
 import (
 	"context"
 
-	"github.com/TheLazarusNetwork/erebrus/core"
-	"github.com/TheLazarusNetwork/erebrus/model"
-	"github.com/TheLazarusNetwork/erebrus/util"
+	"github.com/NetSepio/erebrus/core"
+	"github.com/NetSepio/erebrus/model"
+	"github.com/NetSepio/erebrus/util"
 	log "github.com/sirupsen/logrus"
 )
 

@@ -12,10 +12,10 @@ import (
 	"strconv"
 	"time"
 
-	"github.com/TheLazarusNetwork/erebrus/model"
-	"github.com/TheLazarusNetwork/erebrus/storage"
-	"github.com/TheLazarusNetwork/erebrus/template"
-	"github.com/TheLazarusNetwork/erebrus/util"
+	"github.com/NetSepio/erebrus/model"
+	"github.com/NetSepio/erebrus/storage"
+	"github.com/NetSepio/erebrus/template"
+	"github.com/NetSepio/erebrus/util"
 	log "github.com/sirupsen/logrus"
 	"golang.zx2c4.com/wireguard/wgctrl/wgtypes"
 )
@@ -183,7 +183,7 @@ func ReadWgConfigFile() ([]byte, error) {
 	return util.ReadFile(filepath.Join(os.Getenv("WG_CONF_DIR"), os.Getenv("WG_INTERFACE_NAME")))
 }
 
-//Method to get the server status
+// Method to get the server status
 func GetServerStatus() (*model.Status, error) {
 	var response = &model.Status{}
 	resp, err := http.Get("https://ipinfo.io/ip")
@@ -232,7 +232,7 @@ func GetServerStatus() (*model.Status, error) {
 	return response, nil
 }
 
-//success response message
+// success response message
 func MakeSucessResponse(status int64, message string, server *model.Server, client *model.Client, clients []*model.Client) *model.Response {
 	return &model.Response{
 		Status:  status,
@@ -245,7 +245,7 @@ func MakeSucessResponse(status int64, message string, server *model.Server, clie
 	}
 }
 
-//error response message
+// error response message
 func MakeErrorResponse(status int64, err string, server *model.Server, client *model.Client, clients []*model.Client) *model.Response {
 	return &model.Response{
 		Status:  status,

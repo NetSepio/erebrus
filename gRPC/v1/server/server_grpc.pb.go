@@ -8,7 +8,7 @@ package server
 
 import (
 	context "context"
-	model "github.com/TheLazarusNetwork/erebrus/model"
+	model "github.com/NetSepio/erebrus/model"
 	grpc "google.golang.org/grpc"
 	codes "google.golang.org/grpc/codes"
 	status "google.golang.org/grpc/status"

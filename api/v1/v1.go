@@ -1,10 +1,10 @@
 package v1
 
 import (
-	"github.com/TheLazarusNetwork/erebrus/api/v1/authenticate"
-	"github.com/TheLazarusNetwork/erebrus/api/v1/client"
-	"github.com/TheLazarusNetwork/erebrus/api/v1/server"
-	"github.com/TheLazarusNetwork/erebrus/api/v1/status"
+	"github.com/NetSepio/erebrus/api/v1/authenticate"
+	"github.com/NetSepio/erebrus/api/v1/client"
+	"github.com/NetSepio/erebrus/api/v1/server"
+	"github.com/NetSepio/erebrus/api/v1/status"
 
 	"github.com/gin-gonic/gin"
 )

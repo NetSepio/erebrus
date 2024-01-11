@@ -8,11 +8,11 @@ import (
 	"sync"
 	"time"
 
-	"github.com/TheLazarusNetwork/erebrus/api"
-	"github.com/TheLazarusNetwork/erebrus/core"
-	grpc "github.com/TheLazarusNetwork/erebrus/gRPC"
-	"github.com/TheLazarusNetwork/erebrus/util"
-	"github.com/TheLazarusNetwork/erebrus/util/pkg/auth"
+	"github.com/NetSepio/erebrus/api"
+	"github.com/NetSepio/erebrus/core"
+	grpc "github.com/NetSepio/erebrus/gRPC"
+	"github.com/NetSepio/erebrus/util"
+	"github.com/NetSepio/erebrus/util/pkg/auth"
 	"github.com/gin-contrib/static"
 
 	helmet "github.com/danielkov/gin-helmet"
@@ -77,7 +77,7 @@ func RungRPCServer() {
 }
 
 func main() {
-	log.WithFields(util.StandardFields).Infof("Starting Lazarus Network - Erebrus Version: %s", util.Version)
+	log.WithFields(util.StandardFields).Infof("Starting NetSepio - Erebrus Version: %s", util.Version)
 
 	// check directories or create it
 	if !util.DirectoryExists(filepath.Join(os.Getenv("WG_CONF_DIR"))) {

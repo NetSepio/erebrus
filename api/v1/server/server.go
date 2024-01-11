@@ -4,9 +4,9 @@ import (
 	"net/http"
 	"os"
 
-	"github.com/TheLazarusNetwork/erebrus/core"
-	"github.com/TheLazarusNetwork/erebrus/model"
-	"github.com/TheLazarusNetwork/erebrus/util"
+	"github.com/NetSepio/erebrus/core"
+	"github.com/NetSepio/erebrus/model"
+	"github.com/NetSepio/erebrus/util"
 
 	"github.com/gin-gonic/gin"
 	log "github.com/sirupsen/logrus"

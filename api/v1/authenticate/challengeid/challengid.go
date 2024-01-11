@@ -5,8 +5,8 @@ import (
 	"os"
 	"time"
 
-	"github.com/TheLazarusNetwork/erebrus/core"
-	"github.com/TheLazarusNetwork/erebrus/util"
+	"github.com/NetSepio/erebrus/core"
+	"github.com/NetSepio/erebrus/util"
 
 	"github.com/ethereum/go-ethereum/common/hexutil"
 	"github.com/gin-gonic/gin"

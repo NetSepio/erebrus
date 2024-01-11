@@ -4,10 +4,10 @@ import (
 	"net/http"
 	"os"
 
-	"github.com/TheLazarusNetwork/erebrus/api/v1/authenticate/challengeid"
-	"github.com/TheLazarusNetwork/erebrus/util/pkg/auth"
-	"github.com/TheLazarusNetwork/erebrus/util/pkg/claims"
-	"github.com/TheLazarusNetwork/erebrus/util/pkg/cryptosign"
+	"github.com/NetSepio/erebrus/api/v1/authenticate/challengeid"
+	"github.com/NetSepio/erebrus/util/pkg/auth"
+	"github.com/NetSepio/erebrus/util/pkg/claims"
+	"github.com/NetSepio/erebrus/util/pkg/cryptosign"
 
 	"github.com/gin-gonic/gin"
 	log "github.com/sirupsen/logrus"

@@ -4,7 +4,7 @@ import "model/model.proto";
 
 package server;
 
-option go_package = "github.com/TheLazarusNetwork/erebrus/server;server";
+option go_package = "github.com/NetSepio/erebrus/server;server";
 
 message Empty{
 

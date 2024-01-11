@@ -1,11 +1,11 @@
 package v1
 
 import (
-	"github.com/TheLazarusNetwork/erebrus/gRPC/v1/authenticate/paseto"
-	"github.com/TheLazarusNetwork/erebrus/gRPC/v1/authenticate/selector"
-	"github.com/TheLazarusNetwork/erebrus/gRPC/v1/client"
-	"github.com/TheLazarusNetwork/erebrus/gRPC/v1/server"
-	"github.com/TheLazarusNetwork/erebrus/gRPC/v1/status"
+	"github.com/NetSepio/erebrus/gRPC/v1/authenticate/paseto"
+	"github.com/NetSepio/erebrus/gRPC/v1/authenticate/selector"
+	"github.com/NetSepio/erebrus/gRPC/v1/client"
+	"github.com/NetSepio/erebrus/gRPC/v1/server"
+	"github.com/NetSepio/erebrus/gRPC/v1/status"
 	"github.com/grpc-ecosystem/go-grpc-middleware/v2/interceptors/auth"
 	selector_middleware "github.com/grpc-ecosystem/go-grpc-middleware/v2/interceptors/selector"
 	"google.golang.org/grpc"

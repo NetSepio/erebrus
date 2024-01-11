@@ -6,7 +6,7 @@ import (
 	"strings"
 	"time"
 
-	"github.com/TheLazarusNetwork/erebrus/api/v1/authenticate/challengeid"
+	"github.com/NetSepio/erebrus/api/v1/authenticate/challengeid"
 	"github.com/ethereum/go-ethereum/common/hexutil"
 	"github.com/ethereum/go-ethereum/crypto"
 )

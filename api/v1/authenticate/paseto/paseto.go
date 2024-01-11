@@ -10,8 +10,8 @@ import (
 	gopaseto "aidanwoods.dev/go-paseto"
 	log "github.com/sirupsen/logrus"
 
-	"github.com/TheLazarusNetwork/erebrus/util/pkg/auth"
-	"github.com/TheLazarusNetwork/erebrus/util/pkg/claims"
+	"github.com/NetSepio/erebrus/util/pkg/auth"
+	"github.com/NetSepio/erebrus/util/pkg/claims"
 	"github.com/gin-gonic/gin"
 )
 

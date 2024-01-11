@@ -8,8 +8,8 @@ import (
 	"text/template"
 	"time"
 
-	"github.com/TheLazarusNetwork/erebrus/model"
-	"github.com/TheLazarusNetwork/erebrus/util"
+	"github.com/NetSepio/erebrus/model"
+	"github.com/NetSepio/erebrus/util"
 )
 
 var (

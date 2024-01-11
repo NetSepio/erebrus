@@ -5,8 +5,8 @@ import (
 	"os"
 	"path/filepath"
 
-	"github.com/TheLazarusNetwork/erebrus/model"
-	"github.com/TheLazarusNetwork/erebrus/util"
+	"github.com/NetSepio/erebrus/model"
+	"github.com/NetSepio/erebrus/util"
 )
 
 // Serialize write interface to disk

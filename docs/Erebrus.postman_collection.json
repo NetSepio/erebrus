@@ -145,7 +145,7 @@
 								}
 							],
 							"cookie": [],
-							"body": "[Interface]\nAddress = 10.0.0.3/32\nPrivateKey = 0CZgS3p5hJxeuMipQ0U5SMDqLW/8jKZjkxRhaXST+W4=\nDNS = 1.1.1.1\n\n[Peer]\nPublicKey = T5ZMOnik3YuaRhZgAhcxXrmn2+C0B7qFaqnCypMMcks=\nPresharedKey = 1mKT+5X/1THA0mgl8ecQdN+cULVpIDIc1odTpplfU2M=\nAllowedIPs = 0.0.0.0/0, ::/0\nEndpoint = region.lazarus.network:51820\nPersistentKeepalive = 16\n"
+							"body": "[Interface]\nAddress = 10.0.0.3/32\nPrivateKey = 0CZgS3p5hJxeuMipQ0U5SMDqLW/8jKZjkxRhaXST+W4=\nDNS = 1.1.1.1\n\n[Peer]\nPublicKey = T5ZMOnik3YuaRhZgAhcxXrmn2+C0B7qFaqnCypMMcks=\nPresharedKey = 1mKT+5X/1THA0mgl8ecQdN+cULVpIDIc1odTpplfU2M=\nAllowedIPs = 0.0.0.0/0, ::/0\nEndpoint = region..network:51820\nPersistentKeepalive = 16\n"
 						}
 					]
 				},
@@ -665,7 +665,7 @@
 								}
 							],
 							"cookie": [],
-							"body": "{\n    \"status\": 200,\n    \"sucess\": true,\n    \"message\": \"server details\",\n    \"server\": {\n        \"Address\": [\n            \"10.0.0.1/24\"\n        ],\n        \"ListenPort\": 51820,\n        \"PrivateKey\": \"UFWsgb/Ax5B8zZGx0YtHBAuQVRrOHrxKz2zS2p1LuUE=\",\n        \"PublicKey\": \"T5ZMOnik3YuaRhZgAhcxXrmn2+C0B7qFaqnCypMMcks=\",\n        \"Endpoint\": \"region.lazarus.network\",\n        \"PersistentKeepalive\": 16,\n        \"DNS\": [\n            \"1.1.1.1\"\n        ],\n        \"AllowedIPs\": [\n            \"0.0.0.0/0\",\n            \"::/0\"\n        ],\n        \"PreUp\": \"echo WireGuard PreUp\",\n        \"PostUp\": \"iptables -A FORWARD -i %i -j ACCEPT; iptables -A FORWARD -o %i -j ACCEPT; iptables -t nat -A POSTROUTING -o eth0 -j MASQUERADE\",\n        \"PreDown\": \"echo WireGuard PreDown\",\n        \"PostDown\": \"iptables -D FORWARD -i %i -j ACCEPT; iptables -D FORWARD -o %i -j ACCEPT; iptables -t nat -D POSTROUTING -o eth0 -j MASQUERADE\",\n        \"Created\": 26103870,\n        \"Updated\": 26103870\n    }\n}"
+							"body": "{\n    \"status\": 200,\n    \"sucess\": true,\n    \"message\": \"server details\",\n    \"server\": {\n        \"Address\": [\n            \"10.0.0.1/24\"\n        ],\n        \"ListenPort\": 51820,\n        \"PrivateKey\": \"UFWsgb/Ax5B8zZGx0YtHBAuQVRrOHrxKz2zS2p1LuUE=\",\n        \"PublicKey\": \"T5ZMOnik3YuaRhZgAhcxXrmn2+C0B7qFaqnCypMMcks=\",\n        \"Endpoint\": \"region..network\",\n        \"PersistentKeepalive\": 16,\n        \"DNS\": [\n            \"1.1.1.1\"\n        ],\n        \"AllowedIPs\": [\n            \"0.0.0.0/0\",\n            \"::/0\"\n        ],\n        \"PreUp\": \"echo WireGuard PreUp\",\n        \"PostUp\": \"iptables -A FORWARD -i %i -j ACCEPT; iptables -A FORWARD -o %i -j ACCEPT; iptables -t nat -A POSTROUTING -o eth0 -j MASQUERADE\",\n        \"PreDown\": \"echo WireGuard PreDown\",\n        \"PostDown\": \"iptables -D FORWARD -i %i -j ACCEPT; iptables -D FORWARD -o %i -j ACCEPT; iptables -t nat -D POSTROUTING -o eth0 -j MASQUERADE\",\n        \"Created\": 26103870,\n        \"Updated\": 26103870\n    }\n}"
 						}
 					]
 				},
@@ -843,7 +843,7 @@
 								}
 							],
 							"cookie": [],
-							"body": "{\n    \"Version\": \"1.0\",\n    \"Hostname\": \"sambath-WS\",\n    \"Domain\": \"eu01.lazarus.network\",\n    \"PublicIP\": \"118.246.197.100\",\n    \"gRPCPort\": \"9090\",\n    \"PrivateIP\": \"172.20.0.1,\",\n    \"HttpPort\": \"9080\",\n    \"Region\": \"eu01\",\n    \"VPNPort\": \"51820\"\n}"
+							"body": "{\n    \"Version\": \"1.0\",\n    \"Hostname\": \"sambath-WS\",\n    \"Domain\": \"eu01..network\",\n    \"PublicIP\": \"118.246.197.100\",\n    \"gRPCPort\": \"9090\",\n    \"PrivateIP\": \"172.20.0.1,\",\n    \"HttpPort\": \"9080\",\n    \"Region\": \"eu01\",\n    \"VPNPort\": \"51820\"\n}"
 						}
 					]
 				},
@@ -854,7 +854,7 @@
 						"header": [],
 						"body": {
 							"mode": "raw",
-							"raw": "{\n        \"Address\": [\n            \"10.0.0.1/24\"\n        ],\n        \"ListenPort\": 51822,\n        \"PrivateKey\": \"oKgGti0Kv3tacXGc+X6evdhVm0ILjmlVXHVPdzuCqEQ=\",\n        \"PublicKey\": \"0iG5xe5wp7lGQSYr9qxL8lQ0Ce3CHVMSvW12ziY5TUA=\",\n        \"Endpoint\": \"region.lazarus.network\",\n        \"PersistentKeepalive\": 16,\n        \"DNS\": [\n            \"1.1.1.1\"\n        ],\n        \"AllowedIPs\": [\n            \"0.0.0.0/0\",\n            \"::/0\"\n        ],\n        \"PreUp\": \"echo WireGuard PreUp\",\n        \"PostUp\": \"iptables -A FORWARD -i %i -j ACCEPT; iptables -A FORWARD -o %i -j ACCEPT; iptables -t nat -A POSTROUTING -o eth0 -j MASQUERADE\",\n        \"PreDown\": \"echo WireGuard PreDown\",\n        \"PostDown\": \"iptables -D FORWARD -i %i -j ACCEPT; iptables -D FORWARD -o %i -j ACCEPT; iptables -t nat -D POSTROUTING -o eth0 -j MASQUERADE\",\n        \"Created\": 704810668,\n        \"Updated\": 122649583\n    }",
+							"raw": "{\n        \"Address\": [\n            \"10.0.0.1/24\"\n        ],\n        \"ListenPort\": 51822,\n        \"PrivateKey\": \"oKgGti0Kv3tacXGc+X6evdhVm0ILjmlVXHVPdzuCqEQ=\",\n        \"PublicKey\": \"0iG5xe5wp7lGQSYr9qxL8lQ0Ce3CHVMSvW12ziY5TUA=\",\n        \"Endpoint\": \"region..network\",\n        \"PersistentKeepalive\": 16,\n        \"DNS\": [\n            \"1.1.1.1\"\n        ],\n        \"AllowedIPs\": [\n            \"0.0.0.0/0\",\n            \"::/0\"\n        ],\n        \"PreUp\": \"echo WireGuard PreUp\",\n        \"PostUp\": \"iptables -A FORWARD -i %i -j ACCEPT; iptables -A FORWARD -o %i -j ACCEPT; iptables -t nat -A POSTROUTING -o eth0 -j MASQUERADE\",\n        \"PreDown\": \"echo WireGuard PreDown\",\n        \"PostDown\": \"iptables -D FORWARD -i %i -j ACCEPT; iptables -D FORWARD -o %i -j ACCEPT; iptables -t nat -D POSTROUTING -o eth0 -j MASQUERADE\",\n        \"Created\": 704810668,\n        \"Updated\": 122649583\n    }",
 							"options": {
 								"raw": {
 									"language": "json"
@@ -883,7 +883,7 @@
 								"header": [],
 								"body": {
 									"mode": "raw",
-									"raw": "{\n        \"Address\": [\n            \"10.0.0.1/24\"\n        ],\n        \"ListenPort\": 51822,\n        \"PrivateKey\": \"oKgGti0Kv3tacXGc+X6evdhVm0ILjmlVXHVPdzuCqEQ=\",\n        \"PublicKey\": \"0iG5xe5wp7lGQSYr9qxL8lQ0Ce3CHVMSvW12ziY5TUA=\",\n        \"Endpoint\": \"region.lazarus.network\",\n        \"PersistentKeepalive\": 16,\n        \"DNS\": [\n            \"1.1.1.1\"\n        ],\n        \"AllowedIPs\": [\n            \"0.0.0.0/0\",\n            \"::/0\"\n        ],\n        \"PreUp\": \"echo WireGuard PreUp\",\n        \"PostUp\": \"iptables -A FORWARD -i %i -j ACCEPT; iptables -A FORWARD -o %i -j ACCEPT; iptables -t nat -A POSTROUTING -o eth0 -j MASQUERADE\",\n        \"PreDown\": \"echo WireGuard PreDown\",\n        \"PostDown\": \"iptables -D FORWARD -i %i -j ACCEPT; iptables -D FORWARD -o %i -j ACCEPT; iptables -t nat -D POSTROUTING -o eth0 -j MASQUERADE\",\n        \"Created\": 704810668,\n        \"Updated\": 122649583\n    }",
+									"raw": "{\n        \"Address\": [\n            \"10.0.0.1/24\"\n        ],\n        \"ListenPort\": 51822,\n        \"PrivateKey\": \"oKgGti0Kv3tacXGc+X6evdhVm0ILjmlVXHVPdzuCqEQ=\",\n        \"PublicKey\": \"0iG5xe5wp7lGQSYr9qxL8lQ0Ce3CHVMSvW12ziY5TUA=\",\n        \"Endpoint\": \"region..network\",\n        \"PersistentKeepalive\": 16,\n        \"DNS\": [\n            \"1.1.1.1\"\n        ],\n        \"AllowedIPs\": [\n            \"0.0.0.0/0\",\n            \"::/0\"\n        ],\n        \"PreUp\": \"echo WireGuard PreUp\",\n        \"PostUp\": \"iptables -A FORWARD -i %i -j ACCEPT; iptables -A FORWARD -o %i -j ACCEPT; iptables -t nat -A POSTROUTING -o eth0 -j MASQUERADE\",\n        \"PreDown\": \"echo WireGuard PreDown\",\n        \"PostDown\": \"iptables -D FORWARD -i %i -j ACCEPT; iptables -D FORWARD -o %i -j ACCEPT; iptables -t nat -D POSTROUTING -o eth0 -j MASQUERADE\",\n        \"Created\": 704810668,\n        \"Updated\": 122649583\n    }",
 									"options": {
 										"raw": {
 											"language": "json"
@@ -946,7 +946,7 @@
 								}
 							],
 							"cookie": [],
-							"body": "{\n    \"status\": 200,\n    \"sucess\": true,\n    \"message\": \"server updated\",\n    \"server\": {\n        \"Address\": [\n            \"10.0.0.1/24\"\n        ],\n        \"ListenPort\": 51822,\n        \"PrivateKey\": \"UFWsgb/Ax5B8zZGx0YtHBAuQVRrOHrxKz2zS2p1LuUE=\",\n        \"PublicKey\": \"T5ZMOnik3YuaRhZgAhcxXrmn2+C0B7qFaqnCypMMcks=\",\n        \"Endpoint\": \"region.lazarus.network\",\n        \"PersistentKeepalive\": 16,\n        \"DNS\": [\n            \"1.1.1.1\"\n        ],\n        \"AllowedIPs\": [\n            \"0.0.0.0/0\",\n            \"::/0\"\n        ],\n        \"PreUp\": \"echo WireGuard PreUp\",\n        \"PostUp\": \"iptables -A FORWARD -i %i -j ACCEPT; iptables -A FORWARD -o %i -j ACCEPT; iptables -t nat -A POSTROUTING -o eth0 -j MASQUERADE\",\n        \"PreDown\": \"echo WireGuard PreDown\",\n        \"PostDown\": \"iptables -D FORWARD -i %i -j ACCEPT; iptables -D FORWARD -o %i -j ACCEPT; iptables -t nat -D POSTROUTING -o eth0 -j MASQUERADE\",\n        \"Created\": 704810668,\n        \"Updated\": 582391761\n    }\n}"
+							"body": "{\n    \"status\": 200,\n    \"sucess\": true,\n    \"message\": \"server updated\",\n    \"server\": {\n        \"Address\": [\n            \"10.0.0.1/24\"\n        ],\n        \"ListenPort\": 51822,\n        \"PrivateKey\": \"UFWsgb/Ax5B8zZGx0YtHBAuQVRrOHrxKz2zS2p1LuUE=\",\n        \"PublicKey\": \"T5ZMOnik3YuaRhZgAhcxXrmn2+C0B7qFaqnCypMMcks=\",\n        \"Endpoint\": \"region..network\",\n        \"PersistentKeepalive\": 16,\n        \"DNS\": [\n            \"1.1.1.1\"\n        ],\n        \"AllowedIPs\": [\n            \"0.0.0.0/0\",\n            \"::/0\"\n        ],\n        \"PreUp\": \"echo WireGuard PreUp\",\n        \"PostUp\": \"iptables -A FORWARD -i %i -j ACCEPT; iptables -A FORWARD -o %i -j ACCEPT; iptables -t nat -A POSTROUTING -o eth0 -j MASQUERADE\",\n        \"PreDown\": \"echo WireGuard PreDown\",\n        \"PostDown\": \"iptables -D FORWARD -i %i -j ACCEPT; iptables -D FORWARD -o %i -j ACCEPT; iptables -t nat -D POSTROUTING -o eth0 -j MASQUERADE\",\n        \"Created\": 704810668,\n        \"Updated\": 582391761\n    }\n}"
 						}
 					]
 				}

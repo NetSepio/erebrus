@@ -1,7 +1,7 @@
 package grpc
 
 import (
-	v1 "github.com/TheLazarusNetwork/erebrus/gRPC/v1"
+	v1 "github.com/NetSepio/erebrus/gRPC/v1"
 	"google.golang.org/grpc"
 )
 

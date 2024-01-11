@@ -1,4 +1,4 @@
-module github.com/TheLazarusNetwork/erebrus
+module github.com/NetSepio/erebrus
 
 go 1.19
 

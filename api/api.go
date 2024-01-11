@@ -1,7 +1,7 @@
 package api
 
 import (
-	v1 "github.com/TheLazarusNetwork/erebrus/api/v1"
+	v1 "github.com/NetSepio/erebrus/api/v1"
 	"github.com/gin-gonic/gin"
 )
 

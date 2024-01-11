@@ -9,7 +9,7 @@ package client
 import (
 	protoreflect "google.golang.org/protobuf/reflect/protoreflect"
 	protoimpl "google.golang.org/protobuf/runtime/protoimpl"
-	model"github.com/TheLazarusNetwork/erebrus/model"
+	model"github.com/NetSepio/erebrus/model"
 	reflect "reflect"
 	sync "sync"
 )

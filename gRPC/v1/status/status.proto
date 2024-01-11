@@ -2,7 +2,7 @@ syntax="proto3";
 
 package status;
 
-option go_package = "github.com/TheLazarusNetwork/erebrus/status;status";
+option go_package = "github.com/NetSepio/erebrus/status;status";
 
 import "model/model.proto";
 

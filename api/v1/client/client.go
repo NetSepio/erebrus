@@ -3,8 +3,8 @@ package client
 import (
 	"net/http"
 
-	"github.com/TheLazarusNetwork/erebrus/core"
-	"github.com/TheLazarusNetwork/erebrus/model"
+	"github.com/NetSepio/erebrus/core"
+	"github.com/NetSepio/erebrus/model"
 	"github.com/gin-gonic/gin"
 	log "github.com/sirupsen/logrus"
 	"github.com/skip2/go-qrcode"

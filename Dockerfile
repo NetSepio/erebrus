@@ -1,4 +1,4 @@
-#LABEL Maintainer Shachindra Name shachindra@lazarus.network
+#LABEL Maintainer Punarv Name punarv@netsepio.com
 
 FROM golang:alpine AS build-app
 RUN apk update && apk add --no-cache git
@@ -20,8 +20,8 @@ ENV WG_ENDPOINT_HOST=$WG_ENDPOINT_HOST WG_ENDPOINT_PORT=$WG_ENDPOINT_PORT WG_IPv
 ENV WG_DNS=$WG_DNS WG_ALLOWED_IP_1=$WG_ALLOWED_IP_1 WG_ALLOWED_IP_2=$WG_ALLOWED_IP_2
 ENV WG_PRE_UP=$WG_PRE_UP WG_POST_UP=$WG_POST_UP WG_PRE_DOWN=$WG_PRE_DOWN WG_POST_DOWN=$WG_POST_DOWN
 RUN echo $'#!/usr/bin/env bash\n\
-set -eo pipefail\n\
-/app/erebrus &\n\
-./wg-watcher.sh\n\
-sleep infinity' > /app/start.sh && chmod +x /app/start.sh
+    set -eo pipefail\n\
+    /app/erebrus &\n\
+    ./wg-watcher.sh\n\
+    sleep infinity' > /app/start.sh && chmod +x /app/start.sh
 ENTRYPOINT ["/app/start.sh"]
