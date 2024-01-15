@@ -12,7 +12,7 @@ COPY --from=build-app /app/erebrus .
 COPY --from=build-app /app/webapp ./webapp
 COPY wg-watcher.sh .
 RUN chmod +x ./erebrus ./wg-watcher.sh
-RUN apk update && apk add --no-cache bash openresolv bind-tools wireguard-tools gettext inotify-tools
+RUN apk update && apk add --no-cache bash openresolv bind-tools wireguard-tools gettext inotify-tools iptables
 ENV LOAD_CONFIG_FILE=$LOAD_CONFIG_FILE RUNTYPE=$RUNTYPE SERVER=$SERVER HTTP_PORT=$HTTP_PORT GRPC_PORT=$GRPC_PORT MASTERNODE_URL=$MASTERNODE_URL
 ENV REGION=$REGION DOMAIN=$DOMAIN REGION_NAME=$REGION_NAME REGION_CODE=$REGION_CODE
 ENV WG_CONF_DIR=$WG_CONF_DIR WG_CLIENTS_DIR=$WG_CLIENTS_DIR WG_KEYS_DIR=$WG_KEYS_DIR WG_INTERFACE_NAME=$WG_INTERFACE_NAME
