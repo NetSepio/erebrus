@@ -1,6 +1,7 @@
 syntax="proto3";
 
 package model;
+option go_package = "github.com/NetSepio/model;model";
 
 message Response{
     int64 status=1;
@@ -27,6 +28,8 @@ message Client{
     string UpdatedBy=12;
     int64 CreatedAt=13;
     int64 UpdatedAt=14;
+    int64 ReceiveBytes=15;
+    int64 TransmitBytes=16;
 }
 
 message Server{
