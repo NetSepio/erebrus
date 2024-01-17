@@ -42,7 +42,7 @@ type WireGuardStats struct {
 	TransmittedBytes int64
 }
 
-func getWireGuardStatsForPeer(publicKey string) (*WireGuardStats, error) {
+func GetWireGuardStatsForPeer(publicKey string) (*WireGuardStats, error) {
 	cmd := exec.Command("sudo", "wg", "show", "all", "transfer")
 
 	output, err := cmd.CombinedOutput()
