@@ -134,8 +134,8 @@ type Client struct {
 	UpdatedBy                 string   `protobuf:"bytes,12,opt,name=UpdatedBy,proto3" json:"UpdatedBy,omitempty"`
 	CreatedAt                 int64    `protobuf:"varint,13,opt,name=CreatedAt,proto3" json:"CreatedAt,omitempty"`
 	UpdatedAt                 int64    `protobuf:"varint,14,opt,name=UpdatedAt,proto3" json:"UpdatedAt,omitempty"`
-	ReceiveBytes              int64    `protobuf:"varint,15,opt,name=ReceiveBytes,proto3" json:"ReceiveBytes,omitempty"`
-	TransmitBytes             int64    `protobuf:"varint,16,opt,name=TransmitBytes,proto3" json:"TransmitBytes,omitempty"`
+	ReceiveBytes              int64    `protobuf:"varint,15,opt,name=ReceiveBytes,proto3" json:"ReceiveBytes"`
+	TransmitBytes             int64    `protobuf:"varint,16,opt,name=TransmitBytes,proto3" json:"TransmitBytes"`
 }
 
 func (x *Client) Reset() {

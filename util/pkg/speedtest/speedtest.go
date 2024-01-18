@@ -6,29 +6,37 @@ import (
 	"os/exec"
 )
 
-func GetSpeedtestResults() (downloadSpeed, uploadSpeed float64, err error) {
+type SpeedtestResult struct {
+	DownloadSpeed float64 `json:"downloadSpeed"`
+	UploadSpeed   float64 `json:"uploadSpeed"`
+}
+
+func GetSpeedtestResults() (res *SpeedtestResult, err error) {
 	cmd := exec.Command("speedtest", "--json")
 
 	output, err := cmd.CombinedOutput()
 	if err != nil {
-		return 0, 0, fmt.Errorf("failed to execute 'speedtest --json': %v", err)
+		return nil, fmt.Errorf("failed to execute 'speedtest --json': %v", err)
 	}
 
 	// Parse the Speedtest results
 	var result map[string]interface{}
 	if err := json.Unmarshal(output, &result); err != nil {
-		return 0, 0, fmt.Errorf("failed to parse Speedtest results: %v", err)
+		return nil, fmt.Errorf("failed to parse Speedtest results: %v", err)
 	}
 
 	downloadSpeed, ok := result["download"].(float64)
 	if !ok {
-		return 0, 0, fmt.Errorf("download speed not found in Speedtest results")
+		return nil, fmt.Errorf("download speed not found in Speedtest results")
 	}
 
-	uploadSpeed, ok = result["upload"].(float64)
+	uploadSpeed, ok := result["upload"].(float64)
 	if !ok {
-		return 0, 0, fmt.Errorf("upload speed not found in Speedtest results")
+		return nil, fmt.Errorf("upload speed not found in Speedtest results")
 	}
-
-	return downloadSpeed, uploadSpeed, nil
+	response := &SpeedtestResult{
+		DownloadSpeed: downloadSpeed,
+		UploadSpeed:   uploadSpeed,
+	}
+	return response, nil
 }

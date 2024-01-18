@@ -11,6 +11,7 @@ import (
 	"github.com/NetSepio/erebrus/storage"
 	"github.com/NetSepio/erebrus/template"
 	"github.com/NetSepio/erebrus/util"
+	"github.com/NetSepio/erebrus/util/pkg/stats"
 	uuid "github.com/google/uuid"
 	log "github.com/sirupsen/logrus"
 	"golang.zx2c4.com/wireguard/wgctrl/wgtypes"
@@ -84,6 +85,15 @@ func ReadClient(id string) (*model.Client, error) {
 		return nil, err
 	}
 	client := v.(*model.Client)
+	pkey := client.PublicKey
+	clientStats, err := stats.GetWireGuardStatsForPeer(pkey)
+	if err != nil {
+		log.WithFields(log.Fields{
+			"err": err,
+		}).Error("failed to get client stats")
+	}
+	client.ReceiveBytes = clientStats.ReceivedBytes
+	client.TransmitBytes = clientStats.TransmittedBytes
 
 	return client, nil
 }
@@ -163,7 +173,17 @@ func ReadClients() ([]*model.Client, error) {
 					"path": f.Name(),
 				}).Error("failed to deserialize client")
 			} else {
-				clients = append(clients, c.(*model.Client))
+				cl := c.(*model.Client)
+				pkey := cl.PublicKey
+				clientStats, err := stats.GetWireGuardStatsForPeer(pkey)
+				if err != nil {
+					log.WithFields(log.Fields{
+						"err": err,
+					}).Error("failed to get client stats")
+				}
+				cl.ReceiveBytes = clientStats.ReceivedBytes
+				cl.TransmitBytes = clientStats.TransmittedBytes
+				clients = append(clients, cl)
 			}
 		}
 	}

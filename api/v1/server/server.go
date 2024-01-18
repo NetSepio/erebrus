@@ -7,6 +7,7 @@ import (
 	"github.com/NetSepio/erebrus/core"
 	"github.com/NetSepio/erebrus/model"
 	"github.com/NetSepio/erebrus/util"
+	"github.com/NetSepio/erebrus/util/pkg/speedtest"
 
 	"github.com/gin-gonic/gin"
 	log "github.com/sirupsen/logrus"
@@ -19,7 +20,7 @@ func ApplyRoutes(r *gin.RouterGroup) {
 		g.GET("", readServer)
 		g.PATCH("", updateServer)
 		g.GET("/config", configServer)
-
+		g.GET("/speed", getServerSpeed)
 	}
 }
 
@@ -100,4 +101,14 @@ func configServer(c *gin.Context) {
 	// return config as txt file
 	c.Header("Content-Disposition", "attachment; filename="+os.Getenv("WG_INTERFACE_NAME")+"")
 	c.Data(http.StatusOK, "application/config", configData)
+}
+
+func getServerSpeed(c *gin.Context) {
+	res, err := speedtest.GetSpeedtestResults()
+	if err != nil {
+		log.WithFields(util.StandardFields).Error("Failed to read server speed")
+		c.AbortWithStatus(http.StatusInternalServerError)
+		return
+	}
+	c.JSON(http.StatusOK, res)
 }
