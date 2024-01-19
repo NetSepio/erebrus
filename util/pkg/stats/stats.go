@@ -7,7 +7,7 @@ import (
 )
 
 func GetWireGuardStats() (map[string]map[string]int64, error) {
-	cmd := exec.Command("sudo", "wg", "show", "all", "transfer")
+	cmd := exec.Command("wg", "show", "all", "transfer")
 
 	output, err := cmd.CombinedOutput()
 	if err != nil {
@@ -43,7 +43,7 @@ type WireGuardStats struct {
 }
 
 func GetWireGuardStatsForPeer(publicKey string) (*WireGuardStats, error) {
-	cmd := exec.Command("sudo", "wg", "show", "all", "transfer")
+	cmd := exec.Command("wg", "show", "all", "transfer")
 
 	output, err := cmd.CombinedOutput()
 	if err != nil {
