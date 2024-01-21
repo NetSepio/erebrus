@@ -87,13 +87,10 @@ func ReadClient(id string) (*model.Client, error) {
 	client := v.(*model.Client)
 	pkey := client.PublicKey
 	clientStats, err := stats.GetWireGuardStatsForPeer(pkey)
-	if err != nil {
-		log.WithFields(log.Fields{
-			"err": err,
-		}).Error("failed to get client stats")
+	if err == nil {
+		client.ReceiveBytes = clientStats.ReceivedBytes
+		client.TransmitBytes = clientStats.TransmittedBytes
 	}
-	client.ReceiveBytes = clientStats.ReceivedBytes
-	client.TransmitBytes = clientStats.TransmittedBytes
 
 	return client, nil
 }
@@ -176,13 +173,11 @@ func ReadClients() ([]*model.Client, error) {
 				cl := c.(*model.Client)
 				pkey := cl.PublicKey
 				clientStats, err := stats.GetWireGuardStatsForPeer(pkey)
-				if err != nil {
-					log.WithFields(log.Fields{
-						"err": err,
-					}).Error("failed to get client stats")
+				if err == nil {
+					cl.ReceiveBytes = clientStats.ReceivedBytes
+					cl.TransmitBytes = clientStats.TransmittedBytes
 				}
-				cl.ReceiveBytes = clientStats.ReceivedBytes
-				cl.TransmitBytes = clientStats.TransmittedBytes
+
 				clients = append(clients, cl)
 			}
 		}
