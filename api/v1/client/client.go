@@ -5,6 +5,7 @@ import (
 
 	"github.com/NetSepio/erebrus/core"
 	"github.com/NetSepio/erebrus/model"
+	"github.com/NetSepio/erebrus/util"
 	"github.com/gin-gonic/gin"
 	log "github.com/sirupsen/logrus"
 	"github.com/skip2/go-qrcode"
@@ -56,8 +57,14 @@ func registerClient(c *gin.Context) {
 		c.JSON(http.StatusInternalServerError, response)
 		return
 	}
-
-	response := core.MakeSucessResponse(201, "client created", nil, client, nil)
+	server, err := core.ReadServer()
+	if err != nil {
+		log.WithFields(util.StandardFields).Error("Failure in reading server")
+		response := core.MakeErrorResponse(500, err.Error(), nil, nil, nil)
+		c.JSON(http.StatusInternalServerError, response)
+		return
+	}
+	response := core.MakeSucessResponse(201, "client created", server, client, nil)
 
 	c.JSON(http.StatusOK, response)
 }
