@@ -11,6 +11,7 @@ import (
 	"github.com/NetSepio/erebrus/api"
 	"github.com/NetSepio/erebrus/core"
 	grpc "github.com/NetSepio/erebrus/gRPC"
+	"github.com/NetSepio/erebrus/p2p"
 	"github.com/NetSepio/erebrus/util"
 	"github.com/NetSepio/erebrus/util/pkg/auth"
 	"github.com/gin-contrib/static"
@@ -126,6 +127,7 @@ func main() {
 	err := core.UpdateServerConfigWg()
 	util.CheckError("Error while creating WireGuard config file: ", err)
 
+	go p2p.Init()
 	//running updater
 	wg.Add(1)
 	//go core.UpdateEndpointDetails()
