@@ -54,7 +54,7 @@ jobs:
           docker push $GITHUB_REF_IMAGE
           docker push $GITHUB_BRANCH_IMAGE
       - name: Deploy on US server
-        if: github.ref == 'refs/heads/main'
+        if: github.ref == 'refs/heads/prod'
         uses: appleboy/ssh-action@v0.1.7
         with:
           host: ${{ secrets.DEV_REMOTE_SERVER_ADDRESS_US01 }}
@@ -69,7 +69,7 @@ jobs:
             docker pull ghcr.io/netsepio/erebrus:main
             docker run -d -p 9080:9080/tcp -p 51820:51820/udp --cap-add=NET_ADMIN --cap-add=SYS_MODULE --sysctl="net.ipv4.conf.all.src_valid_mark=1" --sysctl="net.ipv6.conf.all.forwarding=1" --restart unless-stopped -v /home/ubuntu/erebrus/wireguard/:/etc/wireguard/ --name erebrus --env-file .env ghcr.io/netsepio/erebrus:main
       - name: Deploy on EU server
-        if: github.ref == 'refs/heads/main'
+        if: github.ref == 'refs/heads/prod'
         uses: appleboy/ssh-action@v0.1.7
         with:
           host: ${{ secrets.DEV_REMOTE_SERVER_ADDRESS_EU01 }}
@@ -84,7 +84,7 @@ jobs:
             docker pull ghcr.io/netsepio/erebrus:main
             docker run -d -p 9080:9080/tcp -p 51820:51820/udp --cap-add=NET_ADMIN --cap-add=SYS_MODULE --sysctl="net.ipv4.conf.all.src_valid_mark=1" --sysctl="net.ipv6.conf.all.forwarding=1" --restart unless-stopped -v /home/ubuntu/erebrus/wireguard/:/etc/wireguard/ --name erebrus --env-file .env ghcr.io/netsepio/erebrus:main
       - name: Deploy on CA server
-        if: github.ref == 'refs/heads/main'
+        if: github.ref == 'refs/heads/prod'
         uses: appleboy/ssh-action@v0.1.7
         with:
           host: ${{ secrets.DEV_REMOTE_SERVER_ADDRESS_CA01 }}
@@ -99,7 +99,7 @@ jobs:
             docker pull ghcr.io/netsepio/erebrus:main
             docker run -d -p 9080:9080/tcp -p 51820:51820/udp --cap-add=NET_ADMIN --cap-add=SYS_MODULE --sysctl="net.ipv4.conf.all.src_valid_mark=1" --sysctl="net.ipv6.conf.all.forwarding=1" --restart unless-stopped -v /home/ubuntu/erebrus/wireguard/:/etc/wireguard/ --name erebrus --env-file .env ghcr.io/netsepio/erebrus:main
       - name: Deploy on SG server
-        if: github.ref == 'refs/heads/main'
+        if: github.ref == 'refs/heads/prod'
         uses: appleboy/ssh-action@v0.1.7
         with:
           host: ${{ secrets.DEV_REMOTE_SERVER_ADDRESS_SG01 }}
