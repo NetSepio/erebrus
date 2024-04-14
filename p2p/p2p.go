@@ -65,7 +65,7 @@ func Init() {
 	}
 	go func() {
 		time.Sleep(5 * time.Second)
-		fmt.Println("sending")
+		fmt.Println("sending status")
 		node_data := node.CreateNodeStatus(remoteAddr, ha.ID().String(), StartTimeStamp)
 		msgBytes, err := json.Marshal(node_data)
 		if err != nil {

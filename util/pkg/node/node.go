@@ -4,6 +4,7 @@ import (
 	"os"
 
 	"github.com/NetSepio/erebrus/util/pkg/speedtest"
+	"github.com/sirupsen/logrus"
 )
 
 type NodeStatus struct {
@@ -18,7 +19,10 @@ type NodeStatus struct {
 }
 
 func CreateNodeStatus(address string, id string, startTimeStamp int64) *NodeStatus {
-	speedtestResult, _ := speedtest.GetSpeedtestResults()
+	speedtestResult, err := speedtest.GetSpeedtestResults()
+	if err != nil {
+		logrus.Error("failed to fetch network speed: ", err.Error())
+	}
 	nodeStatus := &NodeStatus{
 		HttpPort:       os.Getenv("HTTP_PORT"),
 		Domain:         os.Getenv("DOMAIN"),

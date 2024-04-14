@@ -1,42 +1,37 @@
 package speedtest
 
 import (
-	"encoding/json"
 	"fmt"
-	"os/exec"
+
+	"github.com/showwin/speedtest-go/speedtest"
 )
 
 type SpeedtestResult struct {
+	Latency       string  `json:"latency"`
 	DownloadSpeed float64 `json:"downloadSpeed"`
 	UploadSpeed   float64 `json:"uploadSpeed"`
 }
 
 func GetSpeedtestResults() (res *SpeedtestResult, err error) {
-	cmd := exec.Command("speedtest-cli", "--json")
+	var speedtestClient = speedtest.New()
 
-	output, err := cmd.CombinedOutput()
-	if err != nil {
-		return nil, fmt.Errorf("failed to execute 'speedtest-cli --json': %v", err)
-	}
-
-	// Parse the Speedtest results
-	var result map[string]interface{}
-	if err := json.Unmarshal(output, &result); err != nil {
-		return nil, fmt.Errorf("failed to parse Speedtest results: %v", err)
-	}
-
-	downloadSpeed, ok := result["download"].(float64)
-	if !ok {
-		return nil, fmt.Errorf("download speed not found in Speedtest results")
-	}
-
-	uploadSpeed, ok := result["upload"].(float64)
-	if !ok {
-		return nil, fmt.Errorf("upload speed not found in Speedtest results")
-	}
-	response := &SpeedtestResult{
-		DownloadSpeed: downloadSpeed,
-		UploadSpeed:   uploadSpeed,
+	serverList, _ := speedtestClient.FetchServers()
+	targets, _ := serverList.FindServer([]int{})
+	var response *SpeedtestResult
+	for _, s := range targets {
+		// Please make sure your host can access this test server,
+		// otherwise you will get an error.
+		// It is recommended to replace a server at this time
+		s.PingTest(nil)
+		s.DownloadTest()
+		s.UploadTest()
+		fmt.Printf("Latency: %s, Download: %f, Upload: %f\n", s.Latency, s.DLSpeed, s.ULSpeed)
+		s.Context.Reset() // reset counter
+		response = &SpeedtestResult{
+			Latency:       s.Latency.String(),
+			DownloadSpeed: s.DLSpeed,
+			UploadSpeed:   s.ULSpeed,
+		}
 	}
 	return response, nil
 }
