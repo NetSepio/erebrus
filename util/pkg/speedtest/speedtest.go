@@ -12,11 +12,11 @@ type SpeedtestResult struct {
 }
 
 func GetSpeedtestResults() (res *SpeedtestResult, err error) {
-	cmd := exec.Command("speedtest", "--json")
+	cmd := exec.Command("speedtest-cli", "--json")
 
 	output, err := cmd.CombinedOutput()
 	if err != nil {
-		return nil, fmt.Errorf("failed to execute 'speedtest --json': %v", err)
+		return nil, fmt.Errorf("failed to execute 'speedtest-cli --json': %v", err)
 	}
 
 	// Parse the Speedtest results
