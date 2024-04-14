@@ -112,4 +112,4 @@ jobs:
             docker stop erebrus && docker rm erebrus && docker image rm ghcr.io/netsepio/erebrus:main
             echo ${{ secrets.GHCR_TOKEN }} | docker login ghcr.io -u ${{ secrets.GHCR_USERNAME }} --password-stdin
             docker pull ghcr.io/netsepio/erebrus:main
-            docker run -d -p 9080:9080/tcp -p 51820:51820/udp --cap-add=NET_ADMIN --cap-add=SYS_MODULE --sysctl="net.ipv4.conf.all.src_valid_mark=1" --sysctl="net.ipv6.conf.all.forwarding=1" --restart unless-stopped -v /home/ubuntu/erebrus/wireguard/:/etc/wireguard/ --name erebrus --env-file .env ghcr.io/netsepio/erebrus:main
+            docker run -d -p 9080:9080/tcp -p 9002:9002/tcp -p 51820:51820/udp --cap-add=NET_ADMIN --cap-add=SYS_MODULE --sysctl="net.ipv4.conf.all.src_valid_mark=1" --sysctl="net.ipv6.conf.all.forwarding=1" --restart unless-stopped -v /home/ubuntu/erebrus/wireguard/:/etc/wireguard/ --name erebrus --env-file .env ghcr.io/netsepio/erebrus:main

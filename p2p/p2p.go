@@ -20,7 +20,10 @@ const DiscoveryInterval = time.Second * 10
 // other peers.
 const DiscoveryServiceTag = "erebrus"
 
+var StartTimeStamp int64
+
 func Init() {
+	StartTimeStamp = time.Now().Unix()
 	ctx := context.Background()
 
 	// create a new libp2p Host
@@ -32,6 +35,7 @@ func Init() {
 	fullAddr := getHostAddress(ha)
 	log.Printf("I am %s\n", fullAddr)
 
+	remoteAddr := "/ip4/" + os.Getenv("HOST_IP") + "/tcp/9002/p2p/" + ha.ID().String()
 	// Create a new PubSub service using the GossipSub router.
 	ps, err := pubsub.NewGossipSub(ctx, ha)
 	if err != nil {
@@ -61,7 +65,8 @@ func Init() {
 	}
 	go func() {
 		time.Sleep(5 * time.Second)
-		node_data := node.CreateNodeStatus(fullAddr, ha.ID().String())
+		fmt.Println("sending")
+		node_data := node.CreateNodeStatus(remoteAddr, ha.ID().String(), StartTimeStamp)
 		msgBytes, err := json.Marshal(node_data)
 		if err != nil {
 			panic(err)
