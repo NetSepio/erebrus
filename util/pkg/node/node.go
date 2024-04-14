@@ -16,9 +16,10 @@ type NodeStatus struct {
 	DownloadSpeed  float64 `json:"downloadSpeed"`
 	UploadSpeed    float64 `json:"uploadSpeed"`
 	StartTimeStamp int64   `json:"startTimeStamp"`
+	Name           string  `json:"name"`
 }
 
-func CreateNodeStatus(address string, id string, startTimeStamp int64) *NodeStatus {
+func CreateNodeStatus(address string, id string, startTimeStamp int64, name string) *NodeStatus {
 	speedtestResult, err := speedtest.GetSpeedtestResults()
 	if err != nil {
 		logrus.Error("failed to fetch network speed: ", err.Error())
@@ -32,6 +33,7 @@ func CreateNodeStatus(address string, id string, startTimeStamp int64) *NodeStat
 		DownloadSpeed:  speedtestResult.DownloadSpeed,
 		UploadSpeed:    speedtestResult.UploadSpeed,
 		StartTimeStamp: startTimeStamp,
+		Name:           name,
 	}
 	return nodeStatus
 }

@@ -9,6 +9,7 @@ import (
 	"time"
 
 	"github.com/NetSepio/erebrus/util/pkg/node"
+	"github.com/docker/docker/pkg/namesgenerator"
 	pubsub "github.com/libp2p/go-libp2p-pubsub"
 	"github.com/multiformats/go-multiaddr"
 )
@@ -23,6 +24,7 @@ const DiscoveryServiceTag = "erebrus"
 var StartTimeStamp int64
 
 func Init() {
+	name := namesgenerator.GetRandomName(0)
 	StartTimeStamp = time.Now().Unix()
 	ctx := context.Background()
 
@@ -66,7 +68,7 @@ func Init() {
 	go func() {
 		time.Sleep(5 * time.Second)
 		fmt.Println("sending status")
-		node_data := node.CreateNodeStatus(remoteAddr, ha.ID().String(), StartTimeStamp)
+		node_data := node.CreateNodeStatus(remoteAddr, ha.ID().String(), StartTimeStamp, name)
 		msgBytes, err := json.Marshal(node_data)
 		if err != nil {
 			panic(err)
