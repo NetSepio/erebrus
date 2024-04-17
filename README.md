@@ -13,6 +13,10 @@ For more details visit [here](https://erebrus.io).
 
 - Email VPN configuration to clients easily.
 
+## Deploy Erebrus Node
+
+- Refer docs here [setup docs](https://github.com/NetSepio/erebrus/blob/main/docs/node.md).
+
 ## Get Started
 
 To deploy Erebrus, you need to follow the documentation given below,
