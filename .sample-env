@@ -4,15 +4,16 @@ SERVER=0.0.0.0
 HTTP_PORT=9080
 GRPC_PORT=9090
 REGION=EU01
+MASTERNODE_URL=https://dev.gateway.erebrus.io
+
 DOMAIN=http://ip_addr:9080
 HOST_IP=ip_addr
-MASTERNODE_URL=https://dev.gateway.erebrus.io
+WG_ENDPOINT_HOST=ip_addr
 
 # Wireguard Specifications
 WG_CONF_DIR=/etc/wireguard
 WG_CLIENTS_DIR=/etc/wireguard/clients
 WG_INTERFACE_NAME=wg0.conf
-WG_ENDPOINT_HOST=ip_addr
 WG_ENDPOINT_PORT=51820
 WG_IPv4_SUBNET=10.0.0.1/24
 WG_IPv6_SUBNET=fd9f:0000::10:0:0:1/64
