@@ -56,4 +56,5 @@ func GenerateWalletAddress() {
 
 	// Assign the wallet address to the global variable
 	WalletAddressSui = walletAddress
+	log.Println("the final ", WalletAddressSui)
 }
