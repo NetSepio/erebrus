@@ -3,6 +3,7 @@ package node
 import (
 	"os"
 
+	"github.com/NetSepio/erebrus/core"
 	"github.com/NetSepio/erebrus/util/pkg/speedtest"
 	"github.com/sirupsen/logrus"
 )
@@ -17,6 +18,7 @@ type NodeStatus struct {
 	UploadSpeed    float64 `json:"uploadSpeed"`
 	StartTimeStamp int64   `json:"startTimeStamp"`
 	Name           string  `json:"name"`
+	WalletAddress  string  `json:"walletAddress"`
 }
 
 func CreateNodeStatus(address string, id string, startTimeStamp int64, name string) *NodeStatus {
@@ -34,6 +36,7 @@ func CreateNodeStatus(address string, id string, startTimeStamp int64, name stri
 		UploadSpeed:    speedtestResult.UploadSpeed,
 		StartTimeStamp: startTimeStamp,
 		Name:           name,
+		WalletAddress:  core.WalletAddressSui,
 	}
 	return nodeStatus
 }

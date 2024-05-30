@@ -8,10 +8,12 @@ import (
 	"os"
 	"time"
 
+	"github.com/NetSepio/erebrus/core"
 	"github.com/NetSepio/erebrus/util/pkg/node"
 	"github.com/docker/docker/pkg/namesgenerator"
 	pubsub "github.com/libp2p/go-libp2p-pubsub"
 	"github.com/multiformats/go-multiaddr"
+	"github.com/sirupsen/logrus"
 )
 
 // DiscoveryInterval is how often we search for other peers via the DHT.
@@ -98,35 +100,50 @@ func Init() {
 		}
 	}()
 
-	// //Topic 2
-	// topicString2 := "client" // Change "UniversalPeer" to whatever you want!
-	// topic2, err := ps.Join(DiscoveryServiceTag + "/" + topicString2)
-	// if err != nil {
-	// 	panic(err)
-	// }
-	// // if err := topic2.Publish(ctx, []byte("sending data over client topic")); err != nil {
-	// // 	panic(err)
-	// // }
-	// sub2, err := topic2.Subscribe()
-	// if err != nil {
-	// 	panic(err)
-	// }
+	//Topic 2
+	ClientTopicString := "client" // Change "UniversalPeer" to whatever you want!
+	ClientTopic, err := ps.Join(DiscoveryServiceTag + "/" + ClientTopicString)
+	if err != nil {
+		panic(err)
+	}
+	go func() {
+		time.Sleep(5 * time.Second)
+		fmt.Println("sending clients")
+		clients, err := core.ReadClients()
+		if err != nil {
+			logrus.WithFields(logrus.Fields{
+				"err": err,
+			}).Error("failed to list clients")
+			return
+		}
 
-	// go func() {
-	// 	for {
-	// 		// Block until we recieve a new message.
-	// 		msg, err := sub2.Next(ctx)
-
-	// 		if err != nil {
-	// 			panic(err)
-	// 		}
-	// 		// if msg.ReceivedFrom == ha.ID() {
-	// 		// 	continue
-	// 		// }
-	// 		fmt.Printf("[%s] %s", msg.ReceivedFrom, string(msg.Data))
-	// 		fmt.Println()
-	// 	}
-	// }()
+		msgBytes, err := json.Marshal(clients)
+		if err != nil {
+			panic(err)
+		}
+		if err := topic.Publish(ctx, msgBytes); err != nil {
+			panic(err)
+		}
+	}()
+	//Subscribe to the topic.
+	ClientSub, err := ClientTopic.Subscribe()
+	if err != nil {
+		panic(err)
+	}
+	go func() {
+		for {
+			// Block until we recieve a new message.
+			msg, err := ClientSub.Next(ctx)
+			if err != nil {
+				panic(err)
+			}
+			if msg.ReceivedFrom == ha.ID() {
+				continue
+			}
+			fmt.Printf("[%s] %s", msg.ReceivedFrom, string(msg.Data))
+			fmt.Println()
+		}
+	}()
 
 }
 
