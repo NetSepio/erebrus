@@ -8,10 +8,12 @@ import (
 	"os"
 	"time"
 
+	"github.com/NetSepio/erebrus/core"
 	"github.com/NetSepio/erebrus/util/pkg/node"
 	"github.com/docker/docker/pkg/namesgenerator"
 	pubsub "github.com/libp2p/go-libp2p-pubsub"
 	"github.com/multiformats/go-multiaddr"
+	"github.com/sirupsen/logrus"
 )
 
 // DiscoveryInterval is how often we search for other peers via the DHT.

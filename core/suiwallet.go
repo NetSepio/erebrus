@@ -5,22 +5,25 @@ import (
 	"crypto/sha256"
 	"encoding/hex"
 	"log"
+	"os"
 
-	"github.com/tyler-smith/go-bip39"
 	"github.com/tyler-smith/go-bip32"
+	"github.com/tyler-smith/go-bip39"
 )
 
-// GenerateWalletAddress generates a mnemonic and returns the wallet address
-func GenerateWalletAddress() string {
-	// Generate a mnemonic
-	entropy, err := bip39.NewEntropy(128)
-	if err != nil {
-		log.Fatal(err)
+var WalletAddress string
+
+// GenerateWalletAddress generates a wallet address from the mnemonic set in the environment
+func GenerateWalletAddress() {
+	// Read mnemonic from environment variable
+	mnemonic := os.Getenv("MNEMONIC")
+	if mnemonic == "" {
+		log.Fatal("MNEMONIC environment variable is not set")
 	}
 
-	mnemonic, err := bip39.NewMnemonic(entropy)
-	if err != nil {
-		log.Fatal(err)
+	// Validate the mnemonic
+	if !bip39.IsMnemonicValid(mnemonic) {
+		log.Fatal("Invalid mnemonic")
 	}
 	log.Println("Mnemonic:", mnemonic)
 
@@ -51,5 +54,6 @@ func GenerateWalletAddress() string {
 	walletAddress := hex.EncodeToString(hash[:])
 	log.Println("Wallet Address:", walletAddress)
 
-	return walletAddress
+	// Assign the wallet address to the global variable
+	WalletAddress = walletAddress
 }
