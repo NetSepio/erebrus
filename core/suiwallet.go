@@ -11,7 +11,7 @@ import (
 	"github.com/tyler-smith/go-bip39"
 )
 
-var WalletAddress string
+var WalletAddressSui string
 
 // GenerateWalletAddress generates a wallet address from the mnemonic set in the environment
 func GenerateWalletAddress() {
@@ -55,5 +55,5 @@ func GenerateWalletAddress() {
 	log.Println("Wallet Address:", walletAddress)
 
 	// Assign the wallet address to the global variable
-	WalletAddress = walletAddress
+	WalletAddressSui = walletAddress
 }

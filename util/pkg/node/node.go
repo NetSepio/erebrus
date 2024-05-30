@@ -18,7 +18,7 @@ type NodeStatus struct {
 	UploadSpeed    float64 `json:"uploadSpeed"`
 	StartTimeStamp int64   `json:"startTimeStamp"`
 	Name           string  `json:"name"`
-	walletAddress  string  `json:"walletAddress"`
+	WalletAddress  string  `json:"walletAddress"`
 }
 
 func CreateNodeStatus(address string, id string, startTimeStamp int64, name string) *NodeStatus {
@@ -36,7 +36,7 @@ func CreateNodeStatus(address string, id string, startTimeStamp int64, name stri
 		UploadSpeed:    speedtestResult.UploadSpeed,
 		StartTimeStamp: startTimeStamp,
 		Name:           name,
-		walletAddress:  core.WalletAddress,
+		WalletAddress:  core.WalletAddressSui,
 	}
 	return nodeStatus
 }
