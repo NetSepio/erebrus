@@ -72,6 +72,7 @@ func Init() {
 		fmt.Println("sending status")
 		node_data := node.CreateNodeStatus(remoteAddr, ha.ID().String(), StartTimeStamp, name)
 		msgBytes, err := json.Marshal(node_data)
+		log.Println("node data", node_data)
 		if err != nil {
 			panic(err)
 		}
