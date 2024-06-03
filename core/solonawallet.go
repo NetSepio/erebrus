@@ -1,24 +1,24 @@
 package core
 
 import (
-	"bytes"
-	"crypto/sha256"
 	"fmt"
 	"os"
 
 	"github.com/mr-tron/base58"
 	"github.com/tyler-smith/go-bip39"
 	"golang.org/x/crypto/ed25519"
+	"golang.org/x/crypto/pbkdf2"
+	"golang.org/x/crypto/sha3"
 )
 
 var WalletAddressSolana string
 
-// GenerateWalletAddress generates a wallet address from the mnemonic set in the environment
-func GenerateWalletAddresssolana() {
+// GenerateWalletAddressSolana generates a Solana wallet address from the mnemonic set in the environment
+func GenerateWalletAddressSolana() {
 	// Read mnemonic from environment variable
 	mnemonic := os.Getenv("MNEMONIC_SOL")
 	if mnemonic == "" {
-		fmt.Println("MNEMONIC environment variable is not set")
+		fmt.Println("MNEMONIC_SOL environment variable is not set")
 		return
 	}
 
@@ -32,19 +32,17 @@ func GenerateWalletAddresssolana() {
 	// Derive a seed from the mnemonic
 	seed := bip39.NewSeed(mnemonic, "")
 
-	// Generate a keypair
-	publicKey, _, err := ed25519.GenerateKey(bytes.NewReader(seed))
-	if err != nil {
-		fmt.Println(err)
-		return
-	}
+	// Derive the keypair using PBKDF2 with the Solana-specific path
+	derivedKey := pbkdf2.Key(seed, []byte("ed25519 seed"), 2048, 64, sha3.New512)
 
-	// Generate wallet address
-	hash := sha256.Sum256(publicKey)
-	WalletAddresssol := base58.Encode(hash[:20])
-	fmt.Printf("Wallet Address: %s\n", WalletAddresssol)
+	// The first 32 bytes are the private key, the next 32 bytes are the chain code (unused here)
+	privateKey := derivedKey[:32]
 
-	// Assign the wallet address to the variable (consider error handling)
-	WalletAddressSolana = WalletAddresssol
-	fmt.Printf("The final wallet address: %s\n", WalletAddressSolana)
+	// Generate the public key
+	publicKey := ed25519.NewKeyFromSeed(privateKey).Public().(ed25519.PublicKey)
+
+	// Encode the public key to Base58
+	WalletAddressSolana = base58.Encode(publicKey)
+
+	fmt.Printf("Wallet Address: %s\n", WalletAddressSolana)
 }
