@@ -16,7 +16,7 @@ var WalletAddressSolana string
 // GenerateWalletAddress generates a wallet address from the mnemonic set in the environment
 func GenerateWalletAddresssolana() {
 	// Read mnemonic from environment variable
-	mnemonic := os.Getenv("MNEMONIC_sol")
+	mnemonic := os.Getenv("MNEMONIC_SOL")
 	if mnemonic == "" {
 		fmt.Println("MNEMONIC environment variable is not set")
 		return
