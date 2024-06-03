@@ -129,7 +129,7 @@ func main() {
 	// Call the function to generate the wallet address and store it in the global variable
 	core.GenerateWalletAddress()
 
-	core.GenerateWalletAddresssolana()
+	core.GenerateWalletAddressSolana()
 
 	go p2p.Init()
 	//running updater
