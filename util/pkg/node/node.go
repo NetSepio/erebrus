@@ -19,6 +19,7 @@ type NodeStatus struct {
 	StartTimeStamp int64   `json:"startTimeStamp"`
 	Name           string  `json:"name"`
 	WalletAddress  string  `json:"walletAddress"`
+	WalletAddresssol string `json:"walletAddressSol"`
 }
 
 func CreateNodeStatus(address string, id string, startTimeStamp int64, name string) *NodeStatus {
@@ -27,16 +28,17 @@ func CreateNodeStatus(address string, id string, startTimeStamp int64, name stri
 		logrus.Error("failed to fetch network speed: ", err.Error())
 	}
 	nodeStatus := &NodeStatus{
-		HttpPort:       os.Getenv("HTTP_PORT"),
-		Domain:         os.Getenv("DOMAIN"),
-		Address:        address,
-		Region:         os.Getenv("REGION"),
-		Id:             id,
-		DownloadSpeed:  speedtestResult.DownloadSpeed,
-		UploadSpeed:    speedtestResult.UploadSpeed,
-		StartTimeStamp: startTimeStamp,
-		Name:           name,
-		WalletAddress:  core.WalletAddressSui,
+		HttpPort:         os.Getenv("HTTP_PORT"),
+		Domain:           os.Getenv("DOMAIN"),
+		Address:          address,
+		Region:           os.Getenv("REGION"),
+		Id:               id,
+		DownloadSpeed:    speedtestResult.DownloadSpeed,
+		UploadSpeed:      speedtestResult.UploadSpeed,
+		StartTimeStamp:   startTimeStamp,
+		Name:             name,
+		WalletAddress:    core.WalletAddressSui,
+		WalletAddresssol: core.WalletAddressSolana,
 	}
 	return nodeStatus
 }
