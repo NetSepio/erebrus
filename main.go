@@ -127,8 +127,9 @@ func main() {
 	err := core.UpdateServerConfigWg()
 	util.CheckError("Error while creating WireGuard config file: ", err)
 	// Call the function to generate the wallet address and store it in the global variable
-	core.GenerateWalletAddress(),
-	core.GenerateWalletAddresssol(),
+	core.GenerateWalletAddress()
+
+	core.GenerateWalletAddresssolana()
 
 	go p2p.Init()
 	//running updater
