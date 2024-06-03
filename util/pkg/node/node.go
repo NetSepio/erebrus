@@ -19,7 +19,7 @@ type NodeStatus struct {
 	StartTimeStamp   int64   `json:"startTimeStamp"`
 	Name             string  `json:"name"`
 	WalletAddress    string  `json:"walletAddress"`
-	WalletAddresssol string  `json:"wallet"`
+	WalletAddresssol string  `json:"walletAddressSol"`
 }
 
 func CreateNodeStatus(address string, id string, startTimeStamp int64, name string) *NodeStatus {
