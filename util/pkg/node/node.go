@@ -14,11 +14,11 @@ type NodeStatus struct {
 	Domain           string  `json:"domain"`
 	Address          string  `json:"address"`
 	Region           string  `json:"region"`
+	NodeName         string  `json:"nodename"`
 	DownloadSpeed    float64 `json:"downloadSpeed"`
 	UploadSpeed      float64 `json:"uploadSpeed"`
 	StartTimeStamp   int64   `json:"startTimeStamp"`
 	Name             string  `json:"name"`
-	NodeName         string  `json:"nodename"`
 	WalletAddress    string  `json:"walletAddress"`
 	WalletAddresssol string  `json:"walletAddressSol"`
 }
@@ -32,9 +32,9 @@ func CreateNodeStatus(address string, id string, startTimeStamp int64, name stri
 		HttpPort:         os.Getenv("HTTP_PORT"),
 		Domain:           os.Getenv("DOMAIN"),
 		Address:          address,
+		NodeName:         os.Getenv("NODE_NAME"),
 		Region:           os.Getenv("REGION"),
 		Id:               id,
-		NodeName:         os.Getenv("NODE_NAME"),
 		DownloadSpeed:    speedtestResult.DownloadSpeed,
 		UploadSpeed:      speedtestResult.UploadSpeed,
 		StartTimeStamp:   startTimeStamp,
