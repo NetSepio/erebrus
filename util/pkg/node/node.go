@@ -18,6 +18,7 @@ type NodeStatus struct {
 	UploadSpeed      float64 `json:"uploadSpeed"`
 	StartTimeStamp   int64   `json:"startTimeStamp"`
 	Name             string  `json:"name"`
+	NodeName         string  `json:"nodename"`
 	WalletAddress    string  `json:"walletAddress"`
 	WalletAddresssol string  `json:"walletAddressSol"`
 }
@@ -33,6 +34,7 @@ func CreateNodeStatus(address string, id string, startTimeStamp int64, name stri
 		Address:          address,
 		Region:           os.Getenv("REGION"),
 		Id:               id,
+		NodeName:         os.Getenv("NODE_NAME"),
 		DownloadSpeed:    speedtestResult.DownloadSpeed,
 		UploadSpeed:      speedtestResult.UploadSpeed,
 		StartTimeStamp:   startTimeStamp,
