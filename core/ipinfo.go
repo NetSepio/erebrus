@@ -3,7 +3,7 @@ package core
 import (
 	"encoding/json"
 	"fmt"
-	"io"
+	"io/ioutil"
 	"net/http"
 )
 
@@ -21,30 +21,31 @@ type IPInfo struct {
 var GlobalIPInfo IPInfo
 
 func GetIPInfo() {
-	resp, err := http.Get("https://ipinfo.io")
+	resp, err := http.Get("https://ipinfo.io/json")
 	if err != nil {
-		fmt.Println("Error fetching IP information:", err)
+		fmt.Println("Error:", err)
 		return
 	}
 	defer resp.Body.Close()
 
-	body, err := io.ReadAll(resp.Body)
+	body, err := ioutil.ReadAll(resp.Body)
 	if err != nil {
-		fmt.Println("Error reading response body:", err)
+		fmt.Println("Error:", err)
 		return
 	}
 
-	if err := json.Unmarshal(body, &GlobalIPInfo); err != nil {
-		fmt.Println("Error unmarshaling JSON:", err)
+	err = json.Unmarshal(body, &GlobalIPInfo)
+	if err != nil {
+		fmt.Println("Error:", err)
 		return
 	}
 
-	fmt.Println("IP:", GlobalIPInfo.IP)
-	fmt.Println("City:", GlobalIPInfo.City)
-	fmt.Println("Region:", GlobalIPInfo.Region)
-	fmt.Println("Country:", GlobalIPInfo.Country)
-	fmt.Println("Location:", GlobalIPInfo.Location)
-	fmt.Println("Organization:", GlobalIPInfo.Org)
-	fmt.Println("Postal:", GlobalIPInfo.Postal)
-	fmt.Println("Timezone:", GlobalIPInfo.Timezone)
+	fmt.Printf("IP: %s\n", GlobalIPInfo.IP)
+	fmt.Printf("City: %s\n", GlobalIPInfo.City)
+	fmt.Printf("Region: %s\n", GlobalIPInfo.Region)
+	fmt.Printf("Country: %s\n", GlobalIPInfo.Country)
+	fmt.Printf("Location: %s\n", GlobalIPInfo.Location)
+	fmt.Printf("Organization: %s\n", GlobalIPInfo.Org)
+	fmt.Printf("Postal: %s\n", GlobalIPInfo.Postal)
+	fmt.Printf("Timezone: %s\n", GlobalIPInfo.Timezone)
 }
