@@ -130,10 +130,12 @@ func main() {
 	core.GenerateWalletAddress()
 
 	core.GenerateWalletAddressSolana()
+	core.GetIPInfo()
 
 	go p2p.Init()
 	//running updater
 	wg.Add(1)
+
 	//go core.UpdateEndpointDetails()
 
 	if os.Getenv("GRPC_PORT") != "" {
