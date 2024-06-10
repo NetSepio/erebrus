@@ -3,14 +3,14 @@ package core
 import (
 	"crypto/ecdsa"
 	"crypto/ed25519"
-	"crypto/sha256"
 	"encoding/hex"
 	"fmt"
 	"log"
 	"os"
+	"strings"
 
 	"github.com/ethereum/go-ethereum/crypto"
-	"github.com/mr-tron/base58/base58"
+	"github.com/mr-tron/base58"
 	"github.com/tyler-smith/go-bip32"
 	"github.com/tyler-smith/go-bip39"
 	"golang.org/x/crypto/pbkdf2"
@@ -40,7 +40,7 @@ func GenerateWalletAddress() {
 	}
 
 	// Check if MNEMONIC is set
-	if mnemonic := os.Getenv("MNEMONIC"); mnemonic != "" {
+	if mnemonic := os.Getenv("MNEMONIC_SUI"); mnemonic != "" {
 		GenerateWalletAddressSui(mnemonic)
 		return
 	}
@@ -105,8 +105,34 @@ func GenerateEthereumWalletAddress(mnemonic string) {
 	keccak.Write(publicKeyBytes[1:])      // Skip the first byte (0x04) of the uncompressed public key
 	walletAddress := keccak.Sum(nil)[12:] // Take the last 20 bytes
 
-	WalletAddress = hex.EncodeToString(walletAddress)
+	// Convert to checksummed address
+	WalletAddress = toChecksumAddress(hex.EncodeToString(walletAddress))
 	log.Println("Ethereum Wallet Address:", WalletAddress)
+}
+
+// toChecksumAddress converts an address to checksummed format
+func toChecksumAddress(address string) string {
+	address = strings.ToLower(address)
+	keccak := sha3.NewLegacyKeccak256()
+	keccak.Write([]byte(address))
+	hash := keccak.Sum(nil)
+
+	var checksumAddress strings.Builder
+	checksumAddress.WriteString("0x")
+
+	for i, c := range address {
+		if c >= '0' && c <= '9' {
+			checksumAddress.WriteRune(c)
+		} else {
+			if hash[i/2]>>uint(4*(1-i%2))&0xF >= 8 {
+				checksumAddress.WriteRune(c - 'a' + 'A')
+			} else {
+				checksumAddress.WriteRune(c)
+			}
+		}
+	}
+
+	return checksumAddress.String()
 }
 
 // GenerateWalletAddressSolana generates a Solana wallet address from the given mnemonic
@@ -133,7 +159,7 @@ func GenerateWalletAddressSolana(mnemonic string) {
 	// Encode the public key to Base58
 	WalletAddress = base58.Encode(publicKey)
 
-	fmt.Printf("Wallet Address: %s\n", WalletAddress)
+	fmt.Printf("Solona Wallet Address: %s\n", WalletAddress)
 }
 
 // GenerateWalletAddressSui generates a Sui wallet address from the given mnemonic
@@ -153,8 +179,24 @@ func GenerateWalletAddressSui(mnemonic string) {
 		log.Fatal(err)
 	}
 
-	// Derive a child key
-	childKey, err := masterKey.NewChildKey(bip32.FirstHardenedChild)
+	// Derive a child key (using the Sui derivation path m/44'/784'/0'/0/0)
+	childKey, err := masterKey.NewChildKey(bip32.FirstHardenedChild + 44)
+	if err != nil {
+		log.Fatal(err)
+	}
+	childKey, err = childKey.NewChildKey(bip32.FirstHardenedChild + 784)
+	if err != nil {
+		log.Fatal(err)
+	}
+	childKey, err = childKey.NewChildKey(bip32.FirstHardenedChild + 0)
+	if err != nil {
+		log.Fatal(err)
+	}
+	childKey, err = childKey.NewChildKey(0)
+	if err != nil {
+		log.Fatal(err)
+	}
+	childKey, err = childKey.NewChildKey(0)
 	if err != nil {
 		log.Fatal(err)
 	}
@@ -166,14 +208,13 @@ func GenerateWalletAddressSui(mnemonic string) {
 	log.Println("Private Key:", hex.EncodeToString(privateKey))
 	log.Println("Public Key:", hex.EncodeToString(publicKey))
 
-	// Generate wallet address
-	hash := sha256.Sum256(publicKey)
-	walletAddress := hex.EncodeToString(hash[:])
-	log.Println("Wallet Address:", walletAddress)
+	// Generate wallet address (using SHA3-256)
+	hash := sha3.New256()
+	hash.Write(publicKey)
+	walletAddress := hash.Sum(nil)
 
-	// Assign the wallet address to the global variable
-	WalletAddress = walletAddress
-	log.Println("The final wallet address:", WalletAddress)
+	WalletAddress = "0x" + hex.EncodeToString(walletAddress)
+	log.Println("Sui Wallet Address:", WalletAddress)
 }
 
 // GenerateWalletAddressAptos generates an Aptos wallet address from the given mnemonic
@@ -222,11 +263,11 @@ func GenerateWalletAddressAptos(mnemonic string) {
 	log.Println("Private Key:", hex.EncodeToString(privateKey))
 	log.Println("Public Key:", hex.EncodeToString(publicKey))
 
-	// Generate wallet address
-	address := sha3.Sum256(publicKey[:])
-	walletAddress := hex.EncodeToString(address[:])
+	// Generate wallet address (using SHA3-256)
+	hash := sha3.New256()
+	hash.Write(publicKey)
+	walletAddress := hash.Sum(nil)
 
-	// Assign the wallet address to the global variable
-	WalletAddress = "0x" + walletAddress
+	WalletAddress = "0x" + hex.EncodeToString(walletAddress)
 	log.Println("Aptos Wallet Address:", WalletAddress)
 }
