@@ -2,6 +2,7 @@ package node
 
 import (
 	"encoding/json"
+	"fmt"
 	"os"
 
 	"github.com/NetSepio/erebrus/core"
@@ -123,8 +124,8 @@ func CreateNodeStatus(address string, id string, startTimeStamp int64, name stri
 		// IpInfoTimezone: core.GlobalIPInfo.Timezone,
 		Version:    "v1",
 		CodeHash:   "xxxxxxxxxxxxxxxxxxx",
-		SystemInfo: ToJSON(GetOSInfo()),
-		IpInfo:     ToJSON(GetIPInfo()),
+		SystemInfo: fmt.Sprintf("%+v\n", GetOSInfo()),
+		IpInfo:     fmt.Sprintf("%+v\n", GetIPInfo()),
 	}
 
 	return nodeStatus
