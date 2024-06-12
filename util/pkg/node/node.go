@@ -1,6 +1,7 @@
 package node
 
 import (
+	"encoding/json"
 	"os"
 
 	"github.com/NetSepio/erebrus/core"
@@ -30,27 +31,27 @@ import (
 // 	IpInfoTimezone string  `json:"ipinfotimezone"`
 // }
 
-type NodeStatus struct {
-	PeerId           string  `json:"peerId" gorm:"primaryKey"`
-	Name             string  `json:"name"`
-	HttpPort         string  `json:"httpPort"`
-	Host             string  `json:"host"` //domain
-	PeerAddress      string  `json:"peerAddress"`
-	Region           string  `json:"region"`
-	Status           string  `json:"status"` // offline 1, online 2, maintainance 3,block 4
-	DownloadSpeed    float64 `json:"downloadSpeed"`
-	UploadSpeed      float64 `json:"uploadSpeed"`
-	RegistrationTime int64   `json:"registrationTime"` //StartTimeStamp
-	LastPing         int64   `json:"lastPing"`
-	Chain            string  `json:"chain"`
-	WalletAddress    string  `json:"walletAddress"`
-	Version          string  `json:"version"`
-	CodeHash         string  `json:"codeHash"`
-	SystemInfo       OSInfo  `json:"systemInfo"`
-	IpInfo           IPInfo  `json:"ipinfo"`
-}
+// type NodeStatus struct {
+// 	PeerId           string  `json:"peerId" gorm:"primaryKey"`
+// 	Name             string  `json:"name"`
+// 	HttpPort         string  `json:"httpPort"`
+// 	Host             string  `json:"host"` //domain
+// 	PeerAddress      string  `json:"peerAddress"`
+// 	Region           string  `json:"region"`
+// 	Status           string  `json:"status"` // offline 1, online 2, maintainance 3,block 4
+// 	DownloadSpeed    float64 `json:"downloadSpeed"`
+// 	UploadSpeed      float64 `json:"uploadSpeed"`
+// 	RegistrationTime int64   `json:"registrationTime"` //StartTimeStamp
+// 	LastPing         int64   `json:"lastPing"`
+// 	Chain            string  `json:"chain"`
+// 	WalletAddress    string  `json:"walletAddress"`
+// 	Version          string  `json:"version"`
+// 	CodeHash         string  `json:"codeHash"`
+// 	SystemInfo       OSInfo  `json:"systemInfo"`
+// 	IpInfo           IPInfo  `json:"ipinfo"`
+// }
 
-type TestNodeStatus struct {
+type NodeStatus struct {
 	PeerId           string  `json:"peerId" gorm:"primaryKey"`
 	Name             string  `json:"name"`
 	HttpPort         string  `json:"httpPort"`
@@ -68,6 +69,19 @@ type TestNodeStatus struct {
 	CodeHash         string  `json:"codeHash"`
 	SystemInfo       string  `json:"systemInfo" gorm:"type:jsonb"`
 	IpInfo           string  `json:"ipinfo" gorm:"type:jsonb"`
+}
+
+func ToJSON(data interface{}) string {
+	bytes, err := json.Marshal(data)
+	if err != nil {
+		panic(err)
+	}
+	return string(bytes)
+}
+
+// Helper function to convert JSON string to struct
+func FromJSON(data string, v interface{}) error {
+	return json.Unmarshal([]byte(data), v)
 }
 
 type OSInfo struct {
@@ -109,8 +123,8 @@ func CreateNodeStatus(address string, id string, startTimeStamp int64, name stri
 		// IpInfoTimezone: core.GlobalIPInfo.Timezone,
 		Version:    "v1",
 		CodeHash:   "xxxxxxxxxxxxxxxxxxx",
-		SystemInfo: GetOSInfo(),
-		IpInfo:     GetIPInfo(),
+		SystemInfo: ToJSON(GetOSInfo()),
+		IpInfo:     ToJSON(GetIPInfo()),
 	}
 
 	return nodeStatus
