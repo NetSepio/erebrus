@@ -14,6 +14,7 @@ import (
 	"github.com/NetSepio/erebrus/p2p"
 	"github.com/NetSepio/erebrus/util"
 	"github.com/NetSepio/erebrus/util/pkg/auth"
+	"github.com/NetSepio/erebrus/util/pkg/node"
 	"github.com/gin-contrib/static"
 
 	helmet "github.com/danielkov/gin-helmet"
@@ -30,6 +31,7 @@ func init() {
 	log.SetFormatter(&log.JSONFormatter{})
 	log.SetOutput(os.Stderr)
 	log.SetLevel(log.DebugLevel)
+	node.Init()
 
 	// Get Hostname for updating Log StandardFields
 	HostName, err := os.Hostname()
@@ -49,6 +51,7 @@ func init() {
 			log.WithFields(util.StandardFields).Fatalf("Error in reading the config file: %v", err)
 		}
 	}
+	core.GetIPInfo()
 
 	auth.Init()
 }
@@ -130,7 +133,6 @@ func main() {
 	core.GenerateWalletAddress()
 	// core.GenerateWalletAddressSolana()
 	// core.GenerateEthereumWalletAddress()
-	core.GetIPInfo()
 
 	go p2p.Init()
 	//running updater

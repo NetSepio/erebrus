@@ -5,18 +5,31 @@ import (
 	"net"
 	"os"
 	"runtime"
+
+	"github.com/NetSepio/erebrus/core"
 )
 
 var (
-	osInfo OSInfo
-	ipInfo IPInfo
+	osInfo    OSInfo
+	ipInfo    IPInfo
+	ipGeoData IpGeoAddress
 )
 
-func init() {
+func Init() {
 	osInfo = OSInfo{
 		Name:         runtime.GOOS,
 		Architecture: runtime.GOARCH,
 		NumCPU:       runtime.NumCPU(),
+	}
+
+	ipGeoData = IpGeoAddress{
+		IpInfoIP:       core.GlobalIPInfo.IP,
+		IpInfoCity:     core.GlobalIPInfo.City,
+		IpInfoCountry:  core.GlobalIPInfo.Country,
+		IpInfoLocation: core.GlobalIPInfo.Location,
+		IpInfoOrg:      core.GlobalIPInfo.Org,
+		IpInfoPostal:   core.GlobalIPInfo.Postal,
+		IpInfoTimezone: core.GlobalIPInfo.Timezone,
 	}
 
 	hostname, err := os.Hostname()
@@ -49,4 +62,8 @@ func GetOSInfo() OSInfo {
 
 func GetIPInfo() IPInfo {
 	return ipInfo
+}
+
+func GetIpData() IpGeoAddress {
+	return ipGeoData
 }

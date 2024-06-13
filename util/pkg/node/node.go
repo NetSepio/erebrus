@@ -2,7 +2,9 @@ package node
 
 import (
 	"encoding/json"
+	"fmt"
 	"os"
+	"unicode"
 
 	"github.com/NetSepio/erebrus/core"
 	"github.com/NetSepio/erebrus/util/pkg/speedtest"
@@ -69,6 +71,7 @@ type NodeStatus struct {
 	CodeHash         string  `json:"codeHash"`
 	SystemInfo       string  `json:"systemInfo" gorm:"type:jsonb"`
 	IpInfo           string  `json:"ipinfo" gorm:"type:jsonb"`
+	IpGeoData        string  `json:"ipGeoData" gorm:"type:jsonb"`
 }
 
 func ToJSON(data interface{}) string {
@@ -96,12 +99,33 @@ type IPInfo struct {
 	IPv6Addresses []string
 }
 
+type IpGeoAddress struct {
+	IpInfoIP       string
+	IpInfoCity     string
+	IpInfoCountry  string
+	IpInfoLocation string
+	IpInfoOrg      string
+	IpInfoPostal   string
+	IpInfoTimezone string
+}
+
 func CreateNodeStatus(address string, id string, startTimeStamp int64, name string) *NodeStatus {
 
+	fmt.Println("Printing GetIpData : ")
+	fmt.Printf("%+v\n", core.GlobalIPInfo)
+	fmt.Println()
 	speedtestResult, err := speedtest.GetSpeedtestResults()
 	if err != nil {
 		logrus.Error("failed to fetch network speed: ", err.Error())
 	}
+	IPGeo := IpGeoAddress{IpInfoIP: core.GlobalIPInfo.IP,
+		IpInfoCity:     core.GlobalIPInfo.City,
+		IpInfoCountry:  core.GlobalIPInfo.Country,
+		IpInfoLocation: core.GlobalIPInfo.Location,
+		IpInfoOrg:      core.GlobalIPInfo.Org,
+		IpInfoPostal:   core.GlobalIPInfo.Postal,
+		IpInfoTimezone: core.GlobalIPInfo.Timezone}
+	fmt.Println("Ip Geo : ", IPGeo)
 	nodeStatus := &NodeStatus{
 		HttpPort:         os.Getenv("HTTP_PORT"),
 		Host:             os.Getenv("DOMAIN"),
@@ -114,18 +138,32 @@ func CreateNodeStatus(address string, id string, startTimeStamp int64, name stri
 		Name:             name,
 		WalletAddress:    core.WalletAddress,
 		Chain:            os.Getenv("CHAIN_NAME"),
-		// IpInfoIP:       core.GlobalIPInfo.IP,
-		// IpInfoCity:     core.GlobalIPInfo.City,
-		// IpInfoCountry:  core.GlobalIPInfo.Country,
-		// IpInfoLocation: core.GlobalIPInfo.Location,
-		// IpInfoOrg:      core.GlobalIPInfo.Org,
-		// IpInfoPostal:   core.GlobalIPInfo.Postal,
-		// IpInfoTimezone: core.GlobalIPInfo.Timezone,
+		// IpInfoIP:         core.GlobalIPInfo.IP,
+		// IpInfoCity:       core.GlobalIPInfo.City,
+		// IpInfoCountry:    core.GlobalIPInfo.Country,
+		// IpInfoLocation:   core.GlobalIPInfo.Location,
+		// IpInfoOrg:        core.GlobalIPInfo.Org,
+		// IpInfoPostal:     core.GlobalIPInfo.Postal,
+		// IpInfoTimezone:   core.GlobalIPInfo.Timezone,
+		IpGeoData:  ToJSON(IPGeo),
 		Version:    "v1",
-		CodeHash:   "xxxxxxxxxxxxxxxxxxx",
+		CodeHash:   "yyyyyyyyyyyyyyyyyy",
 		SystemInfo: ToJSON(GetOSInfo()),
 		IpInfo:     ToJSON(GetIPInfo()),
 	}
 
 	return nodeStatus
+}
+
+func MakeItString(str string) string {
+
+	result := ""
+	for _, char := range str {
+		if unicode.IsLetter(char) {
+			result += string(unicode.ToLower(char))
+		} else {
+			result += string(char)
+		}
+	}
+	return result
 }
