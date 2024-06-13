@@ -118,14 +118,14 @@ func CreateNodeStatus(address string, id string, startTimeStamp int64, name stri
 	if err != nil {
 		logrus.Error("failed to fetch network speed: ", err.Error())
 	}
-	IPGeo := IpGeoAddress{IpInfoIP: core.GlobalIPInfo.IP,
+	IpGeoAddress := IpGeoAddress{IpInfoIP: core.GlobalIPInfo.IP,
 		IpInfoCity:     core.GlobalIPInfo.City,
 		IpInfoCountry:  core.GlobalIPInfo.Country,
 		IpInfoLocation: core.GlobalIPInfo.Location,
 		IpInfoOrg:      core.GlobalIPInfo.Org,
 		IpInfoPostal:   core.GlobalIPInfo.Postal,
 		IpInfoTimezone: core.GlobalIPInfo.Timezone}
-	fmt.Println("Ip Geo : ", IPGeo)
+	fmt.Println("Ip Geo : ", IpGeoAddress)
 	nodeStatus := &NodeStatus{
 		HttpPort:         os.Getenv("HTTP_PORT"),
 		Host:             os.Getenv("DOMAIN"),
@@ -138,18 +138,11 @@ func CreateNodeStatus(address string, id string, startTimeStamp int64, name stri
 		Name:             name,
 		WalletAddress:    core.WalletAddress,
 		Chain:            os.Getenv("CHAIN_NAME"),
-		// IpInfoIP:         core.GlobalIPInfo.IP,
-		// IpInfoCity:       core.GlobalIPInfo.City,
-		// IpInfoCountry:    core.GlobalIPInfo.Country,
-		// IpInfoLocation:   core.GlobalIPInfo.Location,
-		// IpInfoOrg:        core.GlobalIPInfo.Org,
-		// IpInfoPostal:     core.GlobalIPInfo.Postal,
-		// IpInfoTimezone:   core.GlobalIPInfo.Timezone,
-		IpGeoData:  ToJSON(IPGeo),
-		Version:    "v1",
-		CodeHash:   "yyyyyyyyyyyyyyyyyy",
-		SystemInfo: ToJSON(GetOSInfo()),
-		IpInfo:     ToJSON(GetIPInfo()),
+		Version:          "v1",
+		CodeHash:         "xxxxxxxxxxxxx",
+		SystemInfo:       ToJSON(GetOSInfo()),
+		IpInfo:           ToJSON(GetIPInfo()),
+		IpGeoData:        ToJSON(IpGeoAddress),
 	}
 
 	return nodeStatus
