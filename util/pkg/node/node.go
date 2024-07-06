@@ -65,7 +65,7 @@ type NodeStatus struct {
 	UploadSpeed      float64 `json:"uploadSpeed"`
 	RegistrationTime int64   `json:"registrationTime"` //StartTimeStamp
 	LastPing         int64   `json:"lastPing"`
-	Chain            string  `json:"chainName"`
+	ChainName        string  `json:"chainName"`
 	WalletAddress    string  `json:"walletAddress"`
 	Version          string  `json:"version"`
 	CodeHash         string  `json:"codeHash"`
@@ -137,7 +137,7 @@ func CreateNodeStatus(address string, id string, startTimeStamp int64, name stri
 		RegistrationTime: startTimeStamp,
 		Name:             name,
 		WalletAddress:    core.WalletAddress,
-		Chain:            os.Getenv("CHAIN_NAME"),
+		ChainName:        core.ChainName,
 		Version:          "v1",
 		CodeHash:         "xxxxxxxxxxxxx",
 		SystemInfo:       ToJSON(GetOSInfo()),

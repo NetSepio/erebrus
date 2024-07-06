@@ -45,10 +45,12 @@ func init() {
 	}
 	// Check if loading environment variables from .env file is required
 	if os.Getenv("LOAD_CONFIG_FILE") == "" {
+
 		// Load environment variables from .env file
 		err = godotenv.Load()
 		if err != nil {
 			log.WithFields(util.StandardFields).Fatalf("Error in reading the config file: %v", err)
+
 		}
 	}
 	core.GetIPInfo()
@@ -133,6 +135,7 @@ func main() {
 	core.GenerateWalletAddress()
 	// core.GenerateWalletAddressSolana()
 	// core.GenerateEthereumWalletAddress()
+	core.LoadChainName()
 
 	go p2p.Init()
 	//running updater
