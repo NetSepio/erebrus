@@ -4,8 +4,6 @@ import (
 	"fmt"
 	"log"
 	"os"
-
-	"github.com/joho/godotenv"
 )
 
 var ChainName string
@@ -13,10 +11,10 @@ var ChainName string
 // Function to load the chain name from the environment and save it to the global variable
 func LoadChainName() {
 	// Load environment variables from the .env file
-	err := godotenv.Load()
-	if err != nil {
-		log.Fatalf("Error loading .env file")
-	}
+	// err := godotenv.Load()
+	// if err != nil {
+	// 	log.Fatalf("Error loading .env file")
+	// }
 
 	// Get the CHAIN_NAME variable from the environment
 	ChainName = os.Getenv("CHAIN_NAME")
