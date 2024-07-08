@@ -46,46 +46,56 @@ show_spinner() {
     printf " ]\b\b\b\b\b\b\t"
 }
 
+# Function to check if Docker is installed
+is_docker_installed() {
+    if command -v docker > /dev/null && command -v docker-compose > /dev/null; then
+        return 0
+    else
+        return 1
+    fi
+}
+
 # Function to install Docker and Docker Compose based on distribution
 install_dependencies() {
     clear
-    printf "\e[1mInstalling Docker and Docker Compose...\e[0m\n"
     status_stage1="\e[34mIn Progress\e[0m"
     display_header
-
-    if command -v apt-get > /dev/null; then
-        printf "Installing Docker on Debian/Ubuntu..."
-        (sudo apt-get update -qq && sudo apt-get install -y docker docker-compose > /dev/null 2>&1) &
-        show_spinner $!
-        printf " \e[32mComplete\e[0m\n"
-    elif command -v yum > /dev/null; then
-        printf "Installing Docker on Red Hat/CentOS..."
-        (sudo yum install -y docker docker-compose > /dev/null 2>&1 && sudo systemctl start docker && sudo systemctl enable docker) &
-        show_spinner $!
-        printf " \e[32mComplete\e[0m\n"
-    elif command -v pacman > /dev/null; then
-        printf "Installing Docker on Arch Linux..."
-        (sudo pacman -Sy --noconfirm docker docker-compose > /dev/null 2>&1 && sudo systemctl start docker && sudo systemctl enable docker) &
-        show_spinner $!
-        printf " \e[32mComplete\e[0m\n"
-    elif command -v dnf > /dev/null; then
-        printf "Installing Docker on Fedora..."
-        (sudo dnf install -y docker docker-compose > /dev/null 2>&1 && sudo systemctl start docker && sudo systemctl enable docker) &
-        show_spinner $!
-        printf " \e[32mComplete\e[0m\n"
-    elif [[ "$OSTYPE" == "darwin"* ]]; then
-        printf "Installing Docker on macOS..."
-        if ! command -v brew > /dev/null; then
-            printf "Homebrew not found. Please install Homebrew first.\n"
+    printf "\e[1mInstalling Docker and Docker Compose...\e[0m"
+    if is_docker_installed; then
+        printf " \e[32m[Already installed]\e[0m\n"
+        sleep 3
+    else
+        if command -v apt-get > /dev/null; then
+            (sudo apt-get update -qq && sudo apt-get install -y containerd docker.io > /dev/null 2> error.log) &
+            show_spinner $!
+            printf " \e[32mComplete\e[0m\n"
+        elif command -v yum > /dev/null; then
+            (sudo yum-config-manager --add-repo https://download.docker.com/linux/centos/docker-ce.repo && yum install -y docker > /dev/null 2>&1 && sudo systemctl start docker && sudo systemctl enable docker > /dev/null 2> error.log) &
+            show_spinner $!
+            printf " \e[32mComplete\e[0m\n"
+        elif command -v pacman > /dev/null; then
+            (sudo pacman -Sy --noconfirm docker > /dev/null 2>&1 && sudo systemctl start docker && sudo systemctl enable docker > /dev/null 2> error.log) &
+            show_spinner $!
+            printf " \e[32mComplete\e[0m\n"
+        elif command -v dnf > /dev/null; then
+            printf "Installing Docker on Fedora..."
+            (sudo dnf install dnf-plugins-core && dnf config-manager --add-repo https://download.docker.com/linux/fedora/docker-ce.repo && dnf install -y docker-ce docker-ce-cli containerd.io  > /dev/null 2>&1 && sudo systemctl start docker && sudo systemctl enable docker > /dev/null 2> error.log) &
+            show_spinner $!
+            printf " \e[32mComplete\e[0m\n"
+        elif [[ "$OSTYPE" == "darwin"* ]]; then
+            printf "Installing Docker on macOS..."
+            if ! command -v brew > /dev/null; then
+                printf "Homebrew not found. Please install Homebrew first.\n"
+                exit 1
+            fi
+            (brew install --cask docker > /dev/null 2> error.log && open /Applications/Docker.app) &
+            show_spinner $!
+            printf " \e[32mComplete\e[0m\n"
+            printf "Please ensure Docker is running from the macOS toolbar.\n"
+        else
+            printf "Unsupported Linux distribution.\n"
             exit 1
         fi
-        (brew install --cask docker > /dev/null 2>&1 && open /Applications/Docker.app) &
-        show_spinner $!
-        printf " \e[32mComplete\e[0m\n"
-        printf "Please ensure Docker is running from the macOS toolbar.\n"
-    else
-        printf "Unsupported Linux distribution.\n"
-        exit 1
     fi
 
     if docker --version > /dev/null 2>&1 && docker-compose --version > /dev/null 2>&1; then
@@ -150,7 +160,6 @@ test_ip_reachability() {
                 return 1
             fi
         fi
-
         ((retry++))
     done
 
@@ -169,26 +178,13 @@ get_default_interface() {
     fi
 }
 
-# Function to prompt user to select network interface
-select_interface() {
-    PS3="Select an interface to run Erebrus VPN service on: "
-    select INTERFACE in $(get_default_interface); do
-        if [ -n "$INTERFACE" ]; then
-            echo "$INTERFACE"
-            break
-        else
-            echo "Invalid choice. Please select a valid interface."
-        fi
-    done
-}
-
 check_node_status() {
     local container_running=0
     local port_9080_listening=0
     local port_9002_listening=0
 
     # Check if container 'erebrus' is running
-    if docker ps -f name=erebrus | grep erebrus >/dev/null; then
+    if docker ps -f name=erebrus | grep "erebrus" >/dev/null; then
         container_running=1
     fi
 
@@ -207,6 +203,29 @@ check_node_status() {
     else
         return 1  # Either container is not running or ports are not listening
     fi
+}
+
+check_mnemonic_format() {
+    local mnemonic="$1"
+    # Split the mnemonic into an array of words
+    IFS=' ' read -r -a words <<< "$mnemonic"
+
+    # Define the required number of words in the mnemonic (12, 15, 18, 21, or 24 typically for BIP39)
+    local required_words=(12 15 18 21 24)
+
+    # Check if the mnemonic has the correct number of words
+    local num_words=${#words[@]}
+    if ! [[ " ${required_words[*]} " =~ " $num_words " ]]; then
+        return 1
+    fi
+
+    # Check if each word in the mnemonic is valid
+    for word in "${words[@]}"; do
+        if [[ ! "$word" =~ ^[a-zA-Z]+$ ]]; then
+            return 1
+        fi
+    done
+    return 0
 }
 
 print_final_message() {
@@ -244,17 +263,47 @@ configure_node() {
     DEFAULT_DOMAIN="http://${DEFAULT_HOST_IP}:9080"
 
     # Prompt for network interface
-    printf "\nAutomatically detected HOST_IP: ${DEFAULT_HOST_IP}\n"
-    read -p "Do you want to use this as the default HOST_IP? (y/n): " use_default_host_ip
+    printf "\nAutomatically detected public IP: ${DEFAULT_HOST_IP}\n"
+    read -p "Do you want to use this public IP? (y/n): " use_default_host_ip
     if [ "$use_default_host_ip" = "n" ]; then
-        read -p "Enter HOST_IP (default: ${DEFAULT_HOST_IP}): " HOST_IP
+        read -p "Enter your public IP (default: ${DEFAULT_HOST_IP}): " HOST_IP
         HOST_IP=${HOST_IP:-$DEFAULT_HOST_IP}
     else
         HOST_IP=${DEFAULT_HOST_IP}
     fi
 
     # Prompt for network interface
-    INTERFACE=$(select_interface)
+    printf "Select from automatically detected interface(s) below:"
+    PS3="Select an interface (e.g. 1): "
+    select INTERFACE in $(get_default_interface); do
+        if [ -n "$INTERFACE" ]; then
+            echo "$INTERFACE"
+            break
+        else
+            echo "Invalid choice. Please select a valid interface."
+        fi
+    done
+
+    # Prompt for Chain
+    printf "Select valid chain from list below:\n"
+    PS3="Select a chain (e.g. 1): "
+    options=("APT" "SOL" "EVM" "SUI")
+    select CHAIN in "${options[@]}"; do
+        if [ -n "$CHAIN" ]; then
+            break
+        else
+            echo "Invalid choice. Please select a valid chain."
+        fi
+    done
+
+    while true; do
+        read -p "Enter your wallet mnemonic: " WALLET_MNEMONIC
+        if check_mnemonic_format "$WALLET_MNEMONIC"; then
+            break
+        else
+            printf "Wrong mnemonic, try agian with correct mnemonic.\n"
+        fi
+    done
 
     # Display and confirm user-provided variables
     printf "\n\e[1mUser Provided Configuration:\e[0m\n"
@@ -263,6 +312,9 @@ configure_node() {
     printf "HOST_IP=%s\n" "${HOST_IP}"
     printf "DOMAIN=%s\n" "${DEFAULT_DOMAIN}"
     printf "INTERFACE=%s\n" "${INTERFACE}"
+    printf "CHAIN=%s\n" "${CHAIN}"
+    printf "MNEMONIC=%s\n" "${WALLET_MNEMONIC}"
+
 
     read -p "Confirm configuration (y/n): " confirm
     if [ "${confirm}" != "y" ]; then
@@ -279,11 +331,26 @@ configure_node() {
     else
     # Write environment variables to .env file
     cat <<EOL > "${INSTALL_DIR}/.env"
+# Application Configuration    
 RUNTYPE=debug
 SERVER=0.0.0.0
 HTTP_PORT=9080
 GRPC_PORT=9090
+REGION=CA
+DOMAIN=${DEFAULT_DOMAIN}
+HOST_IP=${HOST_IP}
 MASTERNODE_URL=https://gateway.erebrus.io
+POLYGON_RPC=
+SIGNED_BY=NetSepio
+FOOTER=NetSepio 2024
+MASTERNODE_WALLET=
+GATEWAY_DOMAIN=https://gateway.erebrus.io
+LOAD_CONFIG_FILE=false
+MASTERNODE_PEERID=/ip4/34.125.116.36/tcp/9001/p2p/12D3KooWJSMKigKLzehhhmppTjX7iQprA7558uU52hqvKqyjbELf
+MNEMONIC_APTOS=${WALLET_MNEMONIC}
+CHAIN_NAME=${CHAIN}
+
+# Wireguard Configuration
 WG_CONF_DIR=/etc/wireguard
 WG_CLIENTS_DIR=/etc/wireguard/clients
 WG_INTERFACE_NAME=wg0.conf
@@ -300,13 +367,6 @@ WG_PRE_DOWN=echo WireGuard PreDown
 WG_POST_DOWN=iptables -D FORWARD -i %i -j ACCEPT; iptables -D FORWARD -o %i -j ACCEPT; iptables -t nat -D POSTROUTING -o ${INTERFACE} -j MASQUERADE
 PASETO_EXPIRATION_IN_HOURS=168
 AUTH_EULA=I Accept the NetSepio Terms of Service https://netsepio.com/terms.html for accessing the application. Challenge ID:
-SIGNED_BY=NetSepio
-FOOTER=NetSepio 2024
-GATEWAY_DOMAIN=https://gateway.erebrus.io
-REGION=CA
-HOST_IP=${HOST_IP}
-DOMAIN=${DEFAULT_DOMAIN}
-INTERFACE=${INTERFACE}
 EOL
         status_stage2="\e[32mComplete\e[0m"
         #display_header
@@ -319,16 +379,23 @@ run_node() {
     printf "\n\e[1mRunning Erebrus Node...\e[0m"
     status_stage3="\e[34mIn Progress\e[0m"
     display_header
+    printf "Starting Erebrus Node... "
+    ENV_FILE="${INSTALL_DIR}/.env"
+    printf "$ENV_FILE"
+    sleep 5
+    if [ ! -f "$ENV_FILE" ]; then
+        printf "\e[31mError:\e[0m The .env file does not exist at path: %s\n" "$ENV_FILE"
+        printf "Make sure the .env file exists and try again.\n"
+        exit 1
+    fi
 
-    printf "Starting Erebrus Node...\n"
     (docker run -d -p 9080:9080/tcp -p 9002:9002/tcp -p 51820:51820/udp \
         --cap-add=NET_ADMIN --cap-add=SYS_MODULE \
         --sysctl="net.ipv4.conf.all.src_valid_mark=1" \
         --sysctl="net.ipv6.conf.all.forwarding=1" \
-        --restart unless-stopped -v "${INSTALL_DIR}:/install_dir" \
-        --name erebrus --env-file "${INSTALL_DIR}/.env" ghcr.io/netsepio/erebrus:main > /dev/null 2> error.log) &
+        --restart unless-stopped -v "${INSTALL_DIR}/wireguard:/etc/wireguard" \
+        --name erebrus --env-file "${ENV_FILE}" ghcr.io/netsepio/erebrus:main > /dev/null 2> error.log) &
     show_spinner $!
-
     wait $!
 
     if [ $? -eq 0 ]; then
@@ -383,3 +450,4 @@ else
         fi
     fi
 fi
+
