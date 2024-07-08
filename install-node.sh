@@ -3,8 +3,19 @@
 # Function to display header and stage status
 display_header() {
     clear
-    cat ascii.txt
-    printf "\e[1m\e[4m=== Node Software Installer - Version 1.0 ===\e[0m\n"
+    cat << "EOF"
+/$$$$$$$$                      /$$                                    
+| $$_____/                    | $$                                    
+| $$        /$$$$$$   /$$$$$$ | $$$$$$$   /$$$$$$  /$$   /$$  /$$$$$$$
+| $$$$$    /$$__  $$ /$$__  $$| $$__  $$ /$$__  $$| $$  | $$ /$$_____/
+| $$__/   | $$  \__/| $$$$$$$$| $$  \ $$| $$  \__/| $$  | $$|  $$$$$$ 
+| $$      | $$      | $$_____/| $$  | $$| $$      | $$  | $$ \____  $$
+| $$$$$$$$| $$      |  $$$$$$$| $$$$$$$/| $$      |  $$$$$$/ /$$$$$$$/
+|________/|__/       \_______/|_______/ |__/       \______/ |_______/ 
+                                                                    
+                                                Powered by NetSepio"
+EOF
+    printf "\n\e[1m\e[4m=== Erebrus Node Software Installer - Version 1.0 ===\e[0m\n"
     printf "%0.s=" {1..120}  # Print a line separator of 80 characters
     printf "\n"
     printf "\n\e[1mRequirements:\e[0m\n"
