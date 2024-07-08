@@ -3,15 +3,16 @@
 # Function to display header and stage status
 display_header() {
     clear
-    printf "\e[1m\e[4m=== Node Software Installation Script (Version 3) ===\e[0m\n"
-    printf "%0.s=" {1..80}  # Print a line separator of 80 characters
+    cat ascii.txt
+    printf "\e[1m\e[4m=== Node Software Installer - Version 1.0 ===\e[0m\n"
+    printf "%0.s=" {1..120}  # Print a line separator of 80 characters
     printf "\n"
     printf "\n\e[1mRequirements:\e[0m\n"
     printf "1. Erebrus node needs public IP that is routable from internet.\n"
     printf "   Node software requires public IP to funtion properly.\n"
-    printf "2. Ports 9080 and 9002 must be open on your firewall and/or host system.\n"
+    printf "2. Ports 9080, 9002 and 51820 must be open on your firewall and/or host system.\n"
     printf "   Ensure these ports are accessible to run the Erebrus Node software.\n"
-    printf "%0.s=" {1..80}  # Print a line separator of 80 characters
+    printf "%0.s=" {1..120}  # Print a line separator of 80 characters
     printf "\n"
     printf "\n\e[1mStage 1 - Install Dependencies:\e[0m\t       [${status_stage1}\e[0m]\n"
     printf "\e[1mStage 2 - Configure Node:\e[0m\t       [${status_stage2}\e[0m]\n"
@@ -330,7 +331,9 @@ run_node() {
 }
 
 # Main script execution starts here
-
+status_stage1="\e[33mPending\e[0m"
+status_stage2="\e[33mPending\e[0m"
+status_stage3="\e[33mPending\e[0m"
 clear
 display_header
 
@@ -349,10 +352,6 @@ if check_node_status; then
     printf "Refer \e[4mhttps://github.com/NetSepio/erebrus/blob/main/docs/docs.md\e[0m for API documentation.\n\n"
     exit 0
 fi
-
-status_stage1="\e[33mPending\e[0m"
-status_stage2="\e[33mPending\e[0m"
-status_stage3="\e[33mPending\e[0m"
 
 install_dependencies
 if [ -n "${error_stage1}" ]; then
