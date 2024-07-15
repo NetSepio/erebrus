@@ -63,7 +63,7 @@ install_dependencies() {
     printf "\e[1mInstalling Docker and Docker Compose...\e[0m"
     if is_docker_installed; then
         printf " \e[32m[Already installed]\e[0m\n"
-        sleep 3
+        sleep 2
     else
         if command -v apt-get > /dev/null; then
             (sudo apt-get update -qq && sudo apt-get install -y containerd docker.io > /dev/null 2> error.log) &
@@ -365,8 +365,7 @@ run_node() {
     display_header
     printf "Starting Erebrus Node... "
     ENV_FILE="${INSTALL_DIR}/.env"
-    printf "$ENV_FILE"
-    sleep 5
+    sleep 2
     if [ ! -f "$ENV_FILE" ]; then
         printf "\e[31mError:\e[0m The .env file does not exist at path: %s\n" "$ENV_FILE"
         printf "Make sure the .env file exists and try again.\n"
