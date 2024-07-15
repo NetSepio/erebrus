@@ -110,7 +110,12 @@ install_dependencies() {
 
 # Function to get the public IP address
 get_public_ip() {
-    curl -s ifconfig.me
+    echo $(curl -s ifconfig.io)
+}
+
+# Function to get region
+get_region() {
+    echo $(curl -s ifconfig.io/country_code)
 }
 
 # Function to test if the IP is directly reachable from the internet
@@ -168,15 +173,6 @@ test_ip_reachability() {
     exit 1
 }
 
-
-# Function to determine default network interface
-get_default_interface() {
-    if command -v ip >/dev/null; then
-        ip route get 1.1.1.1 | grep -oP '(?<=dev )(\S+)' | sort -u
-    elif command -v ifconfig >/dev/null; then
-        ifconfig | awk '/^[a-z]/ { iface=$1; next } /inet / { print iface; }' | sort -u
-    fi
-}
 
 check_node_status() {
     local container_running=0
@@ -262,7 +258,7 @@ configure_node() {
     DEFAULT_HOST_IP=$(get_public_ip)
     DEFAULT_DOMAIN="http://${DEFAULT_HOST_IP}:9080"
 
-    # Prompt for network interface
+    # Prompt for Public IP
     printf "\nAutomatically detected public IP: ${DEFAULT_HOST_IP}\n"
     read -p "Do you want to use this public IP? (y/n): " use_default_host_ip
     if [ "$use_default_host_ip" = "n" ]; then
@@ -272,17 +268,6 @@ configure_node() {
         HOST_IP=${DEFAULT_HOST_IP}
     fi
 
-    # Prompt for network interface
-    printf "Select from automatically detected interface(s) below:"
-    PS3="Select an interface (e.g. 1): "
-    select INTERFACE in $(get_default_interface); do
-        if [ -n "$INTERFACE" ]; then
-            echo "$INTERFACE"
-            break
-        else
-            echo "Invalid choice. Please select a valid interface."
-        fi
-    done
 
     # Prompt for Chain
     printf "Select valid chain from list below:\n"
@@ -308,10 +293,9 @@ configure_node() {
     # Display and confirm user-provided variables
     printf "\n\e[1mUser Provided Configuration:\e[0m\n"
     printf "INSTALL DIR=%s\n" "${INSTALL_DIR}"
-    printf "REGION=CA\n"
+    printf "REGION=$(get_region)\n"
     printf "HOST_IP=%s\n" "${HOST_IP}"
     printf "DOMAIN=%s\n" "${DEFAULT_DOMAIN}"
-    printf "INTERFACE=%s\n" "${INTERFACE}"
     printf "CHAIN=%s\n" "${CHAIN}"
     printf "MNEMONIC=%s\n" "${WALLET_MNEMONIC}"
 
@@ -336,7 +320,7 @@ RUNTYPE=debug
 SERVER=0.0.0.0
 HTTP_PORT=9080
 GRPC_PORT=9090
-REGION=CA
+REGION=$(get_region)
 DOMAIN=${DEFAULT_DOMAIN}
 HOST_IP=${HOST_IP}
 MASTERNODE_URL=https://gateway.erebrus.io
@@ -362,9 +346,9 @@ WG_DNS=1.1.1.1
 WG_ALLOWED_IP_1=0.0.0.0/0
 WG_ALLOWED_IP_2=::/0
 WG_PRE_UP=echo WireGuard PreUp
-WG_POST_UP=iptables -A FORWARD -i %i -j ACCEPT; iptables -A FORWARD -o %i -j ACCEPT; iptables -t nat -A POSTROUTING -o ${INTERFACE} -j MASQUERADE
+WG_POST_UP=iptables -A FORWARD -i %i -j ACCEPT; iptables -A FORWARD -o %i -j ACCEPT; iptables -t nat -A POSTROUTING -o eth0 -j MASQUERADE
 WG_PRE_DOWN=echo WireGuard PreDown
-WG_POST_DOWN=iptables -D FORWARD -i %i -j ACCEPT; iptables -D FORWARD -o %i -j ACCEPT; iptables -t nat -D POSTROUTING -o ${INTERFACE} -j MASQUERADE
+WG_POST_DOWN=iptables -D FORWARD -i %i -j ACCEPT; iptables -D FORWARD -o %i -j ACCEPT; iptables -t nat -D POSTROUTING -o eth0 -j MASQUERADE
 PASETO_EXPIRATION_IN_HOURS=168
 AUTH_EULA=I Accept the NetSepio Terms of Service https://netsepio.com/terms.html for accessing the application. Challenge ID:
 EOL
