@@ -3,8 +3,11 @@
 # Function to display header and stage status
 display_header() {
     clear
+    brand_color="\e[94m"
+    reset_color="\e[0m"
+    echo -e "${brand_color}"
     cat << "EOF"
-/$$$$$$$$                      /$$                                    
+ /$$$$$$$$                      /$$
 | $$_____/                    | $$                                    
 | $$        /$$$$$$   /$$$$$$ | $$$$$$$   /$$$$$$  /$$   /$$  /$$$$$$$
 | $$$$$    /$$__  $$ /$$__  $$| $$__  $$ /$$__  $$| $$  | $$ /$$_____/
@@ -13,8 +16,9 @@ display_header() {
 | $$$$$$$$| $$      |  $$$$$$$| $$$$$$$/| $$      |  $$$$$$/ /$$$$$$$/
 |________/|__/       \_______/|_______/ |__/       \______/ |_______/ 
                                                                     
-                                                Powered by NetSepio"
+                                                   Powered by NetSepio
 EOF
+    echo -e "${reset_color}"
     printf "\n\e[1m\e[4m=== Erebrus Node Software Installer - Version 1.0 ===\e[0m\n"
     printf "%0.s=" {1..120}  # Print a line separator of 80 characters
     printf "\n"
@@ -35,15 +39,17 @@ show_spinner() {
     local pid=$1
     local delay=0.2
     local spinstr='|/-\'
+    tput civis
     printf " ["
     while [ "$(ps a | awk '{print $1}' | grep $pid)" ]; do
         local temp=${spinstr#?}
-        printf "%c" "$spinstr"
+        printf "%c]" "$spinstr"
         local spinstr=$temp${spinstr%"$temp"}
         sleep $delay
-        printf "\b"
+        printf "\b\b"
     done
-    printf " ]\b\b\b\b\b\b\t"
+    printf " \t"
+    tput civis
 }
 
 # Function to check if Docker is installed
@@ -156,7 +162,7 @@ install_dependencies() {
                 exit 1
             fi
         fi
-        status_stage1="\e[32mComplete\e[0m"
+        status_stage1="\e[32m$green_tick Complete\e[0m"
         error_stage1=""
     else
         status_stage1="\e[31mFailed\e[0m"
@@ -186,7 +192,7 @@ test_ip_reachability() {
 
     while [ $retry -le $max_retries ]; do
         display_header
-        printf "\n\e[1mChecking IP reachability from internet...\e[0m"
+        printf "\n\e[1mTesting IP reachability from internet...\e[0m"
         show_spinner $$ &  # Start the spinner
         spinner_pid=$!
 
@@ -197,10 +203,10 @@ test_ip_reachability() {
 
         # Try to connect to the listener using netcat
         if echo "test" | nc -w 3 $host_ip $port > /dev/null 2>&1; then
-            kill $listener_pid
+            kill $listener_pid > /dev/null 2>&1
             kill $spinner_pid  # Stop the spinner
-            printf " \e[32mComplete\e[0m\n"
-            printf "\nIP address %s is reachable from the internet on port %d.\n" "$host_ip" "$port"
+            printf "\b\b\e[32mComplete\e[0m]\n"
+            sleep 3
             return 0
         else
             if [ $retry -lt $max_retries ]; then
@@ -211,13 +217,13 @@ test_ip_reachability() {
                 
                 read -p "Would you like to retry? (y/n): " user_retry_choice
                 if [ "$user_retry_choice" != "y" ]; then
-                    kill $listener_pid
+                    kill $listener_pid > /dev/null 2>&1
                     return 1
                 fi
             else
-                printf "\e[31mFailed\e[0m\n"
+                printf "\b\b\e[31mFailed\e[0m\n"
                 printf "\nYou do not have a public IP that is routable and reachable from internet.\n"
-                kill $listener_pid
+                kill $listener_pid > /dev/null 2>&1
                 kill $spinner_pid  # Stop the spinner
                 return 1
             fi
@@ -430,7 +436,7 @@ WG_POST_DOWN=iptables -D FORWARD -i %i -j ACCEPT; iptables -D FORWARD -o %i -j A
 PASETO_EXPIRATION_IN_HOURS=168
 AUTH_EULA=I Accept the NetSepio Terms of Service https://netsepio.com/terms.html for accessing the application. Challenge ID:
 EOL
-        status_stage2="\e[32mComplete\e[0m"
+        status_stage2="\e[32m$green_tick Complete\e[0m"
         #display_header
     fi
 }
@@ -449,7 +455,6 @@ run_node() {
         printf "Make sure the .env file exists and try again.\n"
         exit 1
     fi
-    printf "starting docker...."
     (docker run -d -p 9080:9080/tcp -p 9002:9002/tcp -p 51820:51820/udp \
         --cap-add=NET_ADMIN --cap-add=SYS_MODULE \
         --sysctl="net.ipv4.conf.all.src_valid_mark=1" \
@@ -460,7 +465,7 @@ run_node() {
     wait $!
 
     if [ $? -eq 0 ]; then
-        status_stage3="\e[32mComplete\e[0m"
+        status_stage3="\e[32m$green_tick Complete\e[0m"
         error_stage3=""
     else
         status_stage3="\e[31mFailed\e[0m"
@@ -474,6 +479,8 @@ run_node() {
 status_stage1="\e[33mPending\e[0m"
 status_stage2="\e[33mPending\e[0m"
 status_stage3="\e[33mPending\e[0m"
+green_tick="\u2714"
+skipped_symbol="\u26D4"
 clear
 display_header
 
@@ -484,9 +491,9 @@ if [ "${confirm_installation}" != "y" ]; then
 fi
 
 if check_node_status; then
-    status_stage1="\e[33mSkipped\e[0m"
-    status_stage2="\e[33mSkipped\e[0m"
-    status_stage3="\e[33mSkipped\e[0m"
+    status_stage1="\e[33m$skipped_symbol Skipped\e[0m"
+    status_stage2="\e[33m$skipped_symbol Skipped\e[0m"
+    status_stage3="\e[33m$skipped_symbol Skipped\e[0m"
     display_header
     printf "\e[31mErebrus node is already installed and running. Aborting installation.\e[0m\n"
     printf "Refer \e[4mhttps://github.com/NetSepio/erebrus/blob/main/docs/docs.md\e[0m for API documentation.\n\n"
