@@ -55,12 +55,59 @@ is_docker_installed() {
     fi
 }
 
+# Check if given group name exists in system
+function group_exists() {
+  if command -v getent >/dev/null 2>&1; then
+    # Use getent if available (common in Linux)
+    if getent group "$1" >/dev/null 2>&1; then
+      return 0
+    else
+      return 1
+    fi
+  # Check using dscl (might be more reliable on macOS)
+  elif command -v dscl >/dev/null 2>&1; then
+    if dscl . -list /Groups | grep "$1" >/dev/null 2>&1; then
+      return 0
+    else
+      return 1
+    fi
+  fi
+}
+
+function create_group() {
+    # Create group, takes group name as an argument $1
+        if command -v groupadd; then
+            sudo groupadd "$1"
+            [[ $? -eq 0 ]] && return 0 || return 1
+        elif command -v dscl; then
+            dscl . -create /Groups/"$1"
+            [[ $? -eq 0 ]] && return 0 || return 1
+        fi
+}
+
+#Create docker group and add user to the group
+function add_user_to_group() {
+    # Add current user to docker group
+    if command -v usermod; then
+        if ! groups "$USER" | grep "$1"; then
+            sudo usermod -aG "$1" "$USER"  # Use sudo and usermod for Linux
+            [[ $? -eq 0 ]] && return 0 || return 1
+        fi
+    elif command -v dscl; then
+        if ! dscl . -read /Groups/"$1" | grep GroupMembership | grep "$USER"; then
+            dscl . -append /Groups/"$1" GroupMembership "$USER"  # Use dscl for macOS
+            [[ $? -eq 0 ]] && return 0 || return 1
+        fi
+    fi
+}
+
+
 # Function to install Docker and Docker Compose based on distribution
 install_dependencies() {
     clear
     status_stage1="\e[34mIn Progress\e[0m"
     display_header
-    printf "\e[1mInstalling Docker and Docker Compose...\e[0m"
+    printf "\e[1mInstalling Docker...\e[0m"
     if is_docker_installed; then
         printf " \e[32m[Already installed]\e[0m\n"
         sleep 2
@@ -98,12 +145,22 @@ install_dependencies() {
         fi
     fi
 
-    if docker --version > /dev/null 2>&1 && docker-compose --version > /dev/null 2>&1; then
+    if docker --version > /dev/null 2>&1; then
+        # Created docker group if not exits
+        if ! group_exists "docker"; then
+            create_group "docker";
+        fi
+        if add_user_to_group "docker"; then
+            if [[ $? -ne 0 ]]; then
+                printf "Failed to create group, docker configuration failed."
+                exit 1
+            fi
+        fi
         status_stage1="\e[32mComplete\e[0m"
         error_stage1=""
     else
         status_stage1="\e[31mFailed\e[0m"
-        error_stage1="\e[31mFailed to install Docker and Docker Compose.\e[0m\n"
+        error_stage1="\e[31mFailed to install Docker.\e[0m\n"
     fi
     display_header
 }
@@ -185,7 +242,7 @@ check_node_status() {
     fi
 
     # Check if ports 9080 and 9002 are listening using lsof command
-    local lsof_output=$(lsof -nP -iTCP -sTCP:LISTEN)
+    local lsof_output=$(sudo lsof -nP -iTCP -sTCP:LISTEN)
     if echo "${lsof_output}" | grep ":9080.*LISTEN" >/dev/null; then
         port_9080_listening=1
     fi
@@ -248,12 +305,33 @@ configure_node() {
         read -p "Enter installation directory (default: current directory): " INSTALL_DIR
         INSTALL_DIR=${INSTALL_DIR:-$(pwd)}
 
+        # Check if directory exists
         if [ ! -d "$INSTALL_DIR" ]; then
-            printf "Error: Directory '%s' does not exist. Please enter a valid directory.\n" "$INSTALL_DIR"
+            printf "Error: Directory '%s' does not exist.\n" "$INSTALL_DIR"
+            # Ask user for confirmation for creation with sudo
+            read -p "Do you want to create the directory (you may be prompted for your password)? (y/N): " CREATE_DIR
+            # Check user confirmation (case-insensitive)
+            if [[ $CREATE_DIR =~ ^[Yy]$ ]]; then
+            # Create directory with sudo, setting user and group to current user
+            sudo mkdir -p "$INSTALL_DIR" && sudo chown $(whoami):$(whoami) "$INSTALL_DIR"
+            if [[ $? -eq 0 ]]; then
+                printf "Directory '%s' created successfully.\n" "$INSTALL_DIR"
+                break
+            else
+                printf "Error: Failed to create directory. Please check your permissions.\n"
+            fi
+            else
+            printf "Directory creation skipped.\n"
+            fi
         else
+            # Directory exists, break the loop
             break
         fi
     done
+
+
+
+
 
     DEFAULT_HOST_IP=$(get_public_ip)
     DEFAULT_DOMAIN="http://${DEFAULT_HOST_IP}:9080"
@@ -314,7 +392,7 @@ configure_node() {
         return 1
     else
     # Write environment variables to .env file
-    cat <<EOL > "${INSTALL_DIR}/.env"
+    sudo cat <<EOL > "${INSTALL_DIR}/.env"
 # Application Configuration    
 RUNTYPE=debug
 SERVER=0.0.0.0
@@ -371,8 +449,8 @@ run_node() {
         printf "Make sure the .env file exists and try again.\n"
         exit 1
     fi
-
-    (sudo docker run -d -p 9080:9080/tcp -p 9002:9002/tcp -p 51820:51820/udp \
+    printf "starting docker...."
+    (docker run -d -p 9080:9080/tcp -p 9002:9002/tcp -p 51820:51820/udp \
         --cap-add=NET_ADMIN --cap-add=SYS_MODULE \
         --sysctl="net.ipv4.conf.all.src_valid_mark=1" \
         --sysctl="net.ipv6.conf.all.forwarding=1" \
@@ -391,6 +469,7 @@ run_node() {
     display_header
 }
 
+#######################################
 # Main script execution starts here
 status_stage1="\e[33mPending\e[0m"
 status_stage2="\e[33mPending\e[0m"
@@ -433,4 +512,3 @@ else
         fi
     fi
 fi
-
