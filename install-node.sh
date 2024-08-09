@@ -119,7 +119,7 @@ install_dependencies() {
         sleep 2
     else
         if command -v apt-get > /dev/null; then
-            (sudo apt-get update -qq && sudo apt-get install -y containerd docker.io > /dev/null 2> error.log) &
+            (sudo apt-get update -qq && sudo apt-get install -y containerd docker.io && sudo apt-get install netcat-* -y && apt-get install lsof -y  > /dev/null 2> error.log) &
             show_spinner $!
             printf " \e[32mComplete\e[0m\n"
         elif command -v yum > /dev/null; then
