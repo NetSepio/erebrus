@@ -119,7 +119,7 @@ install_dependencies() {
         sleep 2
     else
         if command -v apt-get > /dev/null; then
-            (sudo apt-get update -qq && sudo apt-get install -y containerd docker.io && sudo apt-get install netcat-* -y && apt-get install lsof -y  > /dev/null 2> error.log) &
+            (sudo apt-get update -qq && sudo apt-get install -y containerd docker.io && sudo apt-get install netcat-* -y && sudo apt-get install lsof -y  > /dev/null 2> error.log) &
             show_spinner $!
             printf " \e[32mComplete\e[0m\n"
         elif command -v yum > /dev/null; then
@@ -243,7 +243,7 @@ check_node_status() {
     local port_9002_listening=0
 
     # Check if container 'erebrus' is running
-    if docker ps -f name=erebrus | grep "erebrus" >/dev/null; then
+    if sudo docker ps -f name=erebrus | grep "erebrus" >/dev/null; then
         container_running=1
     fi
 
@@ -398,7 +398,7 @@ configure_node() {
         return 1
     else
     # Write environment variables to .env file
-    sudo cat <<EOL > "${INSTALL_DIR}/.env"
+    sudo tee ${INSTALL_DIR}/.env  <<EOL
 # Application Configuration    
 RUNTYPE=debug
 SERVER=0.0.0.0
@@ -455,7 +455,7 @@ run_node() {
         printf "Make sure the .env file exists and try again.\n"
         exit 1
     fi
-    (docker run -d -p 9080:9080/tcp -p 9002:9002/tcp -p 51820:51820/udp \
+    (sudo docker run -d -p 9080:9080/tcp -p 9002:9002/tcp -p 51820:51820/udp \
         --cap-add=NET_ADMIN --cap-add=SYS_MODULE \
         --sysctl="net.ipv4.conf.all.src_valid_mark=1" \
         --sysctl="net.ipv6.conf.all.forwarding=1" \
