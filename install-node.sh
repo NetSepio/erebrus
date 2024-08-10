@@ -123,7 +123,7 @@ install_dependencies() {
             show_spinner $!
             printf " \e[32mComplete\e[0m\n"
         elif command -v yum > /dev/null; then
-            (sudo yum-config-manager --add-repo https://download.docker.com/linux/centos/docker-ce.repo && yum install -y docker > /dev/null 2>&1 && sudo systemctl start docker && sudo systemctl enable docker > /dev/null 2> error.log) &
+            (sudo yum install yum-utils -y && sudo yum install nmap-ncat.x86_64 -y && sudo yum install lsof -y && sudo yum-config-manager --add-repo https://download.docker.com/linux/centos/docker-ce.repo && yum install -y docker > /dev/null 2>&1 && sudo systemctl start docker && sudo systemctl enable docker > /dev/null 2> error.log) &
             show_spinner $!
             printf " \e[32mComplete\e[0m\n"
         elif command -v pacman > /dev/null; then
@@ -310,7 +310,7 @@ configure_node() {
     while true; do
         read -p "Enter installation directory (default: current directory): " INSTALL_DIR
         INSTALL_DIR=${INSTALL_DIR:-$(pwd)}
-
+        sudo mkdir -p "$INSTALL_DIR/wireguard" && sudo chown -R $(whoami):$(whoami) "$INSTALL_DIR"
         # Check if directory exists
         if [ ! -d "$INSTALL_DIR" ]; then
             printf "Error: Directory '%s' does not exist.\n" "$INSTALL_DIR"
@@ -319,7 +319,7 @@ configure_node() {
             # Check user confirmation (case-insensitive)
             if [[ $CREATE_DIR =~ ^[Yy]$ ]]; then
             # Create directory with sudo, setting user and group to current user
-            sudo mkdir -p "$INSTALL_DIR" && sudo chown $(whoami):$(whoami) "$INSTALL_DIR"
+            sudo mkdir -p "$INSTALL_DIR/wireguard" && sudo chown -R $(whoami):$(whoami) "$INSTALL_DIR"
             if [[ $? -eq 0 ]]; then
                 printf "Directory '%s' created successfully.\n" "$INSTALL_DIR"
                 break
