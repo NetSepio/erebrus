@@ -1,0 +1,19 @@
+name: erebrus-node
+version: 1.0
+summary: Installs Erebrus Node
+description: This snap installs the Erebrus Node.
+
+base: core24
+
+confinement: classic
+
+apps:
+  erebrus-node:
+    command: erebrus-snap.sh
+      # plugs:
+      #- network
+
+parts:
+  erebrus-node:
+    plugin: dump
+    source: src/
