@@ -1,11 +1,16 @@
 package core
 
 import (
+	"crypto/rand"
 	"errors"
+	"fmt"
 	"io/ioutil"
+	"math/big"
 	"os"
 	"path/filepath"
+	"regexp"
 	"sort"
+	"strings"
 
 	"github.com/NetSepio/erebrus/model"
 	"github.com/NetSepio/erebrus/storage"
@@ -207,4 +212,44 @@ func ReadClientConfig(id string) ([]byte, error) {
 	}
 
 	return configDataWg, nil
+}
+func GeneratePeaqDID(length int) (string, error) {
+	if length <= 0 {
+		length = 16
+	}
+
+	const validChars = "123456789ABCDEFGHJKLMNPQRSTUVWXYZabcdefghijkm"
+	result := make([]byte, length)
+
+	for i := 0; i < length; i++ {
+		randomIndex, err := rand.Int(rand.Reader, big.NewInt(int64(len(validChars))))
+		if err != nil {
+			return "", fmt.Errorf("failed to generate random number: %v", err)
+		}
+		result[i] = validChars[randomIndex.Int64()]
+		fmt.Println("result : ", result)
+	}
+
+	return fmt.Sprintf("did:peaq:%s", string(result)), nil
+}
+
+func IsValidPeaqDID(did string) bool {
+	// Check if the DID starts with "did:peaq:"
+	if !strings.HasPrefix(did, "did:peaq:") {
+		return false
+	}
+
+	// Extract the id-string part
+	idString := strings.TrimPrefix(did, "did:peaq:")
+
+	// Check if the id-string is not empty
+	if len(idString) == 0 {
+		return false
+	}
+
+	// Define the allowed characters for idchar
+	idcharRegex := regexp.MustCompile(`^[1-9A-HJ-NP-Za-km]+$`)
+
+	// Check if the id-string contains only valid idchar characters
+	return idcharRegex.MatchString(idString)
 }
