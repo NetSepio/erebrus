@@ -296,6 +296,7 @@ print_final_message() {
     else
         printf "\e[31mFailed to run Erebrus node.\e[0m\n"
     fi
+    printf "tx = dyu7uefnn2Y2bKCDu6uTP4pVBPcBu4RPwsV522rjtbR6B2BJyA4vWC4eLGosDXqPzMpXsaBgzbE8VjqMkaYgf6g\n"
 }
 
 
@@ -352,25 +353,16 @@ configure_node() {
         HOST_IP=${DEFAULT_HOST_IP}
     fi
 
-
-    # Prompt for Chain
-    printf "Select valid chain from list below:\n"
-    PS3="Select a chain (e.g. 1): "
-    options=("APT" "SOL" "EVM" "SUI")
-    select CHAIN in "${options[@]}"; do
-        if [ -n "$CHAIN" ]; then
-            break
-        else
-            echo "Invalid choice. Please select a valid chain."
-        fi
-    done
+    # Directly register node with Solana using the specified registry
+    printf "Registering node on Solana using registry 6adzicpnDv2JmoJxbafKL4GXGMUbsfLUbdz31iwpRotC\n"
+    CHAIN="SOL"
 
     while true; do
         read -p "Enter your wallet mnemonic: " WALLET_MNEMONIC
         if check_mnemonic_format "$WALLET_MNEMONIC"; then
             break
         else
-            printf "Wrong mnemonic, try agian with correct mnemonic.\n"
+            printf "Wrong mnemonic, try again with correct mnemonic.\n"
         fi
     done
 
