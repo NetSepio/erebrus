@@ -1,0 +1,7 @@
+#!/usr/bin/env bash
+exec >> /var/snap/erebrus-node/common/remove-hook.log 2>&1
+
+echo "Running remove hook..."
+
+pkill -9 erebrus
+pkill -9 wg-watcher.sh

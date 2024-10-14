@@ -1,0 +1,95 @@
+name: erebrus-node
+version: "1.0"
+summary: A Go executable that runs WireGuard
+description: |
+  This snap packages a Go executable that takes arguments from OS environment variables and runs WireGuard.
+
+base: core22  # or core20 depending on your needs
+confinement: strict  # Use 'devmode' during development for easier debugging
+
+layout:
+  /etc/wireguard:
+    bind: $SNAP_COMMON/wireguard
+
+apps:
+  erebrus-node:
+    #command: bin/setup-env.sh
+    command: erebrus-snap.sh
+    plugs:
+      - network
+      - network-bind
+      - firewall-control
+      - network-control
+      - network-observe
+      - kernel-module-control
+      - home  # If you need access to the user's home directory
+        #environment:
+        #PATH: $(pwd)/bin:$SNAPCRAFT_PART_INSTALL/bin:$SNAP/bin:$SNAP/usr/bin:$PATH
+        #daemon: simple  # Optional: If you want the Go executable to run as a service
+
+parts:
+  erebrus-node:
+    plugin: dump # No specific plugin, since we're handling Go installation ourselves
+      #source-type: local
+    source: ./bin
+    override-build: |
+      snapcraftctl build
+      # Install Go
+      #wget https://golang.org/dl/go1.20.4.linux-amd64.tar.gz
+      #wget https://go.dev/dl/go1.21.8.linux-amd64.tar.gz
+      #tar -C /usr/local -xzf go1.20.4.linux-amd64.tar.gz
+      #tar -C /usr/local -xzf go1.21.8.linux-amd64.tar.gz
+      #export PATH=$PATH:/usr/local/go/bin 
+      #echo "Contents of source directory:"
+      #ls -l $SNAPCRAFT_PART_SRC
+      #ls -l 
+      # Build the Go project
+      #go env -w GO111MODULE=auto
+      #go build -o $SNAPCRAFT_PART_INSTALL/bin/erebrus .
+      #chmod +x $SNAPCRAFT_PART_INSTALL/bin/*
+      #find . -name "erebrus-snap.sh"
+      mv erebrus $SNAPCRAFT_PART_INSTALL/bin/
+      mv erebrus-snap.sh $SNAPCRAFT_PART_INSTALL/bin/
+      mv setup-node.sh $SNAPCRAFT_PART_INSTALL/bin/
+      mv start-node.sh $SNAPCRAFT_PART_INSTALL/bin/
+      mv stop-node.sh $SNAPCRAFT_PART_INSTALL/bin/
+      mv status-node.sh $SNAPCRAFT_PART_INSTALL/bin/
+      mv wg-watcher.sh $SNAPCRAFT_PART_INSTALL/bin/
+      #cp ip $SNAPCRAFT_PART_INSTALL/bin/
+      #cp iptables $SNAPCRAFT_PART_INSTALL/bin/
+      #cp libbpf.so.1  $SNAP/usr/lib/x86_64-linux-gnu/ 
+      chmod +x $SNAPCRAFT_PART_INSTALL/bin/*
+      # Copy the Bash script to the correct location
+      #cp setup-env.sh $SNAPCRAFT_PART_INSTALL/bin/setup-env.sh
+      #cp *.sh $SNAP/bin/
+      #snapcraft build
+    build-packages:
+      - wget
+      - tar
+      - gcc  # Install GCC for building Go projects
+    stage-packages:
+      - wireguard-tools
+      - wireguard-dkms
+      - curl
+      - ncat
+      - coreutils
+      - lsof 
+      - inotify-tools
+      - iproute2
+      - iptables
+      - libbpf-dev
+
+plugs:
+  firewall-control:
+    interface: firewall-control
+  network-control:
+    interface: network-control
+  kernel-module-control:
+    interface: kernel-module-control
+  network:
+    interface: network
+  network-bind:
+    interface: network-bind
+  network-observe:
+    interface: network-observe
+
