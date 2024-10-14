@@ -1,0 +1,12 @@
+#Build the snap
+snapcraft clean
+snapcraft --debug --verbose
+
+# Install the snap
+sudo snap install --dangerous 
+
+# Connect the required plugs
+sudo snap connect erebrus-node:network-control
+sudo snap connect erebrus-node:firewall-control
+
+
