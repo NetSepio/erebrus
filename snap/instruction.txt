@@ -1,12 +1,23 @@
-#Build the snap
+# Build the snap
 snapcraft clean
 snapcraft --debug --verbose
 
 # Install the snap
-sudo snap install --dangerous 
+sudo snap install --dangerous erebrus-node_1.0_amd64.snap
 
 # Connect the required plugs
 sudo snap connect erebrus-node:network-control
 sudo snap connect erebrus-node:firewall-control
 
+# Use Erebrus Node
+Usage: sudo erebrus-node [OPTION]
+
+Options:
+  -h, --help        Print this help message.
+  -c, --configure   Install dependencies & Configure the Erebrus node application.
+  -v, --version     Display the version of this script.
+  --start   start the service
+  --stop    stop the service
+  --restart Rstart the service
+  --status  Get service status
 
