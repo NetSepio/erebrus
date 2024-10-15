@@ -10,22 +10,22 @@ then
    exit 0
 elif [ $x -gt 0 ] && [ $y -eq 0 ]
 then
-   pkill -9 erebrus & >> ${SNAP_COMMON}/erebrus.log 2>&1
+   pkill -9 erebrus & > /dev/null 2>&1
    if [ $? -ne 0 ];then
      a="Issue with killing erebrus process"
    fi
 elif [ $x -eq 0 ] && [ $y -gt 0 ]
 then
-   pkill -9 wg-watcher.sh & >> ${SNAP_COMMON}/erebrus.log 2>&1
+   pkill -9 wg-watcher.sh & > /dev/null 2>&1
    if [ $? -ne 0 ];then
      b="Issue with killing wg-watcher process"
    fi
 else
-   pkill -9 erebrus & >> ${SNAP_COMMON}/erebrus.log 2>&1
+   pkill -9 erebrus & > /dev/null 2>&1
    if [ $? -ne 0 ];then
       a="Issue with killing erebrus process"
    fi
-   pkill -9 wg-watcher.sh &  >> ${SNAP_COMMON}/erebrus.log 2>&1
+   pkill -9 wg-watcher.sh &  > /dev/null 2>&1
    if [ $? -ne 0 ];then
       b="Issue with killing wg-watcher process"
    fi

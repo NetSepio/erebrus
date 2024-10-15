@@ -122,7 +122,7 @@ function start_node(){
 function check_file() {
    if [ -s $1 ]
    then
-      printf "${NC}Environment file is already present.\n"
+      printf "${NC}Environment file is already present\n"
       ${SNAP}/status-node.sh
       if [ $? -eq 0 ]
       then 
