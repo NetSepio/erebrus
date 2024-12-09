@@ -101,9 +101,6 @@ func SoonNodeCreation(data NodeDetails) {
 	//
 	projectDir := "blockchain/solana/soon/."
 
-	// // Your private key in base58 format (replace with your actual private key)
-	// privateKey := "kRVZ7yFvAZFufaUJheFecbp8gESdEFB6hzwRXzzdJGZdnH6hTvdhhZf65bCfG2fAyb9AxFuw3JTvXDPUPXwA5rG"
-
 	// Set environment variable to pass to JS file
 	os.Setenv("SOLANA_PRIVATE_KEY", data.PrivateKey)
 
