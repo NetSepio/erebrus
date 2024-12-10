@@ -6,7 +6,6 @@ import (
 	"os"
 	"unicode"
 
-	soon_solana "github.com/NetSepio/erebrus/blockchain/solana/soon"
 	"github.com/NetSepio/erebrus/core"
 	"github.com/NetSepio/erebrus/util/pkg/speedtest"
 	"github.com/sirupsen/logrus"
@@ -146,20 +145,20 @@ func CreateNodeStatus(address string, id string, startTimeStamp int64, name stri
 		IpGeoData:        ToJSON(IpGeoAddress),
 	}
 
-	if os.Getenv("CHAIN_NAME") == "SOON" {
+	// if os.Getenv("CHAIN_NAME") == "SOON" {
 
-		peaqDid, _, _ := core.GeneratePeaqDID(23)
+	// 	peaqDid, _, _ := core.GeneratePeaqDID(23)
 
-		soon_solana.SoonNodeCreation(soon_solana.NodeDetails{
-			PrivateKey: os.Getenv("SOON_PRIVATE_KEY"),
-			PeaqDid:    peaqDid,
-			NodeName:   name,
-			IPAddress:  ToJSON(GetOSInfo()),
-			ISPInfo:    ToJSON(GetIPInfo()),
-			Region:     core.GlobalIPInfo.Country,
-			Location:   ToJSON(IpGeoAddress),
-		})
-	}
+	// 	soon_solana.SoonNodeBlockchainCall(soon_solana.NodeDetails{
+	// 		PrivateKey: os.Getenv("SOON_PRIVATE_KEY"),
+	// 		PeaqDid:    peaqDid,
+	// 		NodeName:   name,
+	// 		IPAddress:  ToJSON(GetOSInfo()),
+	// 		ISPInfo:    ToJSON(GetIPInfo()),
+	// 		Region:     core.GlobalIPInfo.Country,
+	// 		Location:   ToJSON(IpGeoAddress),
+	// 	})
+	// }
 
 	return nodeStatus
 }

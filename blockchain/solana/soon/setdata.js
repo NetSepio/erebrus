@@ -1,14 +1,14 @@
 // The following variables will be dynamically injected by the Go code
 
-const peaqDid = "did:peaq:testnode123";  // Placeholder for dynamic Peaq DID
-const nodename = "TestVPNNode";  // Placeholder for dynamic Node Name
-const ipaddress = "192.168.1.100";   // Placeholder for dynamic IP Address
-const ispinfo = "TestISP";   // Placeholder for dynamic ISP Information
-const region = "EU-Central";     // Placeholder for dynamic Region
-const location = "Frankfurt, Germany"; // Placeholder for dynamic Location
+const nodeDid = process.env.NODE_DID;
+const nodename = process.env.NODE_NAME;
+const ipaddress = process.env.IP_ADDRESS;
+const ispinfo = process.env.ISP_INFO;
+const region = process.env.REGION;
+const location = process.env.LOCATION;
 
 // Log the values to check if they're injected correctly
-console.log("Peaq DID:", peaqDid);
+console.log("Node DID:", nodeDid);
 console.log("Node Name:", nodename);
 console.log("IP Address:", ipaddress);
 console.log("ISP Info:", ispinfo);
@@ -62,7 +62,7 @@ const IDL = {
           type: "u64",
         },
         {
-          name: "peaqDid",
+          name: "nodeDid",
           type: "string",
         },
         {
@@ -104,7 +104,7 @@ const IDL = {
             type: "publicKey",
           },
           {
-            name: "peaqDid",
+            name: "nodeDid",
             type: "string",
           },
           {
@@ -218,18 +218,18 @@ async function registerVpnNode() {
     // Register VPN node
     const nodeDetails = {
       userNodeNum: userNodeNum,
-      peaqDid: "did:peaq:testnode123",
-      nodename: "TestVPNNode",
-      ipaddress: "192.168.1.100",
-      ispinfo: "TestISP",
-      region: "EU-Central",
-      location: "Frankfurt, Germany",
+      nodeDid: nodeDid,
+      nodename: nodename,
+      ipaddress: ipaddress,
+      ispinfo: ispinfo,
+      region: region,
+      location: location
     };
 
     const tx = await program.methods
       .registerVpnNode(
         nodeDetails.userNodeNum,
-        nodeDetails.peaqDid,
+        nodeDetails.nodeDid,
         nodeDetails.nodename,
         nodeDetails.ipaddress,
         nodeDetails.ispinfo,
@@ -253,7 +253,7 @@ async function registerVpnNode() {
     console.log("Created VPN Node Account:", {
       nodeId: vpnNodeAccount.nodeId.toString(),
       user: vpnNodeAccount.user.toString(),
-      peaqDid: vpnNodeAccount.peaqDid,
+      nodeDid: vpnNodeAccount.nodeDid,
       nodename: vpnNodeAccount.nodename,
       ipaddress: vpnNodeAccount.ipaddress,
       ispinfo: vpnNodeAccount.ispinfo,

@@ -8,6 +8,7 @@ import (
 	"os"
 	"time"
 
+	"github.com/NetSepio/erebrus/blockchain"
 	"github.com/NetSepio/erebrus/core"
 	"github.com/NetSepio/erebrus/util/pkg/node"
 	"github.com/docker/docker/pkg/namesgenerator"
@@ -145,6 +146,10 @@ func Init() {
 			fmt.Println()
 		}
 	}()
+
+	go func(Name string) {
+		blockchain.AllBlockChains(name)
+	}(name)
 
 }
 
