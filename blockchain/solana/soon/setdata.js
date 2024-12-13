@@ -156,6 +156,7 @@ async function registerVpnNode() {
   try {
     // Connect to devnet
     const connection = new Connection(
+      //https://testnet.dev2.eclipsenetwork.xyz
       "https://rpc.devnet.soo.network/rpc",
       "confirmed"
     );
