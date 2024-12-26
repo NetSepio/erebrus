@@ -26,7 +26,17 @@ const DiscoveryServiceTag = "erebrus"
 var StartTimeStamp int64
 
 func Init() {
-	name := namesgenerator.GetRandomName(0) // TODO: Take from environment variable - generate a random name only when unset
+
+	var name string
+
+	// TODO: Take from environment variable - generate a random name only when unset
+
+	if os.Getenv("NODE_NAME") != "" {
+		name = os.Getenv("NODE_NAME")
+	} else {
+		name = namesgenerator.GetRandomName(0) 
+
+	}
 	StartTimeStamp = time.Now().Unix()
 	ctx := context.Background()
 
@@ -40,7 +50,7 @@ func Init() {
 	log.Printf("I am %s\n", fullAddr)
 
 	// TODO: take LIBP2P_PORT from env
-	remoteAddr := "/ip4/" + os.Getenv("HOST_IP") + "/tcp/9002/p2p/" + ha.ID().String()
+	remoteAddr := "/ip4/" + os.Getenv("HOST_IP") + "/tcp/" + os.Getenv("LIBP2P_PORT") + "/p2p/" + ha.ID().String()
 	// Create a new PubSub service using the GossipSub router.
 	ps, err := pubsub.NewGossipSub(ctx, ha)
 	if err != nil {
