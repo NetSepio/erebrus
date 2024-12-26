@@ -353,13 +353,13 @@ configure_node() {
 
     # Prompt for Config Type
     printf "Select a configuration type from list below:\n"
-    PS3="Select a cnfig type (e.g. 1): "
+    PS3="Select a config type (e.g. 1): "
     options=("MINI" "STANDARD" "HPC")
     select CONFIG in "${options[@]}"; do
         if [ -n "$CONFIG" ]; then
             break
         else
-            echo "Invalid choice. Please select a valid chain."
+            echo "Invalid choice. Please select a valid config type."
         fi
     done
 
