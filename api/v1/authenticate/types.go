@@ -3,6 +3,8 @@ package authenticate
 type AuthenticateRequest struct {
 	ChallengeId string `json:"challengeId" binding:"required"`
 	Signature   string `json:"signature" binding:"required"`
+	PubKey      string `json:"pubKey" binding:"omitempty"`
+	ChainName   string `json:"chainName" binding:"required"`
 }
 
 type AuthenticatePayload struct {

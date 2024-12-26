@@ -26,7 +26,7 @@ const DiscoveryServiceTag = "erebrus"
 var StartTimeStamp int64
 
 func Init() {
-	name := namesgenerator.GetRandomName(0)
+	name := namesgenerator.GetRandomName(0) // TODO: Take from environment variable - generate a random name only when unset
 	StartTimeStamp = time.Now().Unix()
 	ctx := context.Background()
 
@@ -39,6 +39,7 @@ func Init() {
 	fullAddr := getHostAddress(ha)
 	log.Printf("I am %s\n", fullAddr)
 
+	// TODO: take LIBP2P_PORT from env
 	remoteAddr := "/ip4/" + os.Getenv("HOST_IP") + "/tcp/9002/p2p/" + ha.ID().String()
 	// Create a new PubSub service using the GossipSub router.
 	ps, err := pubsub.NewGossipSub(ctx, ha)
@@ -49,7 +50,7 @@ func Init() {
 	// Setup DHT with empty discovery peers so this will be a discovery peer for other
 	// peers. This peer should run with a public ip address, otherwise change "nil" to
 	// a list of peers to bootstrap with.
-	bootstrapPeer, err := multiaddr.NewMultiaddr(os.Getenv("MASTERNODE_PEERID"))
+	bootstrapPeer, err := multiaddr.NewMultiaddr(os.Getenv("GATEWAY_PEERID"))
 	if err != nil {
 		panic(err)
 	}

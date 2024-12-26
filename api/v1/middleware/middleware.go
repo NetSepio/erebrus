@@ -1,19 +1,20 @@
 package middleware
 
 import (
-	log "github.com/sirupsen/logrus"
 	"os"
+
+	log "github.com/sirupsen/logrus"
 )
 
-func CheckMasterNodeAccess(decryptedWalletAddress any) bool {
-	AllowedWalletAddress := os.Getenv("MASTERNODE_WALLET")
+func CheckGatewayAccess(decryptedWalletAddress any) bool {
+	AllowedWalletAddress := os.Getenv("GATEWAY_WALLET")
 	if AllowedWalletAddress == "*" {
 		return true
 	}
 	if decryptedWalletAddress != AllowedWalletAddress {
 		log.WithFields(log.Fields{
-			"err": "Updates Not Allowed for the Following Wallet Address",
-		}).Error("Updates Not Allowed for the Following Wallet Address")
+			"err": "Updates Not Allowed for the Given Wallet Address",
+		}).Error("Updates Not Allowed for the Given Wallet Address")
 		return false
 	}
 	return true

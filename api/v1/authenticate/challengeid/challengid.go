@@ -23,23 +23,18 @@ type FlowId struct {
 	WalletAddress string
 	FlowId        string `gorm:"primary_key"`
 }
-type Db struct {
+type MemoryDB struct {
 	WalletAddress string
+	ChainName     string
 	Timestamp     time.Time
 }
 
-var Data map[string]Db
+var Data map[string]MemoryDB
 
-// ApplyRoutes applies router to gin Router
-// func ApplyRoutes(r *gin.RouterGroup) {
-// 	g := r.Group("/flowid")
-// 	{
-// 		g.GET("", GetFlowId)
-// 	}
-// }
-
+// Get walletAddress, chain and return eula, challengeId
 func GetChallengeId(c *gin.Context) {
 	walletAddress := c.Query("walletAddress")
+	chainName := c.Query("chainName")
 
 	if walletAddress == "" {
 		log.WithFields(log.Fields{
@@ -50,6 +45,18 @@ func GetChallengeId(c *gin.Context) {
 		c.JSON(http.StatusForbidden, response)
 		return
 	}
+
+	if chainName == "" {
+		log.WithFields(log.Fields{
+			"err": "empty Chain name",
+		}).Error("failed to create client")
+
+		response := core.MakeErrorResponse(403, "Empty Wallet Address", nil, nil, nil)
+		c.JSON(http.StatusForbidden, response)
+		return
+	}
+
+	// TODO: verify wallet address depending on chainName: ethereum, solana, peaq, aptos, sui, eclipse...
 	_, err := hexutil.Decode(walletAddress)
 	if err != nil {
 		log.WithFields(log.Fields{
@@ -68,7 +75,7 @@ func GetChallengeId(c *gin.Context) {
 		c.JSON(http.StatusBadRequest, response)
 		return
 	}
-	challengeId, err := GenerateChallengeId(walletAddress)
+	challengeId, err := GenerateChallengeId(walletAddress, chainName)
 	if err != nil {
 		log.WithFields(log.Fields{
 			"err": err,
@@ -85,13 +92,12 @@ func GetChallengeId(c *gin.Context) {
 	c.JSON(200, payload)
 }
 
-func GenerateChallengeId(walletAddress string) (string, error) {
-
+func GenerateChallengeId(walletAddress string, chainName string) (string, error) {
 	challengeId := uuid.NewString()
-	var dbdata Db
+	var dbdata MemoryDB
 	dbdata.WalletAddress = walletAddress
 	dbdata.Timestamp = time.Now()
-	Data = map[string]Db{
+	Data = map[string]MemoryDB{
 		challengeId: dbdata,
 	}
 	return challengeId, nil

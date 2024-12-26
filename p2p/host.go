@@ -22,6 +22,7 @@ func makeBasicHost() (host.Host, error) {
 		return nil, err
 	}
 
+	// take LIBP2P_PORT from env
 	opts := []libp2p.Option{
 		libp2p.ListenAddrStrings("/ip4/0.0.0.0/tcp/9002"),
 		libp2p.Identity(priv),
