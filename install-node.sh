@@ -411,10 +411,13 @@ configure_node() {
     # Write environment variables to .env file
     sudo tee ${INSTALL_DIR}/.env  <<EOL
 # Application Configuration    
-RUNTYPE=debug
+
+# Application Configuration
+RUNTYPE=released
 SERVER=0.0.0.0
 HTTP_PORT=9080
 GRPC_PORT=9090
+LIBP2P_PORT=9092
 REGION=$(get_region)
 NODE_NAME=${NODE_NAME}
 DOMAIN=${DEFAULT_DOMAIN}
@@ -423,17 +426,21 @@ GATEWAY_DOMAIN=https://gateway.erebrus.io
 POLYGON_RPC=
 SIGNED_BY=NetSepio
 FOOTER=NetSepio 2024
-GATEWAY_WALLET=
+GATEWAY_WALLET=0x0
 GATEWAY_DOMAIN=https://gateway.erebrus.io
 LOAD_CONFIG_FILE=false
 GATEWAY_PEERID=/ip4/130.211.28.223/tcp/9001/p2p/12D3KooWJSMKigKLzehhhmppTjX7iQprA7558uU52hqvKqyjbELf
 CHAIN_NAME=${CHAIN}
 NODE_TYPE=VPN
 NODE_CONFIG=${CONFIG}
-# Wireguard Configuration
+MNEMONIC=${WALLET_MNEMONIC}
+
+# WireGuard Configuration
 WG_CONF_DIR=/etc/wireguard
 WG_CLIENTS_DIR=/etc/wireguard/clients
 WG_INTERFACE_NAME=wg0.conf
+
+# WireGuard Specifications
 WG_ENDPOINT_HOST=${HOST_IP}
 WG_ENDPOINT_PORT=51820
 WG_IPv4_SUBNET=10.0.0.1/24
@@ -445,8 +452,11 @@ WG_PRE_UP=echo WireGuard PreUp
 WG_POST_UP=iptables -A FORWARD -i %i -j ACCEPT; iptables -A FORWARD -o %i -j ACCEPT; iptables -t nat -A POSTROUTING -o eth0 -j MASQUERADE
 WG_PRE_DOWN=echo WireGuard PreDown
 WG_POST_DOWN=iptables -D FORWARD -i %i -j ACCEPT; iptables -D FORWARD -o %i -j ACCEPT; iptables -t nat -D POSTROUTING -o eth0 -j MASQUERADE
+
+# Authentication & Policies
 PASETO_EXPIRATION_IN_HOURS=168
-AUTH_EULA=I Accept the Erebrus Terms of Service https://erebrus.io/terms.html for accessing the application. Challenge ID:
+AUTH_EULA=I Accept the Erebrus Terms of Service https://erebrus.io/terms
+
 EOL
         status_stage2="\e[32m$green_tick Complete\e[0m"
         #display_header
