@@ -335,10 +335,6 @@ configure_node() {
         fi
     done
 
-
-
-
-
     DEFAULT_HOST_IP=$(get_public_ip)
     DEFAULT_DOMAIN="http://${DEFAULT_HOST_IP}:9080"
 
@@ -352,11 +348,25 @@ configure_node() {
         HOST_IP=${DEFAULT_HOST_IP}
     fi
 
+    # Prompt for Node Details
+    read -p "Enter your node name: " NODE_NAME
+
+    # Prompt for Config Type
+    printf "Select a configuration type from list below:\n"
+    PS3="Select a config type (e.g. 1): "
+    options=("MINI" "STANDARD" "HPC")
+    select CONFIG in "${options[@]}"; do
+        if [ -n "$CONFIG" ]; then
+            break
+        else
+            echo "Invalid choice. Please select a valid config type."
+        fi
+    done
 
     # Prompt for Chain
     printf "Select valid chain from list below:\n"
     PS3="Select a chain (e.g. 1): "
-    options=("APT" "SOL" "EVM" "SUI" "SOON")
+    options=("SOLANA" "PEAQ" "APTOS" "SUI" "ECLIPSE")
     select CHAIN in "${options[@]}"; do
         if [ -n "$CHAIN" ]; then
             break
@@ -374,38 +384,16 @@ configure_node() {
         fi
     done
 
-     # Prompt for chain selection
-    while true; do
-        read -p "Enter the chain (options: SOON, other): " chain
-        if [[ "$chain" == "SOON" || "$chain" == "other" ]]; then
-            break
-        else
-            printf "Invalid chain option. Please enter either 'SOON' or 'other'.\n"
-        fi
-    done
-
-    # If 'SOON' is selected, ask for SOON_PRIVATE_KEY
-    if [[ "$chain" == "SOON" ]]; then
-        while true; do
-            read -p "Enter SOON_PRIVATE_KEY: " SOON_PRIVATE_KEY
-            if [[ -n "$SOON_PRIVATE_KEY" ]]; then
-                break
-            else
-                printf "SOON_PRIVATE_KEY cannot be empty. Please provide a valid key.\n"
-            fi
-        done
-    fi
-
     # Display and confirm user-provided variables
     printf "\n\e[1mUser Provided Configuration:\e[0m\n"
     printf "INSTALL DIR=%s\n" "${INSTALL_DIR}"
     printf "REGION=$(get_region)\n"
+    printf "NODE_NAME=%s\n" "${NODE_NAME}"
     printf "HOST_IP=%s\n" "${HOST_IP}"
     printf "DOMAIN=%s\n" "${DEFAULT_DOMAIN}"
     printf "CHAIN=%s\n" "${CHAIN}"
+    printf "CONFIG=%s\n" "${CONFIG}"
     printf "MNEMONIC=%s\n" "${WALLET_MNEMONIC}"
-     printf "SOON_PRIVATE_KEY=%s\n" "${SOON_PRIVATE_KEY}"
-
 
     read -p "Confirm configuration (y/n): " confirm
     if [ "${confirm}" != "y" ]; then
@@ -423,29 +411,36 @@ configure_node() {
     # Write environment variables to .env file
     sudo tee ${INSTALL_DIR}/.env  <<EOL
 # Application Configuration    
-RUNTYPE=debug
+
+# Application Configuration
+RUNTYPE=released
 SERVER=0.0.0.0
 HTTP_PORT=9080
 GRPC_PORT=9090
+LIBP2P_PORT=9002
 REGION=$(get_region)
+NODE_NAME=${NODE_NAME}
 DOMAIN=${DEFAULT_DOMAIN}
 HOST_IP=${HOST_IP}
-SOON_PRIVATE_KEY=${SOON_PRIVATE_KEY}
-MASTERNODE_URL=https://gateway.erebrus.io
+GATEWAY_DOMAIN=https://gateway.erebrus.io
 POLYGON_RPC=
 SIGNED_BY=NetSepio
 FOOTER=NetSepio 2024
-MASTERNODE_WALLET=
+GATEWAY_WALLET=0x0
 GATEWAY_DOMAIN=https://gateway.erebrus.io
 LOAD_CONFIG_FILE=false
-MASTERNODE_PEERID=/ip4/130.211.28.223/tcp/9001/p2p/12D3KooWJSMKigKLzehhhmppTjX7iQprA7558uU52hqvKqyjbELf
-MNEMONIC_APTOS=${WALLET_MNEMONIC}
+GATEWAY_PEERID=/ip4/130.211.28.223/tcp/9001/p2p/12D3KooWJSMKigKLzehhhmppTjX7iQprA7558uU52hqvKqyjbELf
 CHAIN_NAME=${CHAIN}
+NODE_TYPE=VPN
+NODE_CONFIG=${CONFIG}
+MNEMONIC=${WALLET_MNEMONIC}
 
-# Wireguard Configuration
+# WireGuard Configuration
 WG_CONF_DIR=/etc/wireguard
 WG_CLIENTS_DIR=/etc/wireguard/clients
 WG_INTERFACE_NAME=wg0.conf
+
+# WireGuard Specifications
 WG_ENDPOINT_HOST=${HOST_IP}
 WG_ENDPOINT_PORT=51820
 WG_IPv4_SUBNET=10.0.0.1/24
@@ -457,8 +452,11 @@ WG_PRE_UP=echo WireGuard PreUp
 WG_POST_UP=iptables -A FORWARD -i %i -j ACCEPT; iptables -A FORWARD -o %i -j ACCEPT; iptables -t nat -A POSTROUTING -o eth0 -j MASQUERADE
 WG_PRE_DOWN=echo WireGuard PreDown
 WG_POST_DOWN=iptables -D FORWARD -i %i -j ACCEPT; iptables -D FORWARD -o %i -j ACCEPT; iptables -t nat -D POSTROUTING -o eth0 -j MASQUERADE
+
+# Authentication & Policies
 PASETO_EXPIRATION_IN_HOURS=168
-AUTH_EULA=I Accept the NetSepio Terms of Service https://netsepio.com/terms.html for accessing the application. Challenge ID:
+AUTH_EULA=I Accept the Erebrus Terms of Service https://erebrus.io/terms
+
 EOL
         status_stage2="\e[32m$green_tick Complete\e[0m"
         #display_header

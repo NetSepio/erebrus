@@ -10,7 +10,7 @@ services:
       SERVER: "0.0.0.0"
       PORT: "9080"
       HTTP_PORT: "8080"
-      MASTERNODE_URL: "https://masternode.erebrus.io"
+      GATEWAY_DOMAIN: "https://gateway.erebrus.io"
       WG_CONF_DIR: "/etc/wireguard"
       WG_KEYS_DIR: "/etc/wireguard/keys"
       WG_CLIENTS_DIR: "/etc/wireguard/clients"

@@ -4,7 +4,6 @@ import (
 	"crypto/rand"
 	"errors"
 	"fmt"
-	"io/ioutil"
 	"math/big"
 	"os"
 	"path/filepath"
@@ -159,7 +158,7 @@ func DeleteClient(id string) error {
 func ReadClients() ([]*model.Client, error) {
 	clients := make([]*model.Client, 0)
 
-	files, err := ioutil.ReadDir(filepath.Join(os.Getenv("WG_CLIENTS_DIR")))
+	files, err := os.ReadDir(filepath.Join(os.Getenv("WG_CLIENTS_DIR")))
 	if err != nil {
 		return nil, err
 	}

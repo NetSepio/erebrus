@@ -1,7 +1,6 @@
 package core
 
 import (
-	"bytes"
 	"encoding/json"
 	"errors"
 	"io/ioutil"
@@ -255,36 +254,6 @@ func MakeErrorResponse(status int64, err string, server *model.Server, client *m
 		Clients: clients,
 		Success: false,
 		Error:   err,
-	}
-
-}
-
-func UpdateEndpointDetails() {
-	for {
-		resp, err := http.Get("https://ipinfo.io/ip")
-		if err != nil {
-			log.WithFields(util.StandardFields).Fatal(err)
-		}
-		ip, err := ioutil.ReadAll(resp.Body)
-		if err != nil {
-			log.WithFields(util.StandardFields).Fatal(err)
-
-		}
-		var data model.RegionEndpoint
-		data.Code = os.Getenv("REGION_CODE")
-		data.Name = os.Getenv("REGION_NAME")
-		data.ServiceType = "erebrus"
-		data.Endpoint = string(ip) + ":" + os.Getenv("GRPC_PORT")
-		js, _ := json.Marshal(data)
-
-		client := &http.Client{}
-		request, _ := http.NewRequest(http.MethodPatch, os.Getenv("MASTERNODE_URL")+"/api/v1.0/regupdate", bytes.NewBuffer(js))
-		_, err = client.Do(request)
-		if err != nil {
-			log.WithFields(util.StandardFields).Fatal(err)
-		}
-		log.WithFields(util.StandardFields).Debug("Region Endpoint updation sucess")
-		time.Sleep(3 * time.Hour)
 	}
 
 }

@@ -6,13 +6,14 @@
 
 2. create a .env file in same directory and define the environment for erebrus . you can use template from [.sample-env](https://github.com/NetSepio/erebrus/blob/main/.sample-env). Make sure to put the correct server URL. Example:
 ```
+NODE_NAME=blazing_icarus"
 DOMAIN=http://255.255.255.255:9080
 HOST_IP=255.255.255.255
 WG_ENDPOINT_HOST=255.255.255.255
 ```
 replace `255.255.255.255` with the server IP address
 
-3. Open incoming request to ports: TCP Ports `9080`(http),` 9090`(gRPC),` 9001`(p2p) and UDP port `51820` of your server to communicate with the gateway  
+3. Open incoming request to ports: TCP Ports `9080`(http),` 9090`(gRPC),` 9002`(p2p) and UDP port `51820` of your server to communicate with the gateway
 
 4. Pull the ererbus docker image
 ```

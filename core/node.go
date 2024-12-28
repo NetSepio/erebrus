@@ -17,36 +17,42 @@ import (
 	"golang.org/x/crypto/sha3"
 )
 
-var WalletAddress string
+// These variables will be set at build time
+var (
+	Version  string
+	CodeHash string
+)
 
-// GenerateWalletAddress generates a wallet address based on the environment variable set
-func GenerateWalletAddress() {
-	// Check if MNEMONIC_ETH is set
-	if mnemonicEth := os.Getenv("MNEMONIC_ETH"); mnemonicEth != "" {
-		GenerateEthereumWalletAddress(mnemonicEth)
-		return
+var NodeName string
+var ChainName string
+var NodeType string
+var NodeConfig string
+
+// Function to load the node details from the environment and save it to the global variable
+func LoadNodeDetails() {
+	// Get the CHAIN_NAME variable from the environment
+	NodeName = os.Getenv("NODE_NAME")
+
+	ChainName = os.Getenv("CHAIN_NAME")
+	if ChainName == "" {
+		log.Fatalf("CHAIN_NAME environment variable is not set")
 	}
+	fmt.Printf("Chain Name: %s\n", ChainName)
 
-	// Check if MNEMONIC_SOL is set
-	if mnemonicSol := os.Getenv("MNEMONIC_SOL"); mnemonicSol != "" {
-		GenerateWalletAddressSolana(mnemonicSol)
-		return
+	NodeType = os.Getenv("NODE_TYPE")
+	if NodeType == "" {
+		log.Fatalf("NODE_TYPE environment variable is not set")
 	}
+	fmt.Printf("Node Type: %s\n", NodeType)
 
-	// Check if MNEMONIC_APTOS is set
-	if mnemonicAptos := os.Getenv("MNEMONIC_APTOS"); mnemonicAptos != "" {
-		GenerateWalletAddressAptos(mnemonicAptos)
-		return
+	NodeConfig = os.Getenv("NODE_CONFIG")
+	if NodeConfig == "" {
+		log.Fatalf("NODE_CONFIG environment variable is not set")
 	}
-
-	// Check if MNEMONIC is set
-	if mnemonic := os.Getenv("MNEMONIC_SUI"); mnemonic != "" {
-		GenerateWalletAddressSui(mnemonic)
-		return
-	}
-
-	log.Fatal("No mnemonic environment variable is set")
+	fmt.Printf("Node Config: %s\n", NodeConfig)
 }
+
+var WalletAddress string
 
 // GenerateEthereumWalletAddress generates an Ethereum wallet address from the given mnemonic
 func GenerateEthereumWalletAddress(mnemonic string) {

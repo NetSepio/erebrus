@@ -18,6 +18,7 @@ require (
 	github.com/libp2p/go-libp2p v0.33.2
 	github.com/libp2p/go-libp2p-kad-dht v0.25.2
 	github.com/libp2p/go-libp2p-pubsub v0.10.0
+	github.com/minio/blake2b-simd v0.0.0-20160723061019-3f5f724cb5b1
 	github.com/mr-tron/base58 v1.2.0
 	github.com/multiformats/go-multiaddr v0.12.3
 	github.com/patrickmn/go-cache v2.1.0+incompatible
@@ -133,7 +134,6 @@ require (
 	github.com/spaolacci/murmur3 v1.1.0 // indirect
 	github.com/ugorji/go/codec v1.2.9 // indirect
 	github.com/whyrusleeping/go-keyspace v0.0.0-20160322163242-5b898ac5add1 // indirect
-	github.com/xdg-go/pbkdf2 v1.0.0
 	go.opencensus.io v0.24.0 // indirect
 	go.opentelemetry.io/otel v1.16.0 // indirect
 	go.opentelemetry.io/otel/metric v1.16.0 // indirect

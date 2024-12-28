@@ -132,16 +132,12 @@ func main() {
 	err := core.UpdateServerConfigWg()
 	util.CheckError("Error while creating WireGuard config file: ", err)
 	// Call the function to generate the wallet address and store it in the global variable
-	core.GenerateWalletAddress()
-	// core.GenerateWalletAddressSolana()
-	// core.GenerateEthereumWalletAddress()
-	core.LoadChainName()
+
+	core.LoadNodeDetails()
 
 	go p2p.Init()
 	//running updater
 	wg.Add(1)
-
-	//go core.UpdateEndpointDetails()
 
 	if os.Getenv("GRPC_PORT") != "" {
 		//Add gRPC routine to wait group
