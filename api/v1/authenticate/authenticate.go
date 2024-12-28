@@ -40,34 +40,14 @@ func authenticate(c *gin.Context) {
 	}
 	userAuthEULA := os.Getenv("AUTH_EULA")
 	message := userAuthEULA + req.ChallengeId
-	// walletAddress, isCorrect, err := cryptosign.CheckSign(req.Signature, req.ChallengeId, message)
-
-	// if err == cryptosign.ErrChallangeIdNotFound {
-	// 	log.WithFields(log.Fields{
-	// 		"err": err,
-	// 	}).Error("FlowId Not Found")
-	// 	errResponse := ErrAuthenticate(err.Error())
-	// 	c.JSON(http.StatusNotFound, errResponse)
-	// 	return
-	// }
-
-	// if err != nil {
-	// 	log.WithFields(log.Fields{
-	// 		"err": err,
-	// 	}).Error("failed to CheckSignature")
-	// 	errResponse := ErrAuthenticate(err.Error())
-	// 	c.JSON(http.StatusInternalServerError, errResponse)
-	// 	return
-	// }
 
 	var (
-		isCorrect bool
-		// userId     string
+		isCorrect  bool
 		walletAddr string
 	)
 
 	switch req.ChainName {
-	case "EVM", "PEAQ":
+	case "ETHEREUM", "PEAQ":
 		userAuthEULA := userAuthEULA
 		message := userAuthEULA + req.ChallengeId
 		walletAddr, isCorrect, err = CheckSignEth(req.Signature, req.ChallengeId, message)
@@ -78,8 +58,9 @@ func authenticate(c *gin.Context) {
 		}
 
 		if err != nil {
-			logwrapper.Errorf("failed to CheckSignature, error %v", err.Error())
-			httpo.NewErrorResponse(http.StatusInternalServerError, "Unexpected error occurred").SendD(c)
+			fmt.Println("error", err)
+			log.Errorf("failed to CheckSignature, error %v", err.Error())
+			httpo.NewErrorResponse(http.StatusInternalServerError, err.Error()).SendD(c)
 			return
 		}
 
@@ -126,6 +107,11 @@ func authenticate(c *gin.Context) {
 			httpo.NewErrorResponse(http.StatusInternalServerError, "Unexpected error occurred").SendD(c)
 			return
 		}
+
+	default:
+		info := "chain name must be between SOLANA, PEAQ, APTOS, SUI, ECLIPSE, ETHEREUM"
+		httpo.NewErrorResponse(http.StatusBadRequest, "Invalid chain name, INFO : "+info).SendD(c)
+		return
 	}
 	if isCorrect {
 		customClaims := claims.New(walletAddr)

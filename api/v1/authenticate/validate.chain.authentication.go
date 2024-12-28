@@ -57,13 +57,18 @@ func CheckSign(signature string, challangeId string, message string, pubKey stri
 
 }
 
-func CheckSignEth(signature string, challangeId string, message string) (string, bool, error) {
+func CheckSignEth(signature string, flowId string, message string) (string, bool, error) {
 
 	newMsg := fmt.Sprintf("\x19Ethereum Signed Message:\n%v%v", len(message), message)
+	fmt.Println("newMsg : ", newMsg)
 	newMsgHash := crypto.Keccak256Hash([]byte(newMsg))
 	signatureInBytes, err := hexutil.Decode(signature)
 	if err != nil {
 		return "", false, err
+	}
+	// check if the signature is in the [R || S || V] format
+	if len(signatureInBytes) != 65 {
+		return "", false, errors.New("invalid signature length")
 	}
 	if signatureInBytes[64] == 27 || signatureInBytes[64] == 28 {
 		signatureInBytes[64] -= 27
@@ -77,18 +82,16 @@ func CheckSignEth(signature string, challangeId string, message string) (string,
 	//Get address from public key
 	walletAddress := crypto.PubkeyToAddress(*pubKey)
 
-	dbData, exists := challengeid.Data[challangeId]
-	if !exists {
+	flowIdData := challengeid.Data[flowId]
+	if (challengeid.MemoryDB{}) == flowIdData {
 		return "", false, ErrChallangeIdNotFound
 	}
-
-	if err != nil {
-		return "", false, err
-	}
-	if strings.EqualFold(dbData.WalletAddress, walletAddress.String()) {
-		return dbData.WalletAddress, true, nil
+	fmt.Println("flowIdData.WalletAddress", flowIdData.WalletAddress)
+	fmt.Println("walletAddress.String()", walletAddress.String())
+	if strings.EqualFold(flowIdData.WalletAddress, walletAddress.String()) {
+		return flowIdData.WalletAddress, true, nil
 	} else {
-		return "", false, nil
+		return "", false, errors.New("mismatch wallet_address")
 	}
 }
 
