@@ -8,7 +8,6 @@ import (
 	"github.com/NetSepio/erebrus/api/v1/authenticate/challengeid"
 	"github.com/NetSepio/erebrus/util/pkg/auth"
 	"github.com/NetSepio/erebrus/util/pkg/claims"
-	"github.com/NetSepio/gateway/util/pkg/logwrapper"
 	"github.com/TheLazarusNetwork/go-helpers/httpo"
 
 	"github.com/gin-gonic/gin"
@@ -42,79 +41,99 @@ func authenticate(c *gin.Context) {
 	message := userAuthEULA + req.ChallengeId
 
 	var (
-		isCorrect  bool
-		walletAddr string
+		isCorrect     bool
+		walletAddress string
 	)
 
 	switch req.ChainName {
-	case "ETHEREUM", "PEAQ":
+	case "ethereum", "peaq":
 		userAuthEULA := userAuthEULA
 		message := userAuthEULA + req.ChallengeId
-		walletAddr, isCorrect, err = CheckSignEth(req.Signature, req.ChallengeId, message)
+		walletAddress, isCorrect, err = CheckSignEthereum(req.Signature, req.ChallengeId, message)
 
-		if err == ErrChallangeIdNotFound {
-			httpo.NewErrorResponse(http.StatusNotFound, "Challange Id not found")
+		if err == ErrChallengeIdNotFound {
+
+			log.WithFields(log.Fields{"err": err}).Errorf("Challenge Id not found")
+
+			c.JSON(http.StatusNotFound, ErrAuthenticate("Challenge Id not found"))
+
 			return
 		}
 
 		if err != nil {
 			fmt.Println("error", err)
-			log.Errorf("failed to CheckSignature, error %v", err.Error())
-			httpo.NewErrorResponse(http.StatusInternalServerError, err.Error()).SendD(c)
+
+			log.WithFields(log.Fields{"err": err}).Errorf("failed to CheckSignature, error %v", err.Error())
+
+			c.JSON(http.StatusNotFound, ErrAuthenticate("failed to CheckSignature, error :"+err.Error()))
 			return
 		}
 
-	case "APTOS":
+	case "aptos":
 		userAuthEULA := userAuthEULA
 		message := fmt.Sprintf("APTOS\nmessage: %v\nnonce: %v", userAuthEULA, req.ChallengeId)
-		walletAddr, isCorrect, err = CheckSign(req.Signature, req.ChallengeId, message, req.PubKey)
+		walletAddress, isCorrect, err = CheckSignAptos(req.Signature, req.ChallengeId, message, req.PubKey)
 
-		if err == ErrChallangeIdNotFound {
-			httpo.NewErrorResponse(http.StatusNotFound, "Challange Id not found")
+		if err == ErrChallengeIdNotFound {
+			log.WithFields(log.Fields{"err": err}).Errorf("Challenge Id not found")
+
+			c.JSON(http.StatusNotFound, ErrAuthenticate("Challenge Id not found"))
+
 			return
 		}
 
 		if err != nil {
-			logwrapper.Errorf("failed to CheckSignature, error %v", err.Error())
-			httpo.NewErrorResponse(http.StatusInternalServerError, "Unexpected error occurred").SendD(c)
+
+			log.WithFields(log.Fields{"err": err}).Errorf("failed to CheckSignature, error %v", err.Error())
+
+			c.JSON(http.StatusNotFound, ErrAuthenticate("failed to CheckSignature, error :"+err.Error()))
 			return
 		}
 
-	case "SUI":
-		walletAddr, isCorrect, err = CheckSignSui(req.Signature, req.ChallengeId)
+	case "sui":
+		walletAddress, isCorrect, err = CheckSignSui(req.Signature, req.ChallengeId)
 
-		if err == ErrChallangeIdNotFound {
-			httpo.NewErrorResponse(http.StatusNotFound, "Challange Id not found")
-			return
-		}
+		if err == ErrChallengeIdNotFound {
 
-		if err != nil {
-			logwrapper.Errorf("failed to CheckSignature, error %v", err.Error())
-			httpo.NewErrorResponse(http.StatusInternalServerError, "Unexpected error occurred").SendD(c)
-			return
-		}
+			log.WithFields(log.Fields{"err": err}).Errorf("Challenge Id not found")
 
-	case "SOLANA":
-		walletAddr, isCorrect, err = CheckSignSol(req.Signature, req.ChallengeId, message, req.PubKey)
-
-		if err == ErrChallangeIdNotFound {
-			httpo.NewErrorResponse(http.StatusNotFound, "Challange Id not found")
+			c.JSON(http.StatusNotFound, ErrAuthenticate("Challenge Id not found"))
 			return
 		}
 
 		if err != nil {
-			logwrapper.Errorf("failed to CheckSignature, error %v", err.Error())
-			httpo.NewErrorResponse(http.StatusInternalServerError, "Unexpected error occurred").SendD(c)
+			log.WithFields(log.Fields{"err": err}).Errorf("failed to CheckSignature, error %v", err.Error())
+
+			c.JSON(http.StatusNotFound, ErrAuthenticate("failed to CheckSignature, error : "+err.Error()))
 			return
+		}
+
+	case "solana":
+		walletAddress, isCorrect, err = CheckSignSol(req.Signature, req.ChallengeId, message, req.PubKey)
+
+		if err == ErrChallengeIdNotFound {
+			log.WithFields(log.Fields{"err": err}).Errorf("Challenge Id not found")
+			c.JSON(http.StatusNotFound, ErrAuthenticate("Challenge Id not found"))
+			return
+		}
+
+		if err != nil {
+			log.WithFields(log.Fields{
+				"err": err,
+			}).Errorf("failed to CheckSignature, error : %v", err.Error())
+			errResponse := ErrAuthenticate("failed to CheckSignature, error :" + err.Error())
+			c.JSON(http.StatusInternalServerError, errResponse)
+			return
+
 		}
 
 	default:
-		info := "chain name must be between SOLANA, PEAQ, APTOS, SUI, ECLIPSE, ETHEREUM"
+		info := "chain name must be between solana, peaq, aptos, sui, eclipse, ethereum"
 		httpo.NewErrorResponse(http.StatusBadRequest, "Invalid chain name, INFO : "+info).SendD(c)
 		return
 	}
 	if isCorrect {
-		customClaims := claims.New(walletAddr)
+		customClaims := claims.New(walletAddress)
 		pasetoToken, err := auth.GenerateTokenPaseto(customClaims)
 		if err != nil {
 			log.WithFields(log.Fields{

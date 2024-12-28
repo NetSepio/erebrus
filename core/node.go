@@ -30,12 +30,6 @@ var NodeConfig string
 
 // Function to load the node details from the environment and save it to the global variable
 func LoadNodeDetails() {
-	// Load environment variables from the .env file
-	// err := godotenv.Load()
-	// if err != nil {
-	// 	log.Fatalf("Error loading .env file")
-	// }
-
 	// Get the CHAIN_NAME variable from the environment
 	NodeName = os.Getenv("NODE_NAME")
 
@@ -52,7 +46,7 @@ func LoadNodeDetails() {
 	fmt.Printf("Node Type: %s\n", NodeType)
 
 	NodeConfig = os.Getenv("NODE_CONFIG")
-	if ChainName == "" {
+	if NodeConfig == "" {
 		log.Fatalf("NODE_CONFIG environment variable is not set")
 	}
 	fmt.Printf("Node Config: %s\n", NodeConfig)

@@ -20,10 +20,9 @@ import (
 	"golang.org/x/crypto/sha3"
 )
 
-var ErrChallangeIdNotFound = errors.New("challange id not found")
+var ErrChallengeIdNotFound = errors.New("challenge id not found")
 
-func CheckSign(signature string, challangeId string, message string, pubKey string) (string, bool, error) {
-	// db := dbconfig.GetDb()
+func CheckSignAptos(signature string, challangeId string, message string, pubKey string) (string, bool, error) {
 	signatureInBytes, err := hexutil.Decode(signature)
 	if err != nil {
 		return "", false, err
@@ -42,7 +41,7 @@ func CheckSign(signature string, challangeId string, message string, pubKey stri
 
 	dbData, exists := challengeid.Data[challangeId]
 	if !exists {
-		return "", false, ErrChallangeIdNotFound
+		return "", false, ErrChallengeIdNotFound
 	}
 
 	if !strings.EqualFold(addr, dbData.WalletAddress) {
@@ -57,10 +56,12 @@ func CheckSign(signature string, challangeId string, message string, pubKey stri
 
 }
 
-func CheckSignEth(signature string, flowId string, message string) (string, bool, error) {
+func CheckSignEthereum(signature string, flowId string, message string) (string, bool, error) {
 
 	newMsg := fmt.Sprintf("\x19Ethereum Signed Message:\n%v%v", len(message), message)
-	fmt.Println("newMsg : ", newMsg)
+
+	// fmt.Println("newMsg : ", newMsg)
+
 	newMsgHash := crypto.Keccak256Hash([]byte(newMsg))
 	signatureInBytes, err := hexutil.Decode(signature)
 	if err != nil {
@@ -84,10 +85,8 @@ func CheckSignEth(signature string, flowId string, message string) (string, bool
 
 	flowIdData := challengeid.Data[flowId]
 	if (challengeid.MemoryDB{}) == flowIdData {
-		return "", false, ErrChallangeIdNotFound
+		return "", false, ErrChallengeIdNotFound
 	}
-	fmt.Println("flowIdData.WalletAddress", flowIdData.WalletAddress)
-	fmt.Println("walletAddress.String()", walletAddress.String())
 	if strings.EqualFold(flowIdData.WalletAddress, walletAddress.String()) {
 		return flowIdData.WalletAddress, true, nil
 	} else {
@@ -101,13 +100,6 @@ func CheckSignSui(signature string, challangeId string) (string, bool, error) {
 	if err != nil {
 		return "", false, err
 	}
-
-	//TODO verify message
-	// // Decode message
-	// _, err = base64.StdEncoding.DecodeString(message)
-	// if err != nil {
-	// 	return "", false, err
-	// }
 
 	// Assuming ED25519 signature format
 	size := 32
@@ -139,18 +131,12 @@ func CheckSignSui(signature string, challangeId string) (string, bool, error) {
 
 	dbData, exists := challengeid.Data[challangeId]
 	if !exists {
-		return "", false, ErrChallangeIdNotFound
+		return "", false, ErrChallengeIdNotFound
 	}
 
 	if !strings.EqualFold(suiAddress, dbData.WalletAddress) {
 		return "", false, err
 	}
-
-	//TODO check from message
-	// msgGot, matches := sign.Open(nil, signatureInBytes, (*[32]byte)(pubBytes))
-	// if !matches || string(msgGot) != message {
-	// 	return "", false, err
-	// }
 
 	return dbData.WalletAddress, true, nil
 }
@@ -172,7 +158,7 @@ func CheckSignSol(signature string, challangeId string, message string, pubKey s
 
 	dbData, exists := challengeid.Data[challangeId]
 	if !exists {
-		return "", false, ErrChallangeIdNotFound
+		return "", false, ErrChallengeIdNotFound
 	}
 
 	ed25519.Verify(bytes, messageAsBytes, signedMessageAsBytes)

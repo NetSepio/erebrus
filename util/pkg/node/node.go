@@ -128,7 +128,7 @@ func CreateNodeStatus(address string, id string, startTimeStamp int64, name stri
 		IpInfoPostal:   core.GlobalIPInfo.Postal,
 		IpInfoTimezone: core.GlobalIPInfo.Timezone}
 	fmt.Println("Ip Geo : ", IpGeoAddress)
-	// TODO: Send NodeType and NodeConfig
+	
 	nodeStatus := &NodeStatus{
 		HttpPort:         os.Getenv("HTTP_PORT"),
 		Host:             os.Getenv("DOMAIN"),

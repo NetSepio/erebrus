@@ -16,11 +16,6 @@ import (
 	log "github.com/sirupsen/logrus"
 )
 
-//	type User struct {
-//		Name          string   `json:"name,omitempty"`
-//		WalletAddress string   `gorm:"primary_key" json:"walletAddress"`
-//		FlowIds       []FlowId `gorm:"foreignkey:WalletAddress" json:"-"`
-//	}
 type FlowId struct {
 	WalletAddress string
 	FlowId        string `gorm:"primary_key"`
@@ -58,11 +53,9 @@ func GetChallengeId(c *gin.Context) {
 		return
 	}
 
-	// TODO: verify wallet address depending on chainName: ethereum, solana, peaq, aptos, sui, eclipse...
-
 	if err := ValidateAddress(chainName, walletAddress); err != nil {
 
-		info := "chain name = " + chainName + "; pass chain name between SOLANA, PEAQ, APTOS, SUI, ECLIPSE, EVM"
+		info := "chain name = " + chainName + "; please pass chain name between solana, peaq, aptos, sui, eclipse, ethereum"
 
 		switch err {
 		case ErrInvalidChain:
@@ -78,25 +71,6 @@ func GetChallengeId(c *gin.Context) {
 		}
 		return
 	}
-
-	// _, err := hexutil.Decode(walletAddress)
-	// if err != nil {
-	// 	log.WithFields(log.Fields{
-	// 		"err": err,
-	// 	}).Error("Wallet address (walletAddress) is not valid")
-
-	// 	response := core.MakeErrorResponse(400, err.Error(), nil, nil, nil)
-	// 	c.JSON(http.StatusBadRequest, response)
-	// 	return
-	// }
-	// if !util.RegexpWalletEth.MatchString(walletAddress) {
-	// 	log.WithFields(log.Fields{
-	// 		"err": err,
-	// 	}).Error("Wallet address (walletAddress) is not valid")
-	// 	response := core.MakeErrorResponse(400, err.Error(), nil, nil, nil)
-	// 	c.JSON(http.StatusBadRequest, response)
-	// 	return
-	// }
 
 	challengeId, err := GenerateChallengeId(walletAddress, chainName)
 	if err != nil {
@@ -130,29 +104,28 @@ func GenerateChallengeId(walletAddress string, chainName string) (string, error)
 // ValidateAddress validates a wallet address for the specified blockchain
 func ValidateAddress(chain, address string) error {
 	// Convert chain name to lowercase for case-insensitive comparison
-	// chain = strings.ToLower(chain)
 
 	switch chain {
-	case "EVM":
+	case "ethereum":
 		if !ValidateAddressEtherium(address) {
 			return ErrInvalidAddress
 		}
-	case "SOLANA", "ECLIPSE":
+	case "solana", "eclipse":
 		if !ValidateSolanaAddress(address) {
 			return ErrInvalidAddress
 		}
 
-	case "PEAQ":
+	case "peaq":
 		if !ValidatePeaqAddress(address) {
 			return ErrInvalidAddress
 		}
 
-	case "APTOS":
+	case "aptos":
 		if !ValidateAptosAddress(address) {
 			return ErrInvalidAddress
 		}
 
-	case "SUI":
+	case "sui":
 		if !ValidateSuiAddress(address) {
 			return ErrInvalidAddress
 		}
