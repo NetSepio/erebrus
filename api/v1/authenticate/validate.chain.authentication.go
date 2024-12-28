@@ -141,7 +141,7 @@ func CheckSignSui(signature string, challangeId string) (string, bool, error) {
 	return dbData.WalletAddress, true, nil
 }
 
-func CheckSignSol(signature string, challangeId string, message string, pubKey string) (string, bool, error) {
+func CheckSignSolana(signature string, challangeId string, message string, pubKey string) (string, bool, error) {
 
 	bytes, err := base58.Decode(pubKey)
 	if err != nil {

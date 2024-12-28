@@ -109,7 +109,7 @@ func authenticate(c *gin.Context) {
 		}
 
 	case "solana":
-		walletAddress, isCorrect, err = CheckSignSol(req.Signature, req.ChallengeId, message, req.PubKey)
+		walletAddress, isCorrect, err = CheckSignSolana(req.Signature, req.ChallengeId, message, req.PubKey)
 
 		if err == ErrChallengeIdNotFound {
 			log.WithFields(log.Fields{"err": err}).Errorf("Challenge Id not found")
