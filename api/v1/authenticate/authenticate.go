@@ -8,7 +8,6 @@ import (
 	"github.com/NetSepio/erebrus/api/v1/authenticate/challengeid"
 	"github.com/NetSepio/erebrus/util/pkg/auth"
 	"github.com/NetSepio/erebrus/util/pkg/claims"
-	"github.com/TheLazarusNetwork/go-helpers/httpo"
 
 	"github.com/gin-gonic/gin"
 	log "github.com/sirupsen/logrus"
@@ -129,7 +128,11 @@ func authenticate(c *gin.Context) {
 
 	default:
 		info := "chain name must be between solana, peaq, aptos, sui, eclipse, ethereum"
-		httpo.NewErrorResponse(http.StatusBadRequest, "Invalid chain name, INFO : "+info).SendD(c)
+		log.WithFields(log.Fields{
+			"err": err,
+		}).Errorf("Invalid chain name, INFO : %s\n", info)
+		errResponse := ErrAuthenticate("failed to CheckSignature, error :" + "Invalid chain name, INFO : " + info)
+		c.JSON(http.StatusInternalServerError, errResponse)
 		return
 	}
 	if isCorrect {

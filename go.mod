@@ -6,7 +6,6 @@ toolchain go1.22.2
 
 require (
 	aidanwoods.dev/go-paseto v1.2.0
-	github.com/TheLazarusNetwork/go-helpers/httpo v0.0.0-20231109144013-1ac3070f2b48
 	github.com/danielkov/gin-helmet v0.0.0-20171108135313-1387e224435e
 	github.com/docker/docker v26.0.1+incompatible
 	github.com/ethereum/go-ethereum v1.10.26
