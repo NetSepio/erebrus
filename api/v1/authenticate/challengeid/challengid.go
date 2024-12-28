@@ -2,6 +2,7 @@ package challengeid
 
 import (
 	"encoding/hex"
+	"math/big"
 	"net/http"
 	"os"
 	"regexp"
@@ -61,17 +62,19 @@ func GetChallengeId(c *gin.Context) {
 
 	if err := ValidateAddress(chainName, walletAddress); err != nil {
 
-		info := " pass chain name between SOLANA, PEAQ, APTOS, SUI, ECLIPSE"
+		info := "chain name = " + chainName + "; pass chain name between SOLANA, PEAQ, APTOS, SUI, ECLIPSE, EVM"
 
 		switch err {
 		case ErrInvalidChain:
 			log.WithFields(log.Fields{"err": ErrInvalidChain}).Error("failed to create client")
 			response := core.MakeErrorResponse(http.StatusNotAcceptable, ErrInvalidChain.Error()+info, nil, nil, nil)
 			c.JSON(http.StatusNotAcceptable, response)
+			return
 		case ErrInvalidAddress:
 			log.WithFields(log.Fields{"err": ErrInvalidAddress}).Error("failed to create client")
 			response := core.MakeErrorResponse(http.StatusNotAcceptable, ErrInvalidAddress.Error(), nil, nil, nil)
 			c.JSON(http.StatusNotAcceptable, response)
+			return
 		}
 		return
 	}
@@ -117,6 +120,7 @@ func GenerateChallengeId(walletAddress string, chainName string) (string, error)
 	var dbdata MemoryDB
 	dbdata.WalletAddress = walletAddress
 	dbdata.Timestamp = time.Now()
+	dbdata.ChainName = chainName
 	Data = map[string]MemoryDB{
 		challengeId: dbdata,
 	}
@@ -126,10 +130,14 @@ func GenerateChallengeId(walletAddress string, chainName string) (string, error)
 // ValidateAddress validates a wallet address for the specified blockchain
 func ValidateAddress(chain, address string) error {
 	// Convert chain name to lowercase for case-insensitive comparison
-	chain = strings.ToLower(chain)
+	// chain = strings.ToLower(chain)
 
 	switch chain {
-	case "SOLANA", "SOL", "ECLIPSE":
+	case "EVM":
+		if !ValidateAddressEtherium(address) {
+			return ErrInvalidAddress
+		}
+	case "SOLANA", "ECLIPSE":
 		if !ValidateSolanaAddress(address) {
 			return ErrInvalidAddress
 		}
@@ -139,7 +147,7 @@ func ValidateAddress(chain, address string) error {
 			return ErrInvalidAddress
 		}
 
-	case "APTOS", "APT":
+	case "APTOS":
 		if !ValidateAptosAddress(address) {
 			return ErrInvalidAddress
 		}
@@ -200,4 +208,12 @@ func ValidateSuiAddress(address string) bool {
 	address = strings.TrimPrefix(address, "0x")
 	_, err := hex.DecodeString(address)
 	return err == nil
+}
+
+func ValidateAddressEtherium(address string) bool {
+	if len(address) != 42 || !strings.HasPrefix(address, "0x") {
+		return false
+	}
+	_, isValid := big.NewInt(0).SetString(address[2:], 16)
+	return isValid
 }

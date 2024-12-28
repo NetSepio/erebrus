@@ -8,7 +8,7 @@ REGION=EU
 
 # PASETO Specifications
 PASETO_EXPIRATION_IN_HOURS=168
-AUTH_EULA=I Accept the Erebrus Terms of Service https://erebrus.io/terms.html for accessing the application. Challenge ID: 
+AUTH_EULA=I Accept the Erebrus Terms of Service https://erebrus.io/terms.html for accessing the application. 
 SIGNED_BY=Erebrus
 FOOTER=Erebrus 2024
 
