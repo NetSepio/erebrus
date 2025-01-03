@@ -5,6 +5,7 @@ import (
 	"github.com/NetSepio/erebrus/api/v1/client"
 	"github.com/NetSepio/erebrus/api/v1/server"
 	"github.com/NetSepio/erebrus/api/v1/status"
+	caddy "github.com/NetSepio/erebrus/api/v1/tunnel"
 
 	"github.com/gin-gonic/gin"
 )
@@ -17,6 +18,7 @@ func ApplyRoutes(r *gin.RouterGroup) {
 		server.ApplyRoutes(v1)
 		status.ApplyRoutes(v1)
 		authenticate.ApplyRoutes(v1)
+		caddy.ApplyRoutes(v1)
 
 	}
 }
