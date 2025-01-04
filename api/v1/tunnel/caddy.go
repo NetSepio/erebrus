@@ -16,7 +16,7 @@ import (
 
 // ApplyRoutes applies router to gin Router
 func ApplyRoutes(r *gin.RouterGroup) {
-	r.Use(MiddlewareForCaddy)
+	r.Use(MiddlewareForCaddy())
 
 	g := r.Group("/caddy")
 	{
@@ -172,10 +172,31 @@ func deleteTunnel(c *gin.Context) {
 
 }
 
-func MiddlewareForCaddy(c *gin.Context) {
-	if strings.ToLower(os.Getenv("NODE_CONFIG")) == "standard" || strings.ToLower(os.Getenv("NODE_CONFIG")) == "hpc" {
-		util.LogError("NODE_CONFIG not allowed", nil)
-		c.JSON(http.StatusNotAcceptable, resp)
-		os.Exit(1)
+// func MiddlewareForCaddy(c *gin.Context) {
+
+// 	//check if NODE_CONFIG is set to standard or hpc
+
+// 	if strings.ToLower(os.Getenv("NODE_CONFIG")) != "standard" && strings.ToLower(os.Getenv("NODE_CONFIG")) != "hpc" {
+// 		util.LogError("NODE_CONFIG not allowed", nil)
+// 		c.JSON(http.StatusNotAcceptable, resp)
+// 		os.Exit(1)
+// 	}
+// }
+
+// NodeConfigMiddleware checks if NODE_CONFIG is set to "standard" or "hpc".
+func MiddlewareForCaddy() gin.HandlerFunc {
+	return func(c *gin.Context) {
+		nodeConfig := os.Getenv("NODE_CONFIG")
+
+		if nodeConfig != "standard" && nodeConfig != "hpc" {
+			c.JSON(http.StatusBadRequest, gin.H{
+				"error": "Invalid NODE_CONFIG value. It must be 'standard' or 'hpc'.",
+			})
+			c.Abort() // Stop further processing of the request
+			return
+		}
+
+		// Pass to the next middleware/handler
+		c.Next()
 	}
 }
