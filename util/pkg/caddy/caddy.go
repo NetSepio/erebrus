@@ -13,7 +13,7 @@ func isCaddyInstalled() bool {
 	return err == nil
 }
 
-func LinuxBasicInstallation() {
+func LinuxBasicInstallation() error {
 
 	// Check if 'sh' is already installed
 	cmdCheck := exec.Command("sh", "--version")
@@ -22,7 +22,7 @@ func LinuxBasicInstallation() {
 	if err == nil {
 		// If no error, 'sh' is already installed
 		fmt.Println(" ✅ 'sh' is already installed! ✅")
-		return
+		return err
 	}
 
 	// If 'sh' is not installed, install 'dash' using apt package manager
@@ -33,11 +33,12 @@ func LinuxBasicInstallation() {
 	if err != nil {
 		// Return the error with the custom message format
 		log.Fatalf(" ❌ Failed to install 'sh': %v ❌", err)
-		return
+		return err
 	}
 
 	// Success message in the desired format
 	fmt.Println(" ✅ 'sh' installation complete! ✅")
+	return nil
 
 }
 
@@ -47,6 +48,10 @@ func installCaddy() error {
 
 	switch osType {
 	case "linux":
+		err := LinuxBasicInstallation()
+		if err != nil {
+			return err
+		}
 		installCmd = exec.Command("sh", "-c", `
 			 🐧 Installing Caddy on Linux... Please wait... ⏳  && \
 			sudo apt install -y debian-keyring debian-archive-keyring apt-transport-https && \
