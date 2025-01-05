@@ -16,7 +16,7 @@ import (
 
 // ApplyRoutes applies router to gin Router
 func ApplyRoutes(r *gin.RouterGroup) {
-	r.Use(MiddlewareForCaddy())
+	// r.Use(MiddlewareForCaddy())
 
 	g := r.Group("/caddy")
 	{

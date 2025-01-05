@@ -1,6 +1,8 @@
 package v1
 
 import (
+	"os"
+
 	"github.com/NetSepio/erebrus/api/v1/authenticate"
 	"github.com/NetSepio/erebrus/api/v1/client"
 	"github.com/NetSepio/erebrus/api/v1/server"
@@ -18,7 +20,10 @@ func ApplyRoutes(r *gin.RouterGroup) {
 		server.ApplyRoutes(v1)
 		status.ApplyRoutes(v1)
 		authenticate.ApplyRoutes(v1)
-		caddy.ApplyRoutes(v1)
+		nodeConfig := os.Getenv("NODE_CONFIG")
+		if nodeConfig == "standard" || nodeConfig == "hpc" {
+			caddy.ApplyRoutes(v1)
+		}
 
 	}
 }

@@ -13,7 +13,6 @@ import (
 	grpc "github.com/NetSepio/erebrus/gRPC"
 	"github.com/NetSepio/erebrus/p2p"
 	"github.com/NetSepio/erebrus/util"
-	"github.com/NetSepio/erebrus/util/pkg"
 	"github.com/NetSepio/erebrus/util/pkg/auth"
 	"github.com/NetSepio/erebrus/util/pkg/node"
 	"github.com/gin-contrib/static"
@@ -54,8 +53,6 @@ func init() {
 
 		}
 	}
-
-	pkg.InstallPkgRequirements()
 
 	core.GetIPInfo()
 
