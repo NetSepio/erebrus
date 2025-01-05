@@ -13,6 +13,34 @@ func isCaddyInstalled() bool {
 	return err == nil
 }
 
+func LinuxBasicInstallation() {
+
+	// Check if 'sh' is already installed
+	cmdCheck := exec.Command("sh", "--version")
+	err := cmdCheck.Run()
+
+	if err == nil {
+		// If no error, 'sh' is already installed
+		fmt.Println(" ✅ 'sh' is already installed! ✅")
+		return
+	}
+
+	// If 'sh' is not installed, install 'dash' using apt package manager
+	cmdInstall := exec.Command("sudo", "apt-get", "install", "-y", "dash")
+
+	// Run the command
+	err = cmdInstall.Run()
+	if err != nil {
+		// Return the error with the custom message format
+		log.Fatalf(" ❌ Failed to install 'sh': %v ❌", err)
+		return
+	}
+
+	// Success message in the desired format
+	fmt.Println(" ✅ 'sh' installation complete! ✅")
+
+}
+
 func installCaddy() error {
 	osType := runtime.GOOS
 	var installCmd *exec.Cmd
