@@ -73,15 +73,16 @@ func addTunnel(c *gin.Context) {
 			//create a tunnel struct object
 			var data model.Tunnel
 			data.Name = name
+			data.Type = os.Getenv("NODE_TYPE")
 			data.Port = port
-			data.Domain = os.Getenv("CADDY_DOMAIN")
+			data.Domain = os.Getenv("DOMAIN")
 			data.IpAddress = ipAddress
 			data.CreatedAt = time.Now().UTC().Format(time.RFC3339)
 
 			//to add tunnel config
 			err := middleware.AddWebTunnel(data)
 			if err != nil {
-				resp = util.Message(500, "Server error, Try after some time or Contact Admin...")
+				resp = util.Message(500, "Server error, Try after some time or Contact Admin..."+err.Error())
 				c.JSON(http.StatusInternalServerError, resp)
 				break
 			} else {

@@ -2,7 +2,7 @@ package middleware
 
 import (
 	"encoding/json"
-	"fmt"
+	"errors"
 	"io"
 	"os"
 	"path/filepath"
@@ -28,13 +28,19 @@ func IsValidWeb(name string, port int) (int, string, error) {
 	// check if name or port is already in use
 	tunnels, err := ReadWebTunnels()
 	if err != nil {
-		return -1, "", err
-	} else {
+		if err.Error() == "caddy file is empty while reading file" {
+			util.LogError("Caddy file is empty, proceeding to create a new tunnel", nil)
+		} else {
+			return -1, "", err
+		}
+	}
+
+	if tunnels != nil {
 		for _, tunnel := range tunnels.Tunnels {
 			if tunnel.Name == name {
-				return -1, "Tunnel Already exists", err
+				return -1, "Tunnel Already exists", nil
 			} else if tunnel.Port == strconv.Itoa(port) {
-				return -1, "Port Already in use", err
+				return -1, "Port Already in use", nil
 			}
 		}
 	}
@@ -50,13 +56,7 @@ func IsValidWeb(name string, port int) (int, string, error) {
 // ReadWebTunnels fetches all the Web Tunnel
 func ReadWebTunnels() (*model.Tunnels, error) {
 
-	wd, err := os.UserHomeDir()
-	if err != nil {
-		fmt.Println("\n🚨 Error:", err, "\n")
-	} else {
-		fmt.Println("\n✅ Current Working Directory:", wd, "\n")
-	}
-	fmt.Println("\n📂 Current Path:", wd)
+	// filePath := filepath.Join(os.Getenv("SERVICE_CONF_DIR"), "caddy.json")
 
 	file, err := os.OpenFile(filepath.Join(os.Getenv("SEVICE_CONF_DIR"), "caddy.json"), os.O_RDWR|os.O_APPEND, 0666)
 	if err != nil {
@@ -64,10 +64,18 @@ func ReadWebTunnels() (*model.Tunnels, error) {
 		return nil, err
 	}
 
+	defer file.Close() // Ensure the file is closed in any case
+
 	b, err := io.ReadAll(file)
 	if err != nil {
 		util.LogError("File Read error: ", err)
 		return nil, err
+	}
+
+	// Check if the file is empty
+	if len(b) == 0 {
+		util.LogError("Caddy file is empty", err)
+		return nil, errors.New("caddy file is empty while reading file")
 	}
 
 	var tunnels model.Tunnels
@@ -106,27 +114,40 @@ func ReadWebTunnel(tunnelName string) (*model.Tunnel, error) {
 func AddWebTunnel(tunnel model.Tunnel) error {
 	tunnels, err := ReadWebTunnels()
 	if err != nil {
-		return err
+		if err.Error() == "caddy file is empty while reading file" {
+			util.LogError("Caddy file is empty, proceeding to create a new tunnel", nil)
+			tunnels = &model.Tunnels{Tunnels: []model.Tunnel{}} // Initialize an empty Tunnels struct
+		} else {
+			return err
+		}
 	}
 
-	var updatedTunnels []model.Tunnel
-	updatedTunnels = append(updatedTunnels, tunnels.Tunnels...)
-	updatedTunnels = append(updatedTunnels, tunnel)
+	if tunnels == nil || tunnels.Tunnels == nil {
+		tunnels = &model.Tunnels{Tunnels: []model.Tunnel{}} // Ensure tunnels is initialized
+	}
 
+	// Prepare updated tunnels list
+	updatedTunnels := append(tunnels.Tunnels, tunnel)
+
+	// Marshal the updated tunnels to JSON
 	inter, err := json.MarshalIndent(updatedTunnels, "", "   ")
 	if err != nil {
 		util.LogError("JSON Marshal error: ", err)
 		return err
 	}
 
-	err = util.WriteFile(filepath.Join(os.Getenv("SEVICE_CONF_DIR"), "caddy.json"), inter)
+	// Write the updated configuration to the file
+	caddyConfigPath := filepath.Join(os.Getenv("SEVICE_CONF_DIR"), "caddy.json")
+	err = util.WriteFile(caddyConfigPath, inter)
 	if err != nil {
 		util.LogError("File write error: ", err)
 		return err
 	}
 
+	// Update the Caddy configuration
 	err = UpdateCaddyConfig()
 	if err != nil {
+		util.LogError("Caddy configuration update error: ", err)
 		return err
 	}
 

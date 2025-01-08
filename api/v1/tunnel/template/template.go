@@ -2,6 +2,7 @@ package template
 
 import (
 	"bytes"
+	"fmt"
 	"html/template"
 	"os"
 	"path/filepath"
@@ -14,7 +15,7 @@ var (
 	caddyTpl = `
 # {{.Name}}, {{.Port}}, {{.CreatedAt}}
 {{.Name}}.{{.Domain}} {
-	reverse_proxy / {{.IPAddress}}{{.Port}}
+	reverse_proxy / {{.IpAddress}}{{.Port}}
 	log {
 		output file /var/log/caddy/{{.Name}}.{{.Domain}}.access.log {
 			roll_size 3MiB
@@ -61,9 +62,23 @@ func CaddyConfigTempl(tunnel model.Tunnel) ([]byte, error) {
 		return nil, err
 	}
 
-	err = core.Writefile(filepath.Join(os.Getenv("CADDY_CONF_DIR"), os.Getenv("CADDY_INTERFACE_NAME")), tplBuff.Bytes())
+	// Get the directory path and ensure it exists
+	configDir := os.Getenv("CADDY_CONF_DIR")
+	if configDir == "" {
+		return nil, fmt.Errorf("CADDY_CONF_DIR environment variable is not set")
+	}
+
+	// Ensure the directory exists
+	err = os.MkdirAll(configDir, 0755) // 0755 for read/write/execute permissions
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("error creating directory %s: %w", configDir, err)
+	}
+
+	// Write the file
+	configFilePath := filepath.Join(configDir, os.Getenv("CADDY_INTERFACE_NAME"))
+	err = core.Writefile(configFilePath, tplBuff.Bytes())
+	if err != nil {
+		return nil, fmt.Errorf("error writing file %s: %w", configFilePath, err)
 	}
 
 	return tplBuff.Bytes(), nil
