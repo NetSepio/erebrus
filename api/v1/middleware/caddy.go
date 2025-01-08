@@ -50,7 +50,7 @@ func IsValidWeb(name string, port int) (int, string, error) {
 // ReadWebTunnels fetches all the Web Tunnel
 func ReadWebTunnels() (*model.Tunnels, error) {
 
-	wd, err := os.Getwd()
+	wd, err := os.UserHomeDir()
 	if err != nil {
 		fmt.Println("\n🚨 Error:", err, "\n")
 	} else {
