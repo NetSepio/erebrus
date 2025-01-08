@@ -12,7 +12,7 @@ import (
 	"github.com/NetSepio/erebrus/api/v1/tunnel/util"
 )
 
-var AppConfDir = "./conf"
+// var AppConfDir = "./conf"
 var CaddyJSON = "caddy.json"
 var NginxJSON = "nginx.json"
 
@@ -26,7 +26,15 @@ var NginxFile = os.Getenv("NGINX_INTERFACE_NAME")
 // Init initializes json file for caddy and nginx
 func Init() {
 	//caddy.json path
-	path := filepath.Join(AppConfDir, CaddyJSON)
+	wd, err := os.Getwd()
+	if err != nil {
+		fmt.Println("\n🚨 Error:", err, "\n")
+	} else {
+		fmt.Println("\n✅ Current Working Directory:", wd, "\n")
+	}
+	fmt.Println("\n📂 Current Path:", wd, "\n")
+
+	path := filepath.Join(os.Getenv("SEVICE_CONF_DIR"), CaddyJSON)
 	//check if exists
 	if !util.FileExists(path) {
 		err := util.CreateJSONFile(path)
