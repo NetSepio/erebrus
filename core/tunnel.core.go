@@ -32,7 +32,7 @@ func Init() {
 	} else {
 		fmt.Println("\n✅ Current Working Directory:", wd, "\n")
 	}
-	fmt.Println("\n📂 Current Path:", wd, "\n")
+	fmt.Println("\n📂 Current Path:", wd)
 
 	path := filepath.Join(os.Getenv("SEVICE_CONF_DIR"), CaddyJSON)
 	//check if exists

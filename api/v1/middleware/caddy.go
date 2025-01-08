@@ -2,6 +2,7 @@ package middleware
 
 import (
 	"encoding/json"
+	"fmt"
 	"io"
 	"os"
 	"path/filepath"
@@ -48,6 +49,15 @@ func IsValidWeb(name string, port int) (int, string, error) {
 
 // ReadWebTunnels fetches all the Web Tunnel
 func ReadWebTunnels() (*model.Tunnels, error) {
+
+	wd, err := os.Getwd()
+	if err != nil {
+		fmt.Println("\n🚨 Error:", err, "\n")
+	} else {
+		fmt.Println("\n✅ Current Working Directory:", wd, "\n")
+	}
+	fmt.Println("\n📂 Current Path:", wd)
+
 	file, err := os.OpenFile(filepath.Join(os.Getenv("SEVICE_CONF_DIR"), "caddy.json"), os.O_RDWR|os.O_APPEND, 0666)
 	if err != nil {
 		util.LogError("File Open error: ", err)
