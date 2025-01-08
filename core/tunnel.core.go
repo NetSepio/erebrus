@@ -15,7 +15,8 @@ import (
 var AppConfDir = "./conf"
 var CaddyJSON = "caddy.json"
 var NginxJSON = "nginx.json"
-//WG_CONF_DIR
+
+// WG_CONF_DIR
 var CaddyConfDir = os.Getenv("WG_CONF_DIR")
 var CaddyFile = os.Getenv("CADDY_INTERFACE_NAME")
 
@@ -35,7 +36,7 @@ func Init() {
 	}
 
 	//nginx.json path
-	path = filepath.Join(os.Getenv("APP_CONF_DIR"), NginxJSON)
+	path = filepath.Join(os.Getenv("SEVICE_CONF_DIR"), NginxJSON)
 	//check if exists
 	if !util.FileExists(path) {
 		err := util.CreateJSONFile(path)

@@ -48,7 +48,7 @@ func IsValidWeb(name string, port int) (int, string, error) {
 
 // ReadWebTunnels fetches all the Web Tunnel
 func ReadWebTunnels() (*model.Tunnels, error) {
-	file, err := os.OpenFile(filepath.Join(os.Getenv("APP_CONF_DIR"), "caddy.json"), os.O_RDWR|os.O_APPEND, 0666)
+	file, err := os.OpenFile(filepath.Join(os.Getenv("SEVICE_CONF_DIR"), "caddy.json"), os.O_RDWR|os.O_APPEND, 0666)
 	if err != nil {
 		util.LogError("File Open error: ", err)
 		return nil, err
@@ -109,7 +109,7 @@ func AddWebTunnel(tunnel model.Tunnel) error {
 		return err
 	}
 
-	err = util.WriteFile(filepath.Join(os.Getenv("APP_CONF_DIR"), "caddy.json"), inter)
+	err = util.WriteFile(filepath.Join(os.Getenv("SEVICE_CONF_DIR"), "caddy.json"), inter)
 	if err != nil {
 		util.LogError("File write error: ", err)
 		return err
@@ -144,7 +144,7 @@ func DeleteWebTunnel(tunnelName string) error {
 		return err
 	}
 
-	err = util.WriteFile(filepath.Join(os.Getenv("APP_CONF_DIR"), "caddy.json"), inter)
+	err = util.WriteFile(filepath.Join(os.Getenv("SEVICE_CONF_DIR"), "caddy.json"), inter)
 	if err != nil {
 		util.LogError("File write error: ", err)
 		return err

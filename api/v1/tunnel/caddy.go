@@ -58,7 +58,7 @@ func addTunnel(c *gin.Context) {
 		value, msg, err := middleware.IsValidWeb(name, portInt)
 
 		if err != nil {
-			resp = util.Message(500, "Server error, Try after some time or Contact Admin...")
+			resp = util.Message(500, "Server error, Try after some time or Contact Admin..."+err.Error())
 			c.JSON(http.StatusOK, resp)
 			break
 		} else if value == -1 {

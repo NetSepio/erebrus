@@ -34,6 +34,15 @@ EOF
     printf "\e[1mStage 3 - Run Node:\e[0m\t               [${status_stage3}\e[0m]\n\n"
 }
 
+# Function to check if ./services folder exists
+check_services_folder() {
+    if [ ! -d "./services" ]; then
+        echo -e "\e[31mError: The ./services folder does not exist.\e[0m"
+        echo "Please create a ./services folder from the home directory."
+        exit 1
+    fi
+}
+
 # Function to show spinner
 show_spinner() {
     local pid=$1
