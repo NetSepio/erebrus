@@ -58,7 +58,7 @@ func ReadWebServices() (*model.Services, error) {
 
 	// filePath := filepath.Join(os.Getenv("SERVICE_CONF_DIR"), "caddy.json")
 
-	file, err := os.OpenFile(filepath.Join(os.Getenv("SEVICE_CONF_DIR"), "caddy.json"), os.O_RDWR|os.O_APPEND, 0666)
+	file, err := os.OpenFile(filepath.Join(os.Getenv("SERVICE_CONF_DIR"), "caddy.json"), os.O_RDWR|os.O_APPEND, 0666)
 	if err != nil {
 		util.LogError("File Open error: ", err)
 		return nil, err
@@ -137,7 +137,7 @@ func AddWebServices(Services model.Service) error {
 	}
 
 	// Write the updated configuration to the file
-	caddyConfigPath := filepath.Join(os.Getenv("SEVICE_CONF_DIR"), "caddy.json")
+	caddyConfigPath := filepath.Join(os.Getenv("SERVICE_CONF_DIR"), "caddy.json")
 	err = util.WriteFile(caddyConfigPath, inter)
 	if err != nil {
 		util.LogError("File write error: ", err)
@@ -175,7 +175,7 @@ func DeleteWebServices(ServicesName string) error {
 		return err
 	}
 
-	err = util.WriteFile(filepath.Join(os.Getenv("SEVICE_CONF_DIR"), "caddy.json"), inter)
+	err = util.WriteFile(filepath.Join(os.Getenv("SERVICE_CONF_DIR"), "caddy.json"), inter)
 	if err != nil {
 		util.LogError("File write error: ", err)
 		return err

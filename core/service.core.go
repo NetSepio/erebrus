@@ -34,7 +34,7 @@ func Init() {
 	}
 	fmt.Println("\n📂 Current Path:", wd)
 
-	path := filepath.Join(os.Getenv("SEVICE_CONF_DIR"), CaddyJSON)
+	path := filepath.Join(os.Getenv("SERVICE_CONF_DIR"), CaddyJSON)
 	//check if exists
 	if !util.FileExists(path) {
 		err := util.CreateJSONFile(path)
@@ -44,7 +44,7 @@ func Init() {
 	}
 
 	//nginx.json path
-	path = filepath.Join(os.Getenv("SEVICE_CONF_DIR"), NginxJSON)
+	path = filepath.Join(os.Getenv("SERVICE_CONF_DIR"), NginxJSON)
 	//check if exists
 	if !util.FileExists(path) {
 		err := util.CreateJSONFile(path)
