@@ -8,7 +8,7 @@ import (
 	"time"
 
 	"github.com/NetSepio/erebrus/api/v1/middleware"
-	"github.com/NetSepio/erebrus/api/v1/tunnel/util"
+	"github.com/NetSepio/erebrus/api/v1/service/util"
 	"github.com/NetSepio/erebrus/core"
 	"github.com/NetSepio/erebrus/model"
 	"github.com/gin-gonic/gin"
@@ -19,17 +19,17 @@ func ApplyRoutes(r *gin.RouterGroup) {
 
 	g := r.Group("/caddy")
 	{
-		g.POST("", addTunnel)
-		g.GET("", getTunnels)
-		g.GET(":name", getTunnel)
-		g.DELETE(":name", deleteTunnel)
+		g.POST("", addServices)
+		g.GET("", getServicess)
+		g.GET(":name", getServices)
+		g.DELETE(":name", deleteServices)
 	}
 }
 
 var resp map[string]interface{}
 
 // addTunnel adds new tunnel config
-func addTunnel(c *gin.Context) {
+func addServices(c *gin.Context) {
 	//post form parameters
 	name := strings.ToLower(c.PostForm("name"))
 	ipAddress := c.PostForm("ip_address")
@@ -54,7 +54,7 @@ func addTunnel(c *gin.Context) {
 		// 	panic(err)
 		// }
 
-		// check validity of tunnel name and port
+		// check validity of Services name and port
 		value, msg, err := middleware.IsValidWeb(name, portInt)
 
 		if err != nil {
@@ -70,8 +70,8 @@ func addTunnel(c *gin.Context) {
 			c.JSON(http.StatusBadRequest, resp)
 			break
 		} else if value == 1 {
-			//create a tunnel struct object
-			var data model.Tunnel
+			//create a Services struct object
+			var data model.Service
 			data.Name = name
 			data.Type = os.Getenv("NODE_TYPE")
 			data.Port = port
@@ -79,14 +79,14 @@ func addTunnel(c *gin.Context) {
 			data.IpAddress = ipAddress
 			data.CreatedAt = time.Now().UTC().Format(time.RFC3339)
 
-			//to add tunnel config
-			err := middleware.AddWebTunnel(data)
+			//to add Services config
+			err := middleware.AddWebServices(data)
 			if err != nil {
 				resp = util.Message(500, "Server error, Try after some time or Contact Admin..."+err.Error())
 				c.JSON(http.StatusInternalServerError, resp)
 				break
 			} else {
-				resp = util.MessageTunnel(200, data)
+				resp = util.MessageService(200, data)
 				c.JSON(http.StatusOK, resp)
 				break
 			}
@@ -94,37 +94,37 @@ func addTunnel(c *gin.Context) {
 	}
 }
 
-// getTunnels gets all tunnel config
-func getTunnels(c *gin.Context) {
-	//read all tunnel config
-	tunnels, err := middleware.ReadWebTunnels()
+// getServicess gets all Services config
+func getServicess(c *gin.Context) {
+	//read all Services config
+	Services, err := middleware.ReadWebServices()
 	if err != nil {
 		resp = util.Message(500, "Server error, Try after some time or Contact Admin...")
 		c.JSON(http.StatusInternalServerError, resp)
 	} else {
-		resp = util.MessageTunnels(200, tunnels.Tunnels)
+		resp = util.MessageServices(200, Services.Services)
 		c.JSON(http.StatusOK, resp)
 	}
 }
 
-// getTunnel get specific tunnel config
-func getTunnel(c *gin.Context) {
+// getServices get specific Services config
+func getServices(c *gin.Context) {
 	//get parameter
 	name := c.Param("name")
 
-	//read tunnel config
-	tunnel, err := middleware.ReadWebTunnel(name)
+	//read Services config
+	Services, err := middleware.ReadWebService(name)
 	if err != nil {
 		resp = util.Message(500, "Server error, Try after some time or Contact Admin...")
 		c.JSON(http.StatusInternalServerError, resp)
 	}
 
-	//check if tunnel exists
-	if tunnel.Name == "" {
-		resp = util.Message(404, "Tunnel Doesn't Exists")
+	//check if Services exists
+	if Services.Name == "" {
+		resp = util.Message(404, "Services Doesn't Exists")
 		c.JSON(http.StatusNotFound, resp)
 	} else {
-		port, err := strconv.Atoi(tunnel.Port)
+		port, err := strconv.Atoi(Services.Port)
 		if err != nil {
 			util.LogError("string conv error: ", err)
 			resp = util.Message(500, "Server error, Try after some time or Contact Admin...")
@@ -135,37 +135,37 @@ func getTunnel(c *gin.Context) {
 				resp = util.Message(500, "Server error, Try after some time or Contact Admin...")
 				c.JSON(http.StatusInternalServerError, resp)
 			} else {
-				tunnel.Status = status
-				resp = util.MessageTunnel(200, *tunnel)
+				Services.Status = status
+				resp = util.MessageService(200, *Services)
 				c.JSON(http.StatusOK, resp)
 			}
 		}
 	}
 }
 
-func deleteTunnel(c *gin.Context) {
+func deleteServices(c *gin.Context) {
 	//get parameter
 	name := c.Param("name")
 
-	//read tunnel config
-	tunnel, err := middleware.ReadWebTunnel(name)
+	//read Services config
+	Services, err := middleware.ReadWebService(name)
 	if err != nil {
 		resp = util.Message(500, "Server error, Try after some time or Contact Admin...")
 		c.JSON(http.StatusInternalServerError, resp)
 	}
 
-	//check if tunnel exists
-	if tunnel.Name == "" {
-		resp = util.Message(400, "Tunnel Doesn't Exists")
+	//check if Services exists
+	if Services.Name == "" {
+		resp = util.Message(400, "Services Doesn't Exists")
 		c.JSON(http.StatusBadRequest, resp)
 	} else {
-		//delete tunnel config
-		err = middleware.DeleteWebTunnel(name)
+		//delete Services config
+		err = middleware.DeleteWebServices(name)
 		if err != nil {
 			resp = util.Message(500, "Server error, Try after some time or Contact Admin...")
 			c.JSON(http.StatusInternalServerError, resp)
 		} else {
-			resp = util.Message(200, "Deleted Tunnel: "+name)
+			resp = util.Message(200, "Deleted Services: "+name)
 			c.JSON(http.StatusOK, resp)
 		}
 	}

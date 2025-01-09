@@ -15,7 +15,7 @@ var IsLetter = regexp.MustCompile(`^[a-z0-9]+$`).MatchString
 // StandardFields for logger
 var StandardFields = log.Fields{
 	"hostname": "HostServer",
-	"appname":  "TunnelAPI",
+	"appname":  "ServiceAPI",
 }
 
 // ReadFile file content
@@ -81,11 +81,11 @@ func Message(status int, message string) map[string]interface{} {
 }
 
 // MessageByte Return Response as byte array
-func MessageTunnel(status int, message model.Tunnel) map[string]interface{} {
+func MessageService(status int, message model.Service) map[string]interface{} {
 	return map[string]interface{}{"status": status, "message": message}
 }
 
 // MessageByte Return Response as byte array
-func MessageTunnels(status int, message []model.Tunnel) map[string]interface{} {
+func MessageServices(status int, message []model.Service) map[string]interface{} {
 	return map[string]interface{}{"status": status, "message": message}
 }

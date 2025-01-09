@@ -9,7 +9,7 @@ import (
 	"strings"
 	"time"
 
-	"github.com/NetSepio/erebrus/api/v1/tunnel/util"
+	"github.com/NetSepio/erebrus/api/v1/service/util"
 )
 
 // var AppConfDir = "./conf"

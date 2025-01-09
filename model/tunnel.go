@@ -1,7 +1,7 @@
 package model
 
 // struct name service
-type Tunnel struct { // name app
+type Service struct { // name app
 	Name      string `json:"name"`
 	Type      string `json:"type"`
 	IpAddress string `json:"IPAddress,omitempty"`
@@ -12,6 +12,6 @@ type Tunnel struct { // name app
 }
 
 // type name services
-type Tunnels struct {
-	Tunnels []Tunnel `json:"service"`
+type Services struct {
+	Services []Service `json:"service"`
 }

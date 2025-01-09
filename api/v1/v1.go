@@ -6,8 +6,8 @@ import (
 	"github.com/NetSepio/erebrus/api/v1/authenticate"
 	"github.com/NetSepio/erebrus/api/v1/client"
 	"github.com/NetSepio/erebrus/api/v1/server"
+	caddy "github.com/NetSepio/erebrus/api/v1/service"
 	"github.com/NetSepio/erebrus/api/v1/status"
-	caddy "github.com/NetSepio/erebrus/api/v1/tunnel"
 
 	"github.com/gin-gonic/gin"
 )

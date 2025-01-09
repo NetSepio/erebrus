@@ -50,7 +50,7 @@ server {
 )
 
 // Caddy configuration file template
-func CaddyConfigTempl(tunnel model.Tunnel) ([]byte, error) {
+func CaddyConfigTempl(tunnel model.Service) ([]byte, error) {
 	t, err := template.New("config").Parse(caddyTpl)
 	if err != nil {
 		return nil, err
@@ -67,6 +67,8 @@ func CaddyConfigTempl(tunnel model.Tunnel) ([]byte, error) {
 	if configDir == "" {
 		return nil, fmt.Errorf("CADDY_CONF_DIR environment variable is not set")
 	}
+
+	configDir += os.Getenv("CADDY_INTERFACE_NAME")
 
 	// Ensure the directory exists
 	err = os.MkdirAll(configDir, 0755) // 0755 for read/write/execute permissions
@@ -85,7 +87,7 @@ func CaddyConfigTempl(tunnel model.Tunnel) ([]byte, error) {
 }
 
 // Nginx configuration file template
-func NginxConfigTempl(tunnel model.Tunnel) ([]byte, error) {
+func NginxConfigTempl(tunnel model.Service) ([]byte, error) {
 	t, err := template.New("config").Parse(nginxTpl)
 	if err != nil {
 		return nil, err

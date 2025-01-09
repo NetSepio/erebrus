@@ -8,8 +8,8 @@ import (
 	"path/filepath"
 	"strconv"
 
-	"github.com/NetSepio/erebrus/api/v1/tunnel/template"
-	"github.com/NetSepio/erebrus/api/v1/tunnel/util"
+	"github.com/NetSepio/erebrus/api/v1/service/template"
+	"github.com/NetSepio/erebrus/api/v1/service/util"
 	"github.com/NetSepio/erebrus/model"
 )
 
@@ -17,29 +17,29 @@ import (
 func IsValidWeb(name string, port int) (int, string, error) {
 	// check if the name is empty
 	if name == "" {
-		return -1, "Tunnel Name is required", nil
+		return -1, "Services Name is required", nil
 	}
 
 	// check the name field is between 3 to 40 chars
 	if len(name) < 4 || len(name) > 12 {
-		return -1, "Tunnel Name field must be between 4-12 chars", nil
+		return -1, "Services Name field must be between 4-12 chars", nil
 	}
 
 	// check if name or port is already in use
-	tunnels, err := ReadWebTunnels()
+	Services, err := ReadWebServices()
 	if err != nil {
 		if err.Error() == "caddy file is empty while reading file" {
-			util.LogError("Caddy file is empty, proceeding to create a new tunnel", nil)
+			util.LogError("Caddy file is empty, proceeding to create a new Services", nil)
 		} else {
 			return -1, "", err
 		}
 	}
 
-	if tunnels != nil {
-		for _, tunnel := range tunnels.Tunnels {
-			if tunnel.Name == name {
-				return -1, "Tunnel Already exists", nil
-			} else if tunnel.Port == strconv.Itoa(port) {
+	if Services != nil {
+		for _, Services := range Services.Services {
+			if Services.Name == name {
+				return -1, "Services Already exists", nil
+			} else if Services.Port == strconv.Itoa(port) {
 				return -1, "Port Already in use", nil
 			}
 		}
@@ -47,14 +47,14 @@ func IsValidWeb(name string, port int) (int, string, error) {
 
 	// check the format of name
 	if !util.IsLetter(name) {
-		return -1, "Tunnel Name should be Aplhanumeric", nil
+		return -1, "Services Name should be Aplhanumeric", nil
 	}
 
 	return 1, "", nil
 }
 
 // ReadWebTunnels fetches all the Web Tunnel
-func ReadWebTunnels() (*model.Tunnels, error) {
+func ReadWebServices() (*model.Services, error) {
 
 	// filePath := filepath.Join(os.Getenv("SERVICE_CONF_DIR"), "caddy.json")
 
@@ -78,31 +78,31 @@ func ReadWebTunnels() (*model.Tunnels, error) {
 		return nil, errors.New("caddy file is empty while reading file")
 	}
 
-	var tunnels model.Tunnels
-	err = json.Unmarshal(b, &tunnels.Tunnels)
+	var Services model.Services
+	err = json.Unmarshal(b, &Services.Services)
 	if err != nil {
 		util.LogError("Unmarshal json error: ", err)
 		return nil, err
 	}
 
-	return &tunnels, nil
+	return &Services, nil
 }
 
 // ReadWebTunnel fetches a Web Tunnel
-func ReadWebTunnel(tunnelName string) (*model.Tunnel, error) {
-	tunnels, err := ReadWebTunnels()
+func ReadWebService(tunnelName string) (*model.Service, error) {
+	Services, err := ReadWebServices()
 	if err != nil {
 		return nil, err
 	}
 
-	var data model.Tunnel
-	for _, tunnel := range tunnels.Tunnels {
-		if tunnel.Name == tunnelName {
-			data.Name = tunnel.Name
-			data.Port = tunnel.Port
-			data.CreatedAt = tunnel.CreatedAt
-			data.Domain = tunnel.Domain
-			data.Status = tunnel.Status
+	var data model.Service
+	for _, Services := range Services.Services {
+		if Services.Name == tunnelName {
+			data.Name = Services.Name
+			data.Port = Services.Port
+			data.CreatedAt = Services.CreatedAt
+			data.Domain = Services.Domain
+			data.Status = Services.Status
 			break
 		}
 	}
@@ -110,27 +110,27 @@ func ReadWebTunnel(tunnelName string) (*model.Tunnel, error) {
 	return &data, nil
 }
 
-// AddWebTunnel creates a Web Tunnel
-func AddWebTunnel(tunnel model.Tunnel) error {
-	tunnels, err := ReadWebTunnels()
+// AddWebServices creates a Web Services
+func AddWebServices(Services model.Service) error {
+	servicesList, err := ReadWebServices()
 	if err != nil {
 		if err.Error() == "caddy file is empty while reading file" {
-			util.LogError("Caddy file is empty, proceeding to create a new tunnel", nil)
-			tunnels = &model.Tunnels{Tunnels: []model.Tunnel{}} // Initialize an empty Tunnels struct
+			util.LogError("Caddy file is empty, proceeding to create a new Services", nil)
+			servicesList = &model.Services{Services: []model.Service{}} // Initialize an empty Services struct
 		} else {
 			return err
 		}
 	}
 
-	if tunnels == nil || tunnels.Tunnels == nil {
-		tunnels = &model.Tunnels{Tunnels: []model.Tunnel{}} // Ensure tunnels is initialized
+	if servicesList == nil || servicesList.Services == nil {
+		servicesList = &model.Services{Services: []model.Service{}} // Ensure Services is initialized
 	}
 
-	// Prepare updated tunnels list
-	updatedTunnels := append(tunnels.Tunnels, tunnel)
+	// Prepare updated Services list
+	updatedServices := append(servicesList.Services, Services)
 
-	// Marshal the updated tunnels to JSON
-	inter, err := json.MarshalIndent(updatedTunnels, "", "   ")
+	// Marshal the updated Services to JSON
+	inter, err := json.MarshalIndent(updatedServices, "", "   ")
 	if err != nil {
 		util.LogError("JSON Marshal error: ", err)
 		return err
@@ -154,22 +154,22 @@ func AddWebTunnel(tunnel model.Tunnel) error {
 	return nil
 }
 
-// DeleteWebTunnel deletes a Web Tunnel
-func DeleteWebTunnel(tunnelName string) error {
-	tunnels, err := ReadWebTunnels()
+// DeleteWebServices deletes a Web Services
+func DeleteWebServices(ServicesName string) error {
+	Services, err := ReadWebServices()
 	if err != nil {
 		return err
 	}
 
-	var updatedTunnels []model.Tunnel
-	for _, tunnel := range tunnels.Tunnels {
-		if tunnel.Name == tunnelName {
+	var updatedServices []model.Service
+	for _, Service := range Services.Services {
+		if Service.Name == ServicesName {
 			continue
 		}
-		updatedTunnels = append(updatedTunnels, tunnel)
+		updatedServices = append(updatedServices, Service)
 	}
 
-	inter, err := json.MarshalIndent(updatedTunnels, "", "   ")
+	inter, err := json.MarshalIndent(updatedServices, "", "   ")
 	if err != nil {
 		util.LogError("JSON Marshal error: ", err)
 		return err
@@ -191,7 +191,7 @@ func DeleteWebTunnel(tunnelName string) error {
 
 // UpdateCaddyConfig updates Caddyfile
 func UpdateCaddyConfig() error {
-	tunnels, err := ReadWebTunnels()
+	Services, err := ReadWebServices()
 	if err != nil {
 		return err
 	}
@@ -201,8 +201,8 @@ func UpdateCaddyConfig() error {
 		os.Remove(path)
 	}
 
-	for _, tunnel := range tunnels.Tunnels {
-		_, err := template.CaddyConfigTempl(tunnel)
+	for _, Services := range Services.Services {
+		_, err := template.CaddyConfigTempl(Services)
 		if err != nil {
 			util.LogError("Caddy update error: ", err)
 			return err
