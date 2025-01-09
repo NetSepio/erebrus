@@ -56,14 +56,31 @@ func IsValidWeb(name string, port int) (int, string, error) {
 // ReadWebTunnels fetches all the Web Tunnel
 func ReadWebServices() (*model.Services, error) {
 
-	// filePath := filepath.Join(os.Getenv("SERVICE_CONF_DIR"), "caddy.json")
+	filePath := filepath.Join(os.Getenv("SERVICE_CONF_DIR"), "caddy.json")
 
-	file, err := os.OpenFile(filepath.Join(os.Getenv("SERVICE_CONF_DIR"), "caddy.json"), os.O_RDWR|os.O_APPEND, 0666)
+	// file, err := os.OpenFile(filepath.Join(os.Getenv("SERVICE_CONF_DIR"), "caddy.json"), os.O_RDWR|os.O_APPEND, 0666)
+	// if err != nil {
+	// 	util.LogError("File Open error: ", err)
+	// 	return nil, err
+	// }
+
+	// Check if the file exists
+	if _, err := os.Stat(filePath); os.IsNotExist(err) {
+		// Create the file if it doesn't exist
+		file, err := os.Create(filePath)
+		if err != nil {
+			util.LogError("File creation error: ", err)
+			return nil, err
+		}
+		defer file.Close() // Ensure the file is closed after creation
+	}
+
+	// Open the file
+	file, err := os.OpenFile(filePath, os.O_RDWR|os.O_APPEND, 0666)
 	if err != nil {
 		util.LogError("File Open error: ", err)
 		return nil, err
 	}
-
 	defer file.Close() // Ensure the file is closed in any case
 
 	b, err := io.ReadAll(file)
