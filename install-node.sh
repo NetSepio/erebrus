@@ -34,14 +34,6 @@ EOF
     printf "\e[1mStage 3 - Run Node:\e[0m\t               [${status_stage3}\e[0m]\n\n"
 }
 
-# Function to check if ./services folder exists
-check_services_folder() {
-    if [ ! -d "./services" ]; then
-        echo -e "\e[31mError: The ./services folder does not exist.\e[0m"
-        echo "Please create a ./services folder from the home directory."
-        exit 1
-    fi
-}
 
 # Function to show spinner
 show_spinner() {
@@ -550,3 +542,38 @@ else
         fi
     fi
 fi
+
+# Main script
+# if [[ "$CONFIG_TYPE" == "STANDARD" || "$CONFIG_TYPE" == "HPC" ]]; then
+#   echo "Configuration Type: $CONFIG_TYPE"
+#   check_and_create_folders
+# else
+#   exit 1
+# fi
+
+# Function to check and create directories
+check_and_create_folders() {
+  # Define the folder paths
+  HOME_DIR="$HOME"
+  EREBRUS_FOLDER="$HOME_DIR/.erebrus"
+  SERVICES_FOLDER="$HOME_DIR/.services"
+
+  # Check and create .erebrus folder
+  if [ ! -d "$EREBRUS_FOLDER" ]; then
+    echo "Creating $EREBRUS_FOLDER..."
+    mkdir -p "$EREBRUS_FOLDER"
+  else
+    echo "$EREBRUS_FOLDER already exists."
+  fi
+
+  # Check and create .services folder
+  if [ ! -d "$SERVICES_FOLDER" ]; then
+    echo "Creating $SERVICES_FOLDER..."
+    mkdir -p "$SERVICES_FOLDER"
+  else
+    echo "$SERVICES_FOLDER already exists."
+  fi
+}
+
+# Run the function to check and create folders after retrieving the environment variables
+check_and_create_folders
