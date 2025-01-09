@@ -56,7 +56,14 @@ func IsValidWeb(name string, port int) (int, string, error) {
 // ReadWebTunnels fetches all the Web Tunnel
 func ReadWebServices() (*model.Services, error) {
 
-	filePath := filepath.Join(os.Getenv("SERVICE_CONF_DIR"), "caddy.json")
+	// Get the home directory
+	homeDir, err := os.UserHomeDir()
+	if err != nil {
+		util.LogError("Unable to get home directory: ", err)
+		return nil, err
+	}
+
+	filePath := filepath.Join(homeDir, os.Getenv("SERVICE_CONF_DIR"), "caddy.json")
 
 	// file, err := os.OpenFile(filepath.Join(os.Getenv("SERVICE_CONF_DIR"), "caddy.json"), os.O_RDWR|os.O_APPEND, 0666)
 	// if err != nil {
