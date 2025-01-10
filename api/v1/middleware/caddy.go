@@ -3,6 +3,7 @@ package middleware
 import (
 	"encoding/json"
 	"errors"
+	"fmt"
 	"io"
 	"os"
 	"path/filepath"
@@ -73,6 +74,8 @@ func ReadWebServices() (*model.Services, error) {
 
 	// Check if the file exists
 	if _, err := os.Stat(filePath); os.IsNotExist(err) {
+
+		fmt.Println("File does not exist, creating a new file")
 		// Create the file if it doesn't exist
 		file, err := os.Create(filePath)
 		if err != nil {
