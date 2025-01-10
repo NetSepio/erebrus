@@ -16,43 +16,58 @@ import (
 
 // IsValid check if model is valid
 func IsValidWeb(name string, port int) (int, string, error) {
-	// check if the name is empty
+	// Check if the name is empty
+	fmt.Printf("Checking service name: %s, port: %d\n", name, port)
 	if name == "" {
+		fmt.Println("Service name is empty")
 		return -1, "Services Name is required", nil
 	}
 
-	// check the name field is between 3 to 40 chars
+	// Check the name field length
+	fmt.Printf("Service name length: %d\n", len(name))
 	if len(name) < 4 || len(name) > 12 {
+		fmt.Println("Service name length is invalid")
 		return -1, "Services Name field must be between 4-12 chars", nil
 	}
 
-	// check if name or port is already in use
+	// Read existing services
+	fmt.Println("Reading web services...")
 	Services, err := ReadWebServices()
 	if err != nil {
 		if err.Error() == "caddy file is empty while reading file" {
-			util.LogError("Caddy file is empty, proceeding to create a new Services", nil)
+			fmt.Println("Caddy file is empty, proceeding to create a new Services")
 		} else {
+			fmt.Printf("Error reading web services: %v\n", err)
 			return -1, "", err
 		}
+	} else {
+		fmt.Printf("Read web services successfully: %+v\n", Services)
 	}
 
+	// Check if the name or port is already in use
 	if Services != nil {
-		for _, Services := range Services.Services {
-			if Services.Name == name {
+		for _, service := range Services.Services {
+			fmt.Printf("Checking service: %+v\n", service)
+			if service.Name == name {
+				fmt.Println("Service name already exists")
 				return -1, "Services Already exists", nil
-			} else if Services.Port == strconv.Itoa(port) {
+			} else if service.Port == strconv.Itoa(port) {
+				fmt.Println("Port is already in use")
 				return -1, "Port Already in use", nil
 			}
 		}
 	}
 
-	// check the format of name
+	// Validate the format of the name
 	if !util.IsLetter(name) {
-		return -1, "Services Name should be Aplhanumeric", nil
+		fmt.Println("Service name is not alphanumeric")
+		return -1, "Services Name should be Alphanumeric", nil
 	}
 
+	fmt.Println("Service name and port are valid")
 	return 1, "", nil
 }
+
 
 // ReadWebTunnels fetches all the Web Tunnel
 func ReadWebServices() (*model.Services, error) {
