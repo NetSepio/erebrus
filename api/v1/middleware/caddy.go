@@ -60,57 +60,61 @@ func ReadWebServices() (*model.Services, error) {
 	// Get the home directory
 	homeDir, err := os.UserHomeDir()
 	if err != nil {
-		util.LogError("Unable to get home directory: ", err)
+		fmt.Printf("Unable to get home directory: %v\n", err)
 		return nil, err
 	}
+	fmt.Printf("Home directory: %s\n", homeDir)
 
+	// Construct the file path
 	filePath := filepath.Join(homeDir, os.Getenv("SERVICE_CONF_DIR"), "caddy.json")
-
-	// file, err := os.OpenFile(filepath.Join(os.Getenv("SERVICE_CONF_DIR"), "caddy.json"), os.O_RDWR|os.O_APPEND, 0666)
-	// if err != nil {
-	// 	util.LogError("File Open error: ", err)
-	// 	return nil, err
-	// }
+	fmt.Printf("File path: %s\n", filePath)
 
 	// Check if the file exists
 	if _, err := os.Stat(filePath); os.IsNotExist(err) {
-
 		fmt.Println("File does not exist, creating a new file")
 		// Create the file if it doesn't exist
 		file, err := os.Create(filePath)
 		if err != nil {
-			util.LogError("File creation error: ", err)
+			fmt.Printf("File creation error: %v\n", err)
 			return nil, err
 		}
+		fmt.Println("File created successfully")
 		defer file.Close() // Ensure the file is closed after creation
 	}
 
 	// Open the file
 	file, err := os.OpenFile(filePath, os.O_RDWR|os.O_APPEND, 0666)
 	if err != nil {
-		util.LogError("File Open error: ", err)
+		fmt.Printf("File open error: %v\n", err)
 		return nil, err
 	}
 	defer file.Close() // Ensure the file is closed in any case
+	fmt.Println("File opened successfully")
 
+	// Read the file content
 	b, err := io.ReadAll(file)
 	if err != nil {
-		util.LogError("File Read error: ", err)
+		fmt.Printf("File read error: %v\n", err)
 		return nil, err
 	}
+	fmt.Printf("File content (bytes): %v\n", b)
+	fmt.Printf("File content (string): %s\n", string(b))
 
 	// Check if the file is empty
 	if len(b) == 0 {
-		util.LogError("Caddy file is empty", err)
+		fmt.Println("Caddy file is empty while reading file")
 		return nil, errors.New("caddy file is empty while reading file")
 	}
 
+	// Parse the file content
 	var Services model.Services
+	fmt.Println("Unmarshalling JSON content into Services struct...")
 	err = json.Unmarshal(b, &Services.Services)
 	if err != nil {
-		util.LogError("Unmarshal json error: ", err)
+		fmt.Printf("JSON unmarshal error: %v\n", err)
 		return nil, err
 	}
+	fmt.Printf("Unmarshalled Services struct: %+v\n", Services)
 
 	return &Services, nil
 }
