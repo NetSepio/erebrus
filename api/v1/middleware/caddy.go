@@ -2,7 +2,6 @@ package middleware
 
 import (
 	"encoding/json"
-	"errors"
 	"fmt"
 	"io"
 	"os"
@@ -72,66 +71,41 @@ func IsValidWeb(name string, port int) (int, string, error) {
 // ReadWebTunnels fetches all the Web Tunnel
 func ReadWebServices() (*model.Services, error) {
 
-	// Get the home directory
-	homeDir, err := os.UserHomeDir()
-	if err != nil {
-		fmt.Printf("Unable to get home directory: %v\n", err)
-		return nil, err
-	}
-	fmt.Printf("Home directory: %s\n", homeDir)
+	filePath := filepath.Join(os.Getenv("CADDY_CONF_DIR"), "caddy.json")
 
-	// Construct the file path
-	filePath := filepath.Join(homeDir, os.Getenv("SERVICE_CONF_DIR"), "caddy.json")
-	fmt.Printf("File path: %s\n", filePath)
+    if _, err := os.Stat(filePath); os.IsNotExist(err) {
+        file, err := os.Create(filePath)
+        if err != nil {
+            return nil, err
+        }
+        defer file.Close()
+        file.WriteString(`{"services": []}`) // Initialize with empty JSON structure
+    }
 
-	// Check if the file exists
-	if _, err := os.Stat(filePath); os.IsNotExist(err) {
-		fmt.Println("File does not exist, creating a new file")
-		// Create the file if it doesn't exist
-		file, err := os.Create(filePath)
-		if err != nil {
-			fmt.Printf("File creation error: %v\n", err)
-			return nil, err
-		}
-		fmt.Println("File created successfully")
-		defer file.Close() // Ensure the file is closed after creation
-	}
+    file, err := os.Open(filePath)
+    if err != nil {
+        return nil, err
+    }
+    defer file.Close()
 
-	// Open the file
-	file, err := os.OpenFile(filePath, os.O_RDWR|os.O_APPEND, 0666)
-	if err != nil {
-		fmt.Printf("File open error: %v\n", err)
-		return nil, err
-	}
-	defer file.Close() // Ensure the file is closed in any case
-	fmt.Println("File opened successfully")
+    b, err := io.ReadAll(file)
+    if err != nil {
+        return nil, err
+    }
 
-	// Read the file content
-	b, err := io.ReadAll(file)
-	if err != nil {
-		fmt.Printf("File read error: %v\n", err)
-		return nil, err
-	}
-	fmt.Printf("File content (bytes): %v\n", b)
-	fmt.Printf("File content (string): %s\n", string(b))
+    if len(b) == 0 {
+		fmt.Println("Caddy file is empty while reading file",&model.Services{Services: []model.Service{}})
+        return &model.Services{Services: []model.Service{}}, nil
+    }
 
-	// Check if the file is empty
-	if len(b) == 0 {
-		fmt.Println("Caddy file is empty while reading file")
-		return nil, errors.New("caddy file is empty while reading file")
-	}
+    var Services model.Services
 
-	// Parse the file content
-	var Services model.Services
-	fmt.Println("Unmarshalling JSON content into Services struct...")
-	err = json.Unmarshal(b, &Services.Services)
-	if err != nil {
-		fmt.Printf("JSON unmarshal error: %v\n", err)
-		return nil, err
-	}
-	fmt.Printf("Unmarshalled Services struct: %+v\n", Services)
+    err = json.Unmarshal(b, &Services)
+    if err != nil {
+        return nil, err
+    }
 
-	return &Services, nil
+    return &Services, nil
 }
 
 // ReadWebTunnel fetches a Web Tunnel
@@ -156,8 +130,8 @@ func ReadWebService(tunnelName string) (*model.Service, error) {
 	return &data, nil
 }
 
-// AddWebServices creates a Web Services
-func AddWebServices(Services model.Service) error {
+func AddWebServices(newService model.Service) error {
+	// Read existing services
 	servicesList, err := ReadWebServices()
 	if err != nil {
 		if err.Error() == "caddy file is empty while reading file" {
@@ -168,23 +142,25 @@ func AddWebServices(Services model.Service) error {
 		}
 	}
 
+	// Ensure the services list is initialized
 	if servicesList == nil || servicesList.Services == nil {
-		servicesList = &model.Services{Services: []model.Service{}} // Ensure Services is initialized
+		servicesList = &model.Services{Services: []model.Service{}}
 	}
 
-	// Prepare updated Services list
-	updatedServices := append(servicesList.Services, Services)
+	// Append the new service
+	servicesList.Services = append(servicesList.Services, newService)
 
-	// Marshal the updated Services to JSON
-	inter, err := json.MarshalIndent(updatedServices, "", "   ")
+	// Marshal the updated services list to JSON
+	updatedJSON, err := json.MarshalIndent(servicesList, "", "   ")
 	if err != nil {
 		util.LogError("JSON Marshal error: ", err)
 		return err
 	}
 
-	// Write the updated configuration to the file
-	caddyConfigPath := filepath.Join(os.Getenv("SERVICE_CONF_DIR"), "caddy.json")
-	err = util.WriteFile(caddyConfigPath, inter)
+	// Write the updated configuration back to the file
+	caddyConfigPath := filepath.Join(os.Getenv("CADDY_CONF_DIR"), "caddy.json")
+
+	err = util.WriteFile(caddyConfigPath, updatedJSON)
 	if err != nil {
 		util.LogError("File write error: ", err)
 		return err
@@ -200,28 +176,31 @@ func AddWebServices(Services model.Service) error {
 	return nil
 }
 
-// DeleteWebServices deletes a Web Services
-func DeleteWebServices(ServicesName string) error {
-	Services, err := ReadWebServices()
+func DeleteWebServices(serviceName string) error {
+	services, err := ReadWebServices()
 	if err != nil {
 		return err
 	}
 
 	var updatedServices []model.Service
-	for _, Service := range Services.Services {
-		if Service.Name == ServicesName {
+	for _, service := range services.Services {
+		if service.Name == serviceName {
 			continue
 		}
-		updatedServices = append(updatedServices, Service)
+		updatedServices = append(updatedServices, service)
 	}
 
-	inter, err := json.MarshalIndent(updatedServices, "", "   ")
+	newServices := &model.Services{
+		Services: updatedServices,
+	}
+
+	jsonData, err := json.MarshalIndent(newServices, "", "   ")
 	if err != nil {
 		util.LogError("JSON Marshal error: ", err)
 		return err
 	}
 
-	err = util.WriteFile(filepath.Join(os.Getenv("SERVICE_CONF_DIR"), "caddy.json"), inter)
+	err = util.WriteFile(filepath.Join(os.Getenv("CADDY_CONF_DIR"), "caddy.json"), jsonData)
 	if err != nil {
 		util.LogError("File write error: ", err)
 		return err

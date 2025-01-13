@@ -96,15 +96,13 @@ func addServices(c *gin.Context) {
 
 // getServicess gets all Services config
 func getServicess(c *gin.Context) {
-	//read all Services config
-	Services, err := middleware.ReadWebServices()
+	services, err := middleware.ReadWebServices()
 	if err != nil {
 		resp = util.Message(500, "Server error, Try after some time or Contact Admin...")
 		c.JSON(http.StatusInternalServerError, resp)
-	} else {
-		resp = util.MessageServices(200, Services.Services)
-		c.JSON(http.StatusOK, resp)
+		return
 	}
+	c.JSON(http.StatusOK, services)
 }
 
 // getServices get specific Services config
