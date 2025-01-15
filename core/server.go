@@ -3,7 +3,7 @@ package core
 import (
 	"encoding/json"
 	"errors"
-	"io/ioutil"
+	"io"
 	"net"
 	"net/http"
 	"os"
@@ -189,7 +189,7 @@ func GetServerStatus() (*model.Status, error) {
 	if err != nil {
 		return nil, err
 	}
-	ip, err := ioutil.ReadAll(resp.Body)
+	ip, err := io.ReadAll(resp.Body)
 	if err != nil {
 		return nil, err
 	}

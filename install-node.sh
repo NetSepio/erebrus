@@ -34,6 +34,7 @@ EOF
     printf "\e[1mStage 3 - Run Node:\e[0m\t               [${status_stage3}\e[0m]\n\n"
 }
 
+
 # Function to show spinner
 show_spinner() {
     local pid=$1
@@ -541,3 +542,29 @@ else
         fi
     fi
 fi
+
+# Main script
+# if [[ "$CONFIG_TYPE" == "STANDARD" || "$CONFIG_TYPE" == "HPC" ]]; then
+#   echo "Configuration Type: $CONFIG_TYPE"
+#   check_and_create_folders
+# else
+#   exit 1
+# fi
+
+# Function to check and create directories
+check_and_create_folders() {
+  # Define the folder paths
+  HOME_DIR="$HOME"
+  EREBRUS_FOLDER="$HOME_DIR/.erebrus"
+
+  # Check and create .erebrus folder
+  if [ ! -d "$EREBRUS_FOLDER" ]; then
+    echo "Creating $EREBRUS_FOLDER..."
+    mkdir -p "$EREBRUS_FOLDER"
+  else
+    echo "$EREBRUS_FOLDER already exists."
+  fi
+}
+
+# Run the function to check and create folders after retrieving the environment variables
+check_and_create_folders

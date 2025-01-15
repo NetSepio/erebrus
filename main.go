@@ -53,9 +53,11 @@ func init() {
 
 		}
 	}
+
 	core.GetIPInfo()
 
 	auth.Init()
+
 }
 
 func RungRPCServer() {
