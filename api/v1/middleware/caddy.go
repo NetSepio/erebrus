@@ -108,27 +108,15 @@ func ReadServices() (*model.ServicesList, error) {
 }
 
 // ReadWebTunnel fetches a Web Tunnel
-func ReadWebService(tunnelName string) (*model.Service, error) {
+func ReadService(tunnelName string) (*model.Service, error) {
 	Services, err := ReadServices()
 	if err != nil {
 		return nil, err
 	}
 
-	// print all the services
-	fmt.Println()
-	fmt.Println("Services: ")
-	fmt.Printf("%+v\n", Services)
-	fmt.Println()
-
 	var data model.Service
 	for _, Service := range Services.Services {
 		// print all the services
-		fmt.Println()
-		fmt.Println("Services: ")
-		fmt.Printf("%+v\n", Service)
-		fmt.Println()
-		fmt.Println("tunnel Name: ", tunnelName)
-		fmt.Println()
 		if Service.Name == tunnelName {
 			data.Name = Service.Name
 			data.Port = Service.Port
@@ -142,7 +130,7 @@ func ReadWebService(tunnelName string) (*model.Service, error) {
 	return &data, nil
 }
 
-func AddWebServices(newService model.Service) error {
+func AddServices(newService model.Service) error {
 	// Read existing services
 	servicesList, err := ReadServices()
 	if err != nil {
@@ -188,7 +176,7 @@ func AddWebServices(newService model.Service) error {
 	return nil
 }
 
-func DeleteWebService(serviceName string) error {
+func DeleteService(serviceName string) error {
 	services, err := ReadServices()
 	if err != nil {
 		return err

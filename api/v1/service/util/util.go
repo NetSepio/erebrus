@@ -8,8 +8,6 @@ import (
 	log "github.com/sirupsen/logrus"
 )
 
-// Version Build Version
-var Version = os.Getenv("VERSION")
 var IsLetter = regexp.MustCompile(`^[a-z0-9]+$`).MatchString
 
 // StandardFields for logger

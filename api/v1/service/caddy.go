@@ -80,7 +80,7 @@ func addServices(c *gin.Context) {
 			data.CreatedAt = time.Now().UTC().Format(time.RFC3339)
 
 			//to add Services config
-			err := middleware.AddWebServices(data)
+			err := middleware.AddServices(data)
 			if err != nil {
 				resp = util.Message(500, "Server error, Try after some time or Contact Admin..."+err.Error())
 				c.JSON(http.StatusInternalServerError, resp)
@@ -111,7 +111,7 @@ func getService(c *gin.Context) {
 	name := c.Param("name")
 
 	//read Services config
-	Services, err := middleware.ReadWebService(name)
+	Services, err := middleware.ReadService(name)
 	if err != nil {
 		resp = util.Message(500, "Server error, Try after some time or Contact Admin...")
 		c.JSON(http.StatusInternalServerError, resp)
@@ -146,7 +146,7 @@ func deleteService(c *gin.Context) {
 	name := c.Param("name")
 
 	//read Services config
-	Services, err := middleware.ReadWebService(name)
+	Services, err := middleware.ReadService(name)
 	if err != nil {
 		resp = util.Message(500, "Server error, Try after some time or Contact Admin...")
 		c.JSON(http.StatusInternalServerError, resp)
@@ -158,7 +158,7 @@ func deleteService(c *gin.Context) {
 		c.JSON(http.StatusBadRequest, resp)
 	} else {
 		//delete Services config
-		err = middleware.DeleteWebService(name)
+		err = middleware.DeleteService(name)
 		if err != nil {
 			resp = util.Message(500, "Server error, Try after some time or Contact Admin...")
 			c.JSON(http.StatusInternalServerError, resp)
