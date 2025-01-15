@@ -4,7 +4,7 @@ FROM golang:alpine AS build-app
 RUN apk update && apk add --no-cache git
 WORKDIR /app
 COPY . .
-RUN go build -ldflags "-X main.version=1.0.0 -X main.codeHash=$(git rev-parse HEAD)" -o erebrus .
+RUN go build -ldflags "-X main.version=1.1.0-alpha -X main.codeHash=$(git rev-parse HEAD)" -o erebrus .
 
 FROM alpine:latest
 WORKDIR /app
