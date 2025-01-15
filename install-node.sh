@@ -556,7 +556,6 @@ check_and_create_folders() {
   # Define the folder paths
   HOME_DIR="$HOME"
   EREBRUS_FOLDER="$HOME_DIR/.erebrus"
-  SERVICES_FOLDER="$HOME_DIR/.services"
 
   # Check and create .erebrus folder
   if [ ! -d "$EREBRUS_FOLDER" ]; then
@@ -564,14 +563,6 @@ check_and_create_folders() {
     mkdir -p "$EREBRUS_FOLDER"
   else
     echo "$EREBRUS_FOLDER already exists."
-  fi
-
-  # Check and create .services folder
-  if [ ! -d "$SERVICES_FOLDER" ]; then
-    echo "Creating $SERVICES_FOLDER..."
-    mkdir -p "$SERVICES_FOLDER"
-  else
-    echo "$SERVICES_FOLDER already exists."
   fi
 }
 
