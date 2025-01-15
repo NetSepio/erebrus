@@ -4,7 +4,7 @@ package model
 type Service struct { // name app
 	Name      string `json:"name"`
 	Type      string `json:"type"`
-	IpAddress string `json:"IPAddress,omitempty"`
+	IpAddress string `json:"ipAddress,omitempty"`
 	Port      string `json:"port"`
 	Domain    string `json:"domain"`
 	Status    string `json:"status,omitempty"`

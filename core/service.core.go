@@ -14,16 +14,12 @@ import (
 
 // var AppConfDir = "./conf"
 var CaddyJSON = "caddy.json"
-var NginxJSON = "nginx.json"
 
 // WG_CONF_DIR
 var CaddyConfDir = os.Getenv("WG_CONF_DIR")
 var CaddyFile = os.Getenv("CADDY_INTERFACE_NAME")
 
-var NginxConfDir = os.Getenv("NGINX_CONF_DIR")
-var NginxFile = os.Getenv("NGINX_INTERFACE_NAME")
-
-// Init initializes json file for caddy and nginx
+// Init initializes json file for caddy
 func Init() {
 	//caddy.json path
 	wd, err := os.Getwd()
@@ -40,16 +36,6 @@ func Init() {
 		err := util.CreateJSONFile(path)
 		if err != nil {
 			util.CheckError("caddy.json error: ", err)
-		}
-	}
-
-	//nginx.json path
-	path = filepath.Join(os.Getenv("SERVICE_CONF_DIR"), NginxJSON)
-	//check if exists
-	if !util.FileExists(path) {
-		err := util.CreateJSONFile(path)
-		if err != nil {
-			util.CheckError("nginx.json error: ", err)
 		}
 	}
 }

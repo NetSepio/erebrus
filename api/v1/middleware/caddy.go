@@ -14,7 +14,7 @@ import (
 )
 
 // IsValid check if model is valid
-func IsValidWeb(name string, port int) (int, string, error) {
+func IsValidService(name string, port int) (int, string, error) {
 	// Check if the name is empty
 	fmt.Printf("Checking service name: %s, port: %d\n", name, port)
 	if name == "" {
@@ -31,7 +31,7 @@ func IsValidWeb(name string, port int) (int, string, error) {
 
 	// Read existing services
 	fmt.Println("Reading web services...")
-	Services, err := ReadWebServices()
+	Services, err := ReadServices()
 	if err != nil {
 		if err.Error() == "caddy file is empty while reading file" {
 			fmt.Println("Caddy file is empty, proceeding to create a new Services")
@@ -67,50 +67,49 @@ func IsValidWeb(name string, port int) (int, string, error) {
 	return 1, "", nil
 }
 
-
 // ReadWebTunnels fetches all the Web Tunnel
-func ReadWebServices() (*model.Services, error) {
+func ReadServices() (*model.Services, error) {
 
 	filePath := filepath.Join(os.Getenv("CADDY_CONF_DIR"), "caddy.json")
 
-    if _, err := os.Stat(filePath); os.IsNotExist(err) {
-        file, err := os.Create(filePath)
-        if err != nil {
-            return nil, err
-        }
-        defer file.Close()
-        file.WriteString(`{"services": []}`) // Initialize with empty JSON structure
-    }
+	if _, err := os.Stat(filePath); os.IsNotExist(err) {
+		file, err := os.Create(filePath)
+		if err != nil {
+			return nil, err
+		}
+		defer file.Close()
+		file.WriteString(`{"services": []}`) // Initialize with empty JSON structure
+	}
 
-    file, err := os.Open(filePath)
-    if err != nil {
-        return nil, err
-    }
-    defer file.Close()
+	file, err := os.Open(filePath)
+	if err != nil {
+		return nil, err
+	}
+	defer file.Close()
 
-    b, err := io.ReadAll(file)
-    if err != nil {
-        return nil, err
-    }
+	b, err := io.ReadAll(file)
+	if err != nil {
+		return nil, err
+	}
 
-    if len(b) == 0 {
-		fmt.Println("Caddy file is empty while reading file",&model.Services{Services: []model.Service{}})
-        return &model.Services{Services: []model.Service{}}, nil
-    }
+	if len(b) == 0 {
+		fmt.Println("Caddy file is empty while reading file", &model.Services{Services: []model.Service{}})
+		return &model.Services{Services: []model.Service{}}, nil
+	}
 
-    var Services model.Services
+	var Services model.Services
 
-    err = json.Unmarshal(b, &Services)
-    if err != nil {
-        return nil, err
-    }
+	err = json.Unmarshal(b, &Services)
+	if err != nil {
+		return nil, err
+	}
 
-    return &Services, nil
+	return &Services, nil
 }
 
 // ReadWebTunnel fetches a Web Tunnel
 func ReadWebService(tunnelName string) (*model.Service, error) {
-	Services, err := ReadWebServices()
+	Services, err := ReadServices()
 	if err != nil {
 		return nil, err
 	}
@@ -132,7 +131,7 @@ func ReadWebService(tunnelName string) (*model.Service, error) {
 
 func AddWebServices(newService model.Service) error {
 	// Read existing services
-	servicesList, err := ReadWebServices()
+	servicesList, err := ReadServices()
 	if err != nil {
 		if err.Error() == "caddy file is empty while reading file" {
 			util.LogError("Caddy file is empty, proceeding to create a new Services", nil)
@@ -176,8 +175,8 @@ func AddWebServices(newService model.Service) error {
 	return nil
 }
 
-func DeleteWebServices(serviceName string) error {
-	services, err := ReadWebServices()
+func DeleteWebService(serviceName string) error {
+	services, err := ReadServices()
 	if err != nil {
 		return err
 	}
@@ -216,12 +215,12 @@ func DeleteWebServices(serviceName string) error {
 
 // UpdateCaddyConfig updates Caddyfile
 func UpdateCaddyConfig() error {
-	Services, err := ReadWebServices()
+	Services, err := ReadServices()
 	if err != nil {
 		return err
 	}
 
-	path := filepath.Join(os.Getenv("WG_CONF_DIR"), os.Getenv("CADDY_INTERFACE_NAME"))
+	path := filepath.Join(os.Getenv("CADDY_HOME"), os.Getenv("CADDY_CONF_DIR"), os.Getenv("CADDY_INTERFACE_NAME"))
 	if util.FileExists(path) {
 		os.Remove(path)
 	}

@@ -42,4 +42,7 @@ WG_POST_UP=iptables -A FORWARD -i %i -j ACCEPT; iptables -A FORWARD -o %i -j ACC
 WG_PRE_DOWN=echo WireGuard PreDown
 WG_POST_DOWN=iptables -D FORWARD -i %i -j ACCEPT; iptables -D FORWARD -o %i -j ACCEPT; iptables -t nat -D POSTROUTING -o eth0 -j MASQUERADE
 
-
+#Service Specifications
+SERVICE_CONF_DIR=./erebrus
+CADDY_CONF_DIR=/etc/caddy
+CADDY_INTERFACE_NAME=Caddyfile

@@ -20,9 +20,9 @@ func ApplyRoutes(r *gin.RouterGroup) {
 	g := r.Group("/caddy")
 	{
 		g.POST("", addServices)
-		g.GET("", getServicess)
+		g.GET("", getServices)
 		g.GET(":name", getServices)
-		g.DELETE(":name", deleteServices)
+		g.DELETE(":name", deleteService)
 	}
 }
 
@@ -55,7 +55,7 @@ func addServices(c *gin.Context) {
 		// }
 
 		// check validity of Services name and port
-		value, msg, err := middleware.IsValidWeb(name, portInt)
+		value, msg, err := middleware.IsValidService(name, portInt)
 
 		if err != nil {
 			resp = util.Message(500, "Server error, Try after some time or Contact Admin..."+err.Error())
@@ -94,9 +94,9 @@ func addServices(c *gin.Context) {
 	}
 }
 
-// getServicess gets all Services config
-func getServicess(c *gin.Context) {
-	services, err := middleware.ReadWebServices()
+// getServices gets all Services config
+func getServices(c *gin.Context) {
+	services, err := middleware.ReadServices()
 	if err != nil {
 		resp = util.Message(500, "Server error, Try after some time or Contact Admin...")
 		c.JSON(http.StatusInternalServerError, resp)
@@ -106,7 +106,7 @@ func getServicess(c *gin.Context) {
 }
 
 // getServices get specific Services config
-func getServices(c *gin.Context) {
+func getService(c *gin.Context) {
 	//get parameter
 	name := c.Param("name")
 
@@ -141,7 +141,7 @@ func getServices(c *gin.Context) {
 	}
 }
 
-func deleteServices(c *gin.Context) {
+func deleteService(c *gin.Context) {
 	//get parameter
 	name := c.Param("name")
 
@@ -158,7 +158,7 @@ func deleteServices(c *gin.Context) {
 		c.JSON(http.StatusBadRequest, resp)
 	} else {
 		//delete Services config
-		err = middleware.DeleteWebServices(name)
+		err = middleware.DeleteWebService(name)
 		if err != nil {
 			resp = util.Message(500, "Server error, Try after some time or Contact Admin...")
 			c.JSON(http.StatusInternalServerError, resp)
