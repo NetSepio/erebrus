@@ -29,8 +29,8 @@ func GetSpeedtestResults() (res *SpeedtestResult, err error) {
 		s.Context.Reset() // reset counter
 		response = &SpeedtestResult{
 			Latency:       s.Latency.String(),
-			DownloadSpeed: s.DLSpeed,
-			UploadSpeed:   s.ULSpeed,
+			DownloadSpeed: s.DLSpeed.Mbps(),
+			UploadSpeed:   s.ULSpeed.Mbps(),
 		}
 	}
 	return response, nil
