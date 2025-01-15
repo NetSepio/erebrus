@@ -12,6 +12,6 @@ type Service struct { // name app
 }
 
 // type name services
-type Services struct {
+type ServicesList struct {
 	Services []Service `json:"services"`
 }

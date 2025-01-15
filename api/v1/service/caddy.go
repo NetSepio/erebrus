@@ -21,7 +21,7 @@ func ApplyRoutes(r *gin.RouterGroup) {
 	{
 		g.POST("", addServices)
 		g.GET("", getServices)
-		g.GET(":name", getServices)
+		g.GET(":name", getService)
 		g.DELETE(":name", deleteService)
 	}
 }
@@ -55,7 +55,7 @@ func addServices(c *gin.Context) {
 		// }
 
 		// check validity of Services name and port
-		value, msg, err := middleware.IsValidService(name, portInt)
+		value, msg, err := middleware.IsValidService(name, portInt, ipAddress)
 
 		if err != nil {
 			resp = util.Message(500, "Server error, Try after some time or Contact Admin..."+err.Error())
@@ -119,7 +119,7 @@ func getService(c *gin.Context) {
 
 	//check if Services exists
 	if Services.Name == "" {
-		resp = util.Message(404, "Services Doesn't Exists")
+		resp = util.Message(404, "Service Doesn't Exists")
 		c.JSON(http.StatusNotFound, resp)
 	} else {
 		port, err := strconv.Atoi(Services.Port)
@@ -154,7 +154,7 @@ func deleteService(c *gin.Context) {
 
 	//check if Services exists
 	if Services.Name == "" {
-		resp = util.Message(400, "Services Doesn't Exists")
+		resp = util.Message(400, "Service Doesn't Exists")
 		c.JSON(http.StatusBadRequest, resp)
 	} else {
 		//delete Services config
@@ -163,7 +163,7 @@ func deleteService(c *gin.Context) {
 			resp = util.Message(500, "Server error, Try after some time or Contact Admin...")
 			c.JSON(http.StatusInternalServerError, resp)
 		} else {
-			resp = util.Message(200, "Deleted Services: "+name)
+			resp = util.Message(200, "Deleted Services "+name)
 			c.JSON(http.StatusOK, resp)
 		}
 	}

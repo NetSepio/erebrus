@@ -14,7 +14,7 @@ import (
 )
 
 // IsValid check if model is valid
-func IsValidService(name string, port int) (int, string, error) {
+func IsValidService(name string, port int, ipAddress string) (int, string, error) {
 	// Check if the name is empty
 	fmt.Printf("Checking service name: %s, port: %d\n", name, port)
 	if name == "" {
@@ -49,10 +49,10 @@ func IsValidService(name string, port int) (int, string, error) {
 			fmt.Printf("Checking service: %+v\n", service)
 			if service.Name == name {
 				fmt.Println("Service name already exists")
-				return -1, "Services Already exists", nil
-			} else if service.Port == strconv.Itoa(port) {
-				fmt.Println("Port is already in use")
-				return -1, "Port Already in use", nil
+				return -1, "Service Already exists", nil
+			} else if service.IpAddress == ipAddress && service.Port == strconv.Itoa(port) {
+				fmt.Println("Port and IP address combination is already in use")
+				return -1, "Port and IP address combination already in use", nil
 			}
 		}
 	}
@@ -68,7 +68,7 @@ func IsValidService(name string, port int) (int, string, error) {
 }
 
 // ReadWebTunnels fetches all the Web Tunnel
-func ReadServices() (*model.Services, error) {
+func ReadServices() (*model.ServicesList, error) {
 
 	filePath := filepath.Join(os.Getenv("CADDY_CONF_DIR"), "caddy.json")
 
@@ -93,11 +93,11 @@ func ReadServices() (*model.Services, error) {
 	}
 
 	if len(b) == 0 {
-		fmt.Println("Caddy file is empty while reading file", &model.Services{Services: []model.Service{}})
-		return &model.Services{Services: []model.Service{}}, nil
+		fmt.Println("Caddy file is empty while reading file", &model.ServicesList{Services: []model.Service{}})
+		return &model.ServicesList{Services: []model.Service{}}, nil
 	}
 
-	var Services model.Services
+	var Services model.ServicesList
 
 	err = json.Unmarshal(b, &Services)
 	if err != nil {
@@ -114,14 +114,27 @@ func ReadWebService(tunnelName string) (*model.Service, error) {
 		return nil, err
 	}
 
+	// print all the services
+	fmt.Println()
+	fmt.Println("Services: ")
+	fmt.Printf("%+v\n", Services)
+	fmt.Println()
+
 	var data model.Service
-	for _, Services := range Services.Services {
-		if Services.Name == tunnelName {
-			data.Name = Services.Name
-			data.Port = Services.Port
-			data.CreatedAt = Services.CreatedAt
-			data.Domain = Services.Domain
-			data.Status = Services.Status
+	for _, Service := range Services.Services {
+		// print all the services
+		fmt.Println()
+		fmt.Println("Services: ")
+		fmt.Printf("%+v\n", Service)
+		fmt.Println()
+		fmt.Println("tunnel Name: ", tunnelName)
+		fmt.Println()
+		if Service.Name == tunnelName {
+			data.Name = Service.Name
+			data.Port = Service.Port
+			data.CreatedAt = Service.CreatedAt
+			data.Domain = Service.Domain
+			data.Status = Service.Status
 			break
 		}
 	}
@@ -135,7 +148,7 @@ func AddWebServices(newService model.Service) error {
 	if err != nil {
 		if err.Error() == "caddy file is empty while reading file" {
 			util.LogError("Caddy file is empty, proceeding to create a new Services", nil)
-			servicesList = &model.Services{Services: []model.Service{}} // Initialize an empty Services struct
+			servicesList = &model.ServicesList{Services: []model.Service{}} // Initialize an empty Services struct
 		} else {
 			return err
 		}
@@ -143,7 +156,7 @@ func AddWebServices(newService model.Service) error {
 
 	// Ensure the services list is initialized
 	if servicesList == nil || servicesList.Services == nil {
-		servicesList = &model.Services{Services: []model.Service{}}
+		servicesList = &model.ServicesList{Services: []model.Service{}}
 	}
 
 	// Append the new service
@@ -189,7 +202,7 @@ func DeleteWebService(serviceName string) error {
 		updatedServices = append(updatedServices, service)
 	}
 
-	newServices := &model.Services{
+	newServices := &model.ServicesList{
 		Services: updatedServices,
 	}
 
