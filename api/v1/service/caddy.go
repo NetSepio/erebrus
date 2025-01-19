@@ -4,7 +4,6 @@ import (
 	"net/http"
 	"os"
 	"strconv"
-	"strings"
 	"time"
 
 	"github.com/NetSepio/erebrus/api/v1/middleware"
@@ -31,31 +30,26 @@ var resp map[string]interface{}
 // addTunnel adds new tunnel config
 func addServices(c *gin.Context) {
 	//post form parameters
-	name := strings.ToLower(c.PostForm("name"))
-	ipAddress := c.PostForm("ip_address")
+	var payload ServicePayload
 
-	port := c.PostForm("port")
+	// Bind JSON payload to the struct
+	if err := c.ShouldBindJSON(&payload); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		return
+	}
 
 	// convert port string to int
-	portInt, err := strconv.Atoi(port)
+	portInt, err := strconv.Atoi(payload.Port)
 	if err != nil {
 		resp = util.Message(400, "Invalid Port")
 		c.JSON(http.StatusInternalServerError, resp)
 		return
 	}
 
-	// port allocation
-	// max, _ := strconv.Atoi(os.Getenv("CADDY_UPPER_RANGE"))
-	// min, _ := strconv.Atoi(os.Getenv("CADDY_LOWER_RANGE"))
-
 	for {
-		// port, err := core.GetPort(max, min)
-		// if err != nil {
-		// 	panic(err)
-		// }
 
 		// check validity of Services name and port
-		value, msg, err := middleware.IsValidService(name, portInt, ipAddress)
+		value, msg, err := middleware.IsValidService(payload.Name, portInt, payload.IPAddress)
 
 		if err != nil {
 			resp = util.Message(500, "Server error, Try after some time or Contact Admin..."+err.Error())
@@ -72,11 +66,11 @@ func addServices(c *gin.Context) {
 		} else if value == 1 {
 			//create a Services struct object
 			var data model.Service
-			data.Name = name
+			data.Name = payload.Name
 			data.Type = os.Getenv("NODE_TYPE")
-			data.Port = port
+			data.Port = payload.Port
 			data.Domain = os.Getenv("DOMAIN")
-			data.IpAddress = ipAddress
+			data.IpAddress = payload.IPAddress
 			data.CreatedAt = time.Now().UTC().Format(time.RFC3339)
 
 			//to add Services config
