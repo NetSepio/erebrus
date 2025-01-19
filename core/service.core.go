@@ -24,9 +24,9 @@ func Init() {
 	//caddy.json path
 	wd, err := os.Getwd()
 	if err != nil {
-		fmt.Println("\n🚨 Error:", err, "\n")
+		fmt.Println("\n🚨 Error:", err)
 	} else {
-		fmt.Println("\n✅ Current Working Directory:", wd, "\n")
+		fmt.Println("\n✅ Current Working Directory:", wd)
 	}
 	fmt.Println("\n📂 Current Path:", wd)
 

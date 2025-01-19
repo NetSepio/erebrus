@@ -67,41 +67,65 @@ func IsValidService(name string, port int, ipAddress string) (int, string, error
 	return 1, "", nil
 }
 
-// ReadWebTunnels fetches all the Web Tunnel
+// ReadServices fetches all the Web Tunnel services
 func ReadServices() (*model.ServicesList, error) {
-
-	filePath := filepath.Join(os.Getenv("CADDY_CONF_DIR"), "caddy.json")
-
-	if _, err := os.Stat(filePath); os.IsNotExist(err) {
-		file, err := os.Create(filePath)
-		if err != nil {
-			return nil, err
-		}
-		defer file.Close()
-		file.WriteString(`{"services": []}`) // Initialize with empty JSON structure
+	// Get the CADDY_CONF_DIR environment variable
+	caddyConfDir := os.Getenv("CADDY_CONF_DIR")
+	if caddyConfDir == "" {
+		return nil, fmt.Errorf("CADDY_CONF_DIR environment variable is not set")
 	}
 
+	// Ensure the directory exists
+	if _, err := os.Stat(caddyConfDir); os.IsNotExist(err) {
+		err = os.MkdirAll(caddyConfDir, 0755) // Create the directory with proper permissions
+		if err != nil {
+			return nil, fmt.Errorf("failed to create directory %s: %w", caddyConfDir, err)
+		}
+	}
+
+	// Construct the file path
+	filePath := filepath.Join(caddyConfDir, "caddy.json")
+	fmt.Println("filePath : ", filePath)
+
+	// Check if the file exists
+	if _, err := os.Stat(filePath); os.IsNotExist(err) {
+		// Create the file at the specified location
+		file, err := os.Create(filePath)
+		if err != nil {
+			return nil, fmt.Errorf("failed to create file at %s: %w", filePath, err)
+		}
+		defer file.Close()
+
+		// Initialize with empty JSON structure
+		if _, writeErr := file.WriteString(`{"services": []}`); writeErr != nil {
+			return nil, fmt.Errorf("failed to write initial JSON to file: %w", writeErr)
+		}
+	}
+
+	// Open the file
 	file, err := os.Open(filePath)
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("failed to open file: %w", err)
 	}
 	defer file.Close()
 
+	// Read the file contents
 	b, err := io.ReadAll(file)
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("failed to read file: %w", err)
 	}
 
+	// Handle empty file
 	if len(b) == 0 {
 		fmt.Println("Caddy file is empty while reading file", &model.ServicesList{Services: []model.Service{}})
 		return &model.ServicesList{Services: []model.Service{}}, nil
 	}
 
+	// Parse the JSON contents
 	var Services model.ServicesList
-
 	err = json.Unmarshal(b, &Services)
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("failed to parse JSON: %w", err)
 	}
 
 	return &Services, nil
