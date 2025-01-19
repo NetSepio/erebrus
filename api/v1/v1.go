@@ -21,7 +21,7 @@ func ApplyRoutes(r *gin.RouterGroup) {
 		status.ApplyRoutes(v1)
 		authenticate.ApplyRoutes(v1)
 		nodeConfig := os.Getenv("NODE_CONFIG")
-		if nodeConfig == "standard" || nodeConfig == "hpc" {
+		if nodeConfig == "STANDARD" || nodeConfig == "HPC" {
 			caddy.ApplyRoutes(v1)
 		}
 
