@@ -24,7 +24,7 @@ func IsValidService(name string, port int, ipAddress string) (int, string, error
 
 	// Check the name field length
 	fmt.Printf("Service name length: %d\n", len(name))
-	if len(name) < 4 || len(name) > 12 {
+	if len(name) < 4 || len(name) > 50 {
 		fmt.Println("Service name length is invalid")
 		return -1, "Services Name field must be between 4-12 chars", nil
 	}
@@ -58,10 +58,10 @@ func IsValidService(name string, port int, ipAddress string) (int, string, error
 	}
 
 	// Validate the format of the name
-	if !util.IsLetter(name) {
-		fmt.Println("Service name is not alphanumeric")
-		return -1, "Services Name should be Alphanumeric", nil
-	}
+	// if !util.IsLetter(name) {
+	// 	fmt.Println("Service name is not alphanumeric")
+	// 	return -1, "Services Name should be Alphanumeric", nil
+	// }
 
 	fmt.Println("Service name and port are valid")
 	return 1, "", nil

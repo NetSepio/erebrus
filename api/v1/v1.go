@@ -8,6 +8,7 @@ import (
 	"github.com/NetSepio/erebrus/api/v1/server"
 	caddy "github.com/NetSepio/erebrus/api/v1/service"
 	"github.com/NetSepio/erebrus/api/v1/status"
+	"github.com/NetSepio/erebrus/api/v1/agents"
 
 	"github.com/gin-gonic/gin"
 )
@@ -23,6 +24,7 @@ func ApplyRoutes(r *gin.RouterGroup) {
 		nodeConfig := os.Getenv("NODE_CONFIG")
 		if nodeConfig == "standard" || nodeConfig == "hpc" {
 			caddy.ApplyRoutes(v1)
+			agents.ApplyRoutes(v1)
 		}
 
 	}
