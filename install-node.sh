@@ -410,8 +410,7 @@ configure_node() {
         return 1
     else
     # Write environment variables to .env file
-    sudo tee ${INSTALL_DIR}/.env  <<EOL
-# Application Configuration    
+    sudo tee ${INSTALL_DIR}/.env  <<EOL  
 
 # Application Configuration
 RUNTYPE=released
@@ -453,10 +452,17 @@ WG_PRE_UP=echo WireGuard PreUp
 WG_POST_UP=iptables -A FORWARD -i %i -j ACCEPT; iptables -A FORWARD -o %i -j ACCEPT; iptables -t nat -A POSTROUTING -o eth0 -j MASQUERADE
 WG_PRE_DOWN=echo WireGuard PreDown
 WG_POST_DOWN=iptables -D FORWARD -i %i -j ACCEPT; iptables -D FORWARD -o %i -j ACCEPT; iptables -t nat -D POSTROUTING -o eth0 -j MASQUERADE
+SERVICE_CONF_DIR=./erebrus
 
 # Authentication & Policies
 PASETO_EXPIRATION_IN_HOURS=168
 AUTH_EULA=I Accept the Erebrus Terms of Service https://erebrus.io/terms
+
+
+
+# Caddy Specifications
+CADDY_CONF_DIR=/etc/caddy # /etc/caddy
+CADDY_INTERFACE_NAME=Caddyfile
 
 EOL
         status_stage2="\e[32m$green_tick Complete\e[0m"
