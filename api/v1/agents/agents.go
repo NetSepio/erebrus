@@ -11,13 +11,11 @@ import (
 	"os/exec"
 	"strings"
 	"time"
-	
 
-	"github.com/gin-gonic/gin"
-	caddy "github.com/NetSepio/erebrus/api/v1/service" 
+	caddy "github.com/NetSepio/erebrus/api/v1/service"
 	"github.com/NetSepio/erebrus/model"
+	"github.com/gin-gonic/gin"
 )
-
 
 // ApplyRoutes applies router to gin Router
 func ApplyRoutes(r *gin.RouterGroup) {
@@ -26,11 +24,10 @@ func ApplyRoutes(r *gin.RouterGroup) {
 		g.POST("", addAgent)
 		g.GET("", getAgents)
 		g.GET(":agentId", getAgent)
-		g.DELETE(":agentId", deleteAgent) 
-		g.PUT("/manage/:agentId", manageAgent) 
+		g.DELETE(":agentId", deleteAgent)
+		g.PUT("/manage/:agentId", manageAgent)
 	}
 }
-
 
 const agentsFile = "agents.json"
 
@@ -74,8 +71,6 @@ func saveAgents(newAgent model.Agent) error {
 	return encoder.Encode(agents)
 }
 
-
-
 // GET /agents
 func getAgents(c *gin.Context) {
 	agents, err := loadAgents()
@@ -116,11 +111,9 @@ func getAgent(c *gin.Context) {
 			return
 		}
 	}
-	
 
 	c.JSON(http.StatusNotFound, gin.H{"error": "Agent not found"})
 }
-
 
 // Function to find an available port on the host machine
 func getAvailablePort() (int, error) {
@@ -212,7 +205,6 @@ func addAgent(c *gin.Context) {
 		"pnpm", "start", fmt.Sprintf("--character=/app/characters/%s", file.Filename),
 	)
 
-
 	output, err := dockerCmd.CombinedOutput()
 	if err != nil {
 		log.Printf("Error starting Docker container: %s", string(output))
@@ -222,7 +214,7 @@ func addAgent(c *gin.Context) {
 
 	log.Printf("Docker container started successfully: %s", string(output))
 
-	time.Sleep(time.Duration(44) * time.Second)
+	time.Sleep(time.Duration(10) * time.Second)
 
 	// Determine the domain
 	domain := c.DefaultPostForm("domain", "")
@@ -284,7 +276,7 @@ func addAgent(c *gin.Context) {
 		ID:      createdAgent.ID,
 		Name:    createdAgent.Name,
 		Clients: createdAgent.Clients,
-		Status  : createdAgent.Status,
+		Status:  createdAgent.Status,
 	}
 
 	log.Printf("Agent created successfully: %+v", response)
@@ -307,8 +299,6 @@ func deleteAgent(c *gin.Context) {
 		return
 	}
 
-
-
 	// Find the agent by ID and remove it
 	var indexToDelete int = -1
 	for i, agent := range agents {
@@ -318,20 +308,20 @@ func deleteAgent(c *gin.Context) {
 		}
 	}
 
-		// Stop and remove the Docker container for the deleted agent
-		dockerCmd := exec.Command("docker", "stop", agents[indexToDelete].Name)
-		if output, err := dockerCmd.CombinedOutput(); err != nil {
-			log.Printf("Error stopping Docker container: %s", string(output))
-			c.JSON(http.StatusInternalServerError, gin.H{"error": fmt.Sprintf("Failed to stop Docker container: %s", string(output))})
-			return
-		}
-	
-		dockerRemoveCmd := exec.Command("docker", "rm", agents[indexToDelete].Name)
-		if output, err := dockerRemoveCmd.CombinedOutput(); err != nil {
-			log.Printf("Error removing Docker container: %s", string(output))
-			c.JSON(http.StatusInternalServerError, gin.H{"error": fmt.Sprintf("Failed to remove Docker container: %s", string(output))})
-			return
-		}
+	// Stop and remove the Docker container for the deleted agent
+	dockerCmd := exec.Command("docker", "stop", agents[indexToDelete].Name)
+	if output, err := dockerCmd.CombinedOutput(); err != nil {
+		log.Printf("Error stopping Docker container: %s", string(output))
+		c.JSON(http.StatusInternalServerError, gin.H{"error": fmt.Sprintf("Failed to stop Docker container: %s", string(output))})
+		return
+	}
+
+	dockerRemoveCmd := exec.Command("docker", "rm", agents[indexToDelete].Name)
+	if output, err := dockerRemoveCmd.CombinedOutput(); err != nil {
+		log.Printf("Error removing Docker container: %s", string(output))
+		c.JSON(http.StatusInternalServerError, gin.H{"error": fmt.Sprintf("Failed to remove Docker container: %s", string(output))})
+		return
+	}
 
 	// If the agent is not found, return an error
 	if indexToDelete == -1 {
@@ -369,8 +359,7 @@ func saveAgentsList(agents []model.Agent) error {
 	return encoder.Encode(agents)
 }
 
-
-func manageAgent (c *gin.Context) {
+func manageAgent(c *gin.Context) {
 	agentID := c.Param("agentId")
 	if agentID == "" {
 		c.JSON(http.StatusBadRequest, gin.H{"error": "Agent ID is required"})
@@ -412,13 +401,13 @@ func manageAgent (c *gin.Context) {
 		}
 	}
 
-		// If the agent is not found, return an error
-		if agentIndex == -1 {
-			c.JSON(http.StatusNotFound, gin.H{"error": "Agent not found"})
-			return
-		}
+	// If the agent is not found, return an error
+	if agentIndex == -1 {
+		c.JSON(http.StatusNotFound, gin.H{"error": "Agent not found"})
+		return
+	}
 
-			// Write the updated data back to the file
+	// Write the updated data back to the file
 	updatedData, err := json.MarshalIndent(agents, "", "  ")
 	if err != nil {
 		log.Printf("Error marshalling updated JSON: %v", err)
@@ -426,7 +415,7 @@ func manageAgent (c *gin.Context) {
 		return
 	}
 
-	file, err := os.Create("agents.json"); 
+	file, err := os.Create("agents.json")
 	if err != nil {
 		log.Printf("Error creating agents.json: %v", err)
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to save updated agents"})
