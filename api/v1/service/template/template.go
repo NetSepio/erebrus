@@ -52,8 +52,6 @@ func CaddyConfigTempl(tunnel model.Service) ([]byte, error) {
 		return nil, fmt.Errorf("CADDY_CONF_DIR environment variable is not set")
 	}
 
-	configDir += os.Getenv("CADDY_INTERFACE_NAME")
-
 	// Ensure the directory exists
 	err = os.MkdirAll(configDir, 0755) // 0755 for read/write/execute permissions
 	if err != nil {

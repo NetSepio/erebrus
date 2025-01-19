@@ -184,6 +184,7 @@ func AddServices(newService model.Service) error {
 	// Write the updated configuration back to the file
 	caddyConfigPath := filepath.Join(os.Getenv("CADDY_CONF_DIR"), "caddy.json")
 
+	fmt.Println("caddyConfigPath : ", caddyConfigPath)
 	err = util.WriteFile(caddyConfigPath, updatedJSON)
 	if err != nil {
 		util.LogError("File write error: ", err)
@@ -245,7 +246,7 @@ func UpdateCaddyConfig() error {
 		return err
 	}
 
-	path := filepath.Join(os.Getenv("CADDY_HOME"), os.Getenv("CADDY_CONF_DIR"), os.Getenv("CADDY_INTERFACE_NAME"))
+	path := filepath.Join(os.Getenv("CADDY_CONF_DIR"), os.Getenv("CADDY_INTERFACE_NAME"))
 	if util.FileExists(path) {
 		os.Remove(path)
 	}
