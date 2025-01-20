@@ -1,11 +1,11 @@
 package caddy
 
 import (
+	"fmt"
 	"net/http"
 	"os"
 	"strconv"
 	"time"
-	"fmt"
 
 	"github.com/NetSepio/erebrus/api/v1/middleware"
 	"github.com/NetSepio/erebrus/api/v1/service/util"
@@ -195,11 +195,11 @@ func MiddlewareForCaddy() gin.HandlerFunc {
 }
 
 // AddServicesDirect adds a service using direct arguments.
-func AddServicesDirect(name, domain string, port int) error {
+func AddServicesDirect(domain string, agentName string, port int) error {
 	ipAddress := "127.0.0.1" // Replace with actual IP logic if needed
 
 	// Validate the service
-	value, msg, err := middleware.IsValidService(name, port, ipAddress)
+	value, msg, err := middleware.IsValidService(agentName, port, ipAddress)
 	if err != nil {
 		return fmt.Errorf("server error: %v", err)
 	}
@@ -210,10 +210,10 @@ func AddServicesDirect(name, domain string, port int) error {
 
 	// Create a Services struct object
 	var data model.Service
-	data.Name = name
+	data.Name = agentName
 	data.Type = os.Getenv("NODE_TYPE")
 	data.Port = strconv.Itoa(port)
-	data.Domain = domain
+	data.Domain = agentName + "." + domain
 	data.IpAddress = ipAddress
 	data.CreatedAt = time.Now().UTC().Format(time.RFC3339)
 

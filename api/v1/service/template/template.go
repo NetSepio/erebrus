@@ -14,10 +14,10 @@ import (
 var (
 	caddyTpl = `
 # {{.Name}}, {{.IpAddress}}, {{.Port}}, {{.CreatedAt}}
-{{.Name}}.{{.Domain}} {
+{{.Domain}} {
 	reverse_proxy {{.IpAddress}}:{{.Port}}
 	log {
-		output file /var/log/caddy/{{.Name}}.{{.Domain}}.access.log {
+		output file /var/log/caddy/{{.Domain}}.access.log {
 			roll_size 3MiB
 			roll_keep 5
 			roll_keep_for 48h

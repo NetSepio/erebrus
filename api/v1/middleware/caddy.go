@@ -181,13 +181,10 @@ func AddServices(newService model.Service) error {
 		return err
 	}
 
-	// Write the updated configuration back to the file
-	caddyConfigPath := filepath.Join(os.Getenv("CADDY_CONF_DIR"), "caddy.json")
-
-	fmt.Println("caddyConfigPath : ", caddyConfigPath)
-	err = util.WriteFile(caddyConfigPath, updatedJSON)
+	//to save/update in /etc/caddy and service_conf_dir
+	err = SaveToFile(updatedJSON)
 	if err != nil {
-		util.LogError("File write error: ", err)
+		util.LogError("failed to save/update data in config files: ", err)
 		return err
 	}
 
@@ -225,9 +222,9 @@ func DeleteService(serviceName string) error {
 		return err
 	}
 
-	err = util.WriteFile(filepath.Join(os.Getenv("CADDY_CONF_DIR"), "caddy.json"), jsonData)
+	err = SaveToFile(jsonData)
 	if err != nil {
-		util.LogError("File write error: ", err)
+		util.LogError("failed to save/update data in config files: ", err)
 		return err
 	}
 
@@ -259,5 +256,40 @@ func UpdateCaddyConfig() error {
 		}
 	}
 
+	return nil
+}
+
+func SaveToFile(updatedJSON []byte) error {
+	// Write the updated configuration back to the file
+	caddyConfigPath := filepath.Join(os.Getenv("CADDY_CONF_DIR"), "caddy.json")
+
+	fmt.Println("caddyConfigPath : ", caddyConfigPath)
+	err := util.WriteFile(caddyConfigPath, updatedJSON)
+	if err != nil {
+		util.LogError("File write error: ", err)
+		return err
+	}
+
+	// Write the updated configuration to the SERVICE_CONF_DIR in $HOME
+	homeDir, err := os.UserHomeDir()
+	if err != nil {
+		util.LogError("Error getting home directory: ", err)
+		return err
+	}
+
+	serviceConfDir := filepath.Join(homeDir, os.Getenv("SERVICE_CONF_DIR"))
+	err = os.MkdirAll(serviceConfDir, 0755) // Ensure the directory exists
+	if err != nil {
+		util.LogError("Error creating SERVICE_CONF_DIR: ", err)
+		return err
+	}
+
+	serviceConfigPath := filepath.Join(serviceConfDir, "caddy.json")
+	fmt.Println("serviceConfigPath: ", serviceConfigPath)
+	err = util.WriteFile(serviceConfigPath, updatedJSON)
+	if err != nil {
+		util.LogError("File write error for SERVICE_CONF_DIR: ", err)
+		return err
+	}
 	return nil
 }

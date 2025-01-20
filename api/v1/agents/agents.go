@@ -4,14 +4,15 @@ import (
 	"encoding/json"
 	"fmt"
 	"log"
-	"math/rand"
 	"net"
 	"net/http"
 	"os"
 	"os/exec"
+	"path/filepath"
 	"strings"
 	"time"
 
+	"github.com/NetSepio/erebrus/api/v1/middleware"
 	caddy "github.com/NetSepio/erebrus/api/v1/service"
 	"github.com/NetSepio/erebrus/model"
 	"github.com/gin-gonic/gin"
@@ -29,11 +30,28 @@ func ApplyRoutes(r *gin.RouterGroup) {
 	}
 }
 
-const agentsFile = "agents.json"
+var agentsFilePath string
+
+func init() {
+	// Initialize the agentsFilePath during package initialization
+	homeDir, err := os.UserHomeDir()
+	if err != nil {
+		log.Fatalf("Error getting home directory: %v", err)
+	}
+	// Create the "erebrus" folder(SERVICE_CONF_DIR) inside the home directory if it doesn't exist
+	erebrusDir := filepath.Join(homeDir, "erebrus")
+	err = os.MkdirAll(erebrusDir, os.ModePerm)
+	if err != nil {
+		log.Fatalf("Error creating erebrus directory: %v", err)
+	}
+
+	// Set the path for agents.json inside the erebrus folder
+	agentsFilePath = filepath.Join(erebrusDir, "agents.json")
+}
 
 // Load agents from file
 func loadAgents() ([]model.Agent, error) {
-	file, err := os.Open(agentsFile)
+	file, err := os.Open(agentsFilePath)
 	if err != nil {
 		if os.IsNotExist(err) {
 			return []model.Agent{}, nil
@@ -59,7 +77,7 @@ func saveAgents(newAgent model.Agent) error {
 
 	agents = append(agents, newAgent)
 
-	file, err := os.Create(agentsFile)
+	file, err := os.Create(agentsFilePath)
 	if err != nil {
 		return err
 	}
@@ -125,16 +143,6 @@ func getAvailablePort() (int, error) {
 	return listener.Addr().(*net.TCPAddr).Port, nil
 }
 
-// Generate a random string for the domain name
-func generateRandomName() string {
-	const letters = "abcdefghijklmnopqrstuvwxyz0123456789"
-	name := make([]byte, 8)
-	for i := range name {
-		name[i] = letters[rand.Intn(len(letters))]
-	}
-	return string(name)
-}
-
 // POST /agents
 func addAgent(c *gin.Context) {
 	log.Println("Received request to add an agent.")
@@ -149,13 +157,13 @@ func addAgent(c *gin.Context) {
 
 	log.Printf("Uploaded file: %s", file.Filename)
 
-	if !strings.HasSuffix(file.Filename, ".characters.json") {
+	if !strings.HasSuffix(file.Filename, ".character.json") {
 		log.Printf("Invalid file format: %s", file.Filename)
 		c.JSON(http.StatusBadRequest, gin.H{"error": "Invalid character file format"})
 		return
 	}
 
-	agentName := strings.TrimSuffix(file.Filename, ".characters.json")
+	agentName := strings.TrimSuffix(file.Filename, ".character.json")
 	characterFilePath := fmt.Sprintf("./characters/%s", file.Filename)
 
 	// Ensure the characters directory exists
@@ -177,7 +185,7 @@ func addAgent(c *gin.Context) {
 	}
 
 	// Ensure the Docker image is present
-	dockerImage := "ghcr.io/shachindra/eliza:main"
+	dockerImage := os.Getenv("DOCKER_IMAGE_AGENT")
 	log.Printf("Checking Docker image: %s", dockerImage)
 	pullCmd := exec.Command("docker", "pull", dockerImage)
 	if output, err := pullCmd.CombinedOutput(); err != nil {
@@ -219,7 +227,7 @@ func addAgent(c *gin.Context) {
 	// Determine the domain
 	domain := c.DefaultPostForm("domain", "")
 	if domain == "" {
-		domain = fmt.Sprintf("https://%s.us01.erebrus.io", generateRandomName())
+		domain = os.Getenv("EREBRUS_DOMAIN")
 	}
 
 	// Call the AddServicesDirect function from the caddy package
@@ -265,6 +273,7 @@ func addAgent(c *gin.Context) {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "Agent creation failed"})
 		return
 	}
+	domain = agentName + "." + domain
 
 	createdAgent.Port = exposedPort
 	createdAgent.Domain = domain
@@ -329,6 +338,9 @@ func deleteAgent(c *gin.Context) {
 		return
 	}
 
+	//to delete from caddyfile and caddy.json
+	middleware.DeleteService(agents[indexToDelete].Name)
+
 	// Remove the agent from the list
 	agents = append(agents[:indexToDelete], agents[indexToDelete+1:]...)
 
@@ -347,7 +359,7 @@ func deleteAgent(c *gin.Context) {
 // Save the list of agents back to the file after deletion
 func saveAgentsList(agents []model.Agent) error {
 	// Open or create the file to save the agents list
-	file, err := os.Create(agentsFile)
+	file, err := os.Create(agentsFilePath)
 	if err != nil {
 		return err
 	}
@@ -415,7 +427,7 @@ func manageAgent(c *gin.Context) {
 		return
 	}
 
-	file, err := os.Create("agents.json")
+	file, err := os.Create(agentsFilePath)
 	if err != nil {
 		log.Printf("Error creating agents.json: %v", err)
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to save updated agents"})
