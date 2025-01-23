@@ -1,6 +1,7 @@
 package caddy
 
 import (
+	"fmt"
 	"net/http"
 	"os"
 	"strconv"
@@ -18,7 +19,7 @@ func ApplyRoutes(r *gin.RouterGroup) {
 
 	g := r.Group("/caddy")
 	{
-		g.POST("", addServices)
+		g.POST("", AddServices)
 		g.GET("", getServices)
 		g.GET(":name", getService)
 		g.DELETE(":name", deleteService)
@@ -28,7 +29,7 @@ func ApplyRoutes(r *gin.RouterGroup) {
 var resp map[string]interface{}
 
 // addTunnel adds new tunnel config
-func addServices(c *gin.Context) {
+func AddServices(c *gin.Context) {
 	//post form parameters
 	var payload ServicePayload
 
@@ -191,4 +192,36 @@ func MiddlewareForCaddy() gin.HandlerFunc {
 		// Pass to the next middleware/handler
 		c.Next()
 	}
+}
+
+// AddServicesDirect adds a service using direct arguments.
+func AddServicesDirect(domain string, agentName string, port int) error {
+	ipAddress := "127.0.0.1" // Replace with actual IP logic if needed
+
+	// Validate the service
+	value, msg, err := middleware.IsValidService(agentName, port, ipAddress)
+	if err != nil {
+		return fmt.Errorf("server error: %v", err)
+	}
+
+	if value == -1 {
+		return fmt.Errorf("validation failed: %s", msg)
+	}
+
+	// Create a Services struct object
+	var data model.Service
+	data.Name = agentName
+	data.Type = os.Getenv("NODE_TYPE")
+	data.Port = strconv.Itoa(port)
+	data.Domain = agentName + "." + domain
+	data.IpAddress = ipAddress
+	data.CreatedAt = time.Now().UTC().Format(time.RFC3339)
+
+	// Add the service
+	err = middleware.AddServices(data)
+	if err != nil {
+		return fmt.Errorf("error adding service: %v", err)
+	}
+
+	return nil
 }

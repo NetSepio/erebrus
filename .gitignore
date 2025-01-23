@@ -34,3 +34,6 @@ erebrus-linux-x64
 
 # bin folder
 /bin
+
+agents.json
+/characters
