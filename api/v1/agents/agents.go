@@ -3,7 +3,6 @@ package agents
 import (
 	"encoding/json"
 	"fmt"
-	"io/ioutil"
 	"log"
 	"net"
 	"net/http"
@@ -161,37 +160,18 @@ func addAgent(c *gin.Context) {
 
 	log.Printf("Uploaded file: %s", file.Filename)
 
-	characterFilePath := fmt.Sprintf("./characters/%s", file.Filename)
-
-	// Ensure the characters directory exists
-	if _, err := os.Stat("./characters"); os.IsNotExist(err) {
-		log.Println("Characters directory does not exist. Creating...")
-		if err := os.Mkdir("./characters", 0755); err != nil {
-			log.Printf("Error creating characters directory: %v", err)
-			c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to create characters directory"})
-			return
-		}
-	}
-
-	// Save the file to the characters directory
-	log.Printf("Saving character file to %s", characterFilePath)
-	if err := c.SaveUploadedFile(file, characterFilePath); err != nil {
-		log.Printf("Error saving character file: %v", err)
-		c.JSON(http.StatusInternalServerError, gin.H{"error": fmt.Sprintf("Failed to save character file: %s", err.Error())})
-		return
-	}
-
 	// Read the saved file
-	content, err := ioutil.ReadFile(characterFilePath)
+	content, err := file.Open()
 	if err != nil {
-		log.Printf("Error reading saved file: %v", err)
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to read saved file"})
+		log.Printf("Error opening file: %v", err)
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to read file"})
 		return
 	}
 
 	// Decode the JSON content
 	var character model.CharacterFile
-	if err := json.Unmarshal(content, &character); err != nil {
+
+	if err := json.NewDecoder(content).Decode(&character); err != nil {
 		log.Printf("Invalid JSON format: %v", err)
 		c.JSON(http.StatusBadRequest, gin.H{"error": "Invalid JSON file"})
 		return
@@ -205,6 +185,26 @@ func addAgent(c *gin.Context) {
 	}
 
 	agentName := character.Name
+
+	// Ensure the characters directory exists
+	if _, err := os.Stat("./characters"); os.IsNotExist(err) {
+		log.Println("Characters directory does not exist. Creating...")
+		if err := os.Mkdir("./characters", 0755); err != nil {
+			log.Printf("Error creating characters directory: %v", err)
+			c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to create characters directory"})
+			return
+		}
+	}
+
+	characterFilePath := fmt.Sprintf("./characters/%s/%s", agentName, file.Filename)
+
+	// Save the file to the characters directory
+	log.Printf("Saving character file to %s", characterFilePath)
+	if err := c.SaveUploadedFile(file, characterFilePath); err != nil {
+		log.Printf("Error saving character file: %v", err)
+		c.JSON(http.StatusInternalServerError, gin.H{"error": fmt.Sprintf("Failed to save character file: %s", err.Error())})
+		return
+	}
 
 	// Ensure the Docker image is present
 	dockerImage := os.Getenv("DOCKER_IMAGE_AGENT")
@@ -232,7 +232,7 @@ func addAgent(c *gin.Context) {
 		"-p", fmt.Sprintf("%d:3000", exposedPort),
 		"-v", fmt.Sprintf("%s:/app/characters", "./characters"),
 		dockerImage,
-		"pnpm", "start", fmt.Sprintf("--character=/app/characters/%s", file.Filename),
+		"pnpm", "start", fmt.Sprintf("--character=/app/characters/%s/%s", agentName, file.Filename),
 	)
 
 	output, err := dockerCmd.CombinedOutput()
@@ -244,7 +244,7 @@ func addAgent(c *gin.Context) {
 
 	log.Printf("Docker container started successfully: %s", string(output))
 
-	time.Sleep(time.Duration(60) * time.Second)
+	time.Sleep(time.Duration(10) * time.Second)
 
 	// Determine the domain
 	domain := c.DefaultPostForm("domain", "")
@@ -493,6 +493,10 @@ func monitorAndRecoverAgents() {
 				output, err := cmd.Output()
 				if err != nil {
 					log.Printf("Error checking container status for %s: %v", agent.Name, err)
+					recreateErr := recreateAgent(agent)
+					if recreateErr != nil {
+						log.Printf("Failed to recreate agent %s: %v", agent.Name, recreateErr)
+					}
 					continue
 				}
 
@@ -548,13 +552,23 @@ func recreateAgent(agent model.Agent) error {
 		"-p", fmt.Sprintf("%d:3000", agent.Port),
 		"-v", fmt.Sprintf("%s:/app/characters", "./characters"),
 		os.Getenv("DOCKER_IMAGE_AGENT"),
-		"pnpm", "start", fmt.Sprintf("--character=/app/characters/%s.character.json", agent.Name),
+		"pnpm", "start", fmt.Sprintf("--character=/app/characters/%s/%s.character.json", agent.Name, agent.Name),
 	)
 
 	output, err := dockerCmd.CombinedOutput()
 	if err != nil {
 		return fmt.Errorf("failed to recreate container: %v, output: %s", err, string(output))
 	}
+
+	if agent.Status == "inactive" {
+		actionCmd := exec.Command("docker", "pause", agent.Name)
+		actionOutput, err := actionCmd.CombinedOutput()
+		if err != nil {
+			log.Printf("Error performing action pause on Agent: %s, Output: %s", err, string(actionOutput))
+		}
+	}
+
+	fmt.Println("Successfully recreated the agent container:", agent.Name)
 
 	return nil
 }
