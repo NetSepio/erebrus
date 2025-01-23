@@ -244,7 +244,7 @@ func addAgent(c *gin.Context) {
 
 	log.Printf("Docker container started successfully: %s", string(output))
 
-	time.Sleep(time.Duration(30) * time.Second)
+	time.Sleep(time.Duration(60) * time.Second)
 
 	// Determine the domain
 	domain := c.DefaultPostForm("domain", "")
