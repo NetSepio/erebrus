@@ -26,7 +26,7 @@ func ApplyRoutes(r *gin.RouterGroup) {
 		g.GET("", getAgents)
 		g.GET(":agentId", getAgent)
 		g.DELETE(":agentId", deleteAgent)
-		g.PUT("/manage/:agentId", manageAgent)
+		g.PATCH("/manage/:agentId", manageAgent)
 	}
 }
 
@@ -47,6 +47,9 @@ func init() {
 
 	// Set the path for agents.json inside the erebrus folder
 	agentsFilePath = filepath.Join(erebrusDir, "agents.json")
+
+	monitorAndRecoverAgents()
+
 }
 
 // Load agents from file
@@ -222,7 +225,7 @@ func addAgent(c *gin.Context) {
 
 	log.Printf("Docker container started successfully: %s", string(output))
 
-	time.Sleep(time.Duration(10) * time.Second)
+	time.Sleep(time.Duration(60) * time.Second)
 
 	// Determine the domain
 	domain := c.DefaultPostForm("domain", "")
@@ -453,4 +456,86 @@ func manageAgent(c *gin.Context) {
 
 	log.Printf("Successfully performed action '%s' on Agent '%s'", dockerAction, agentID)
 	c.JSON(http.StatusOK, gin.H{"message": fmt.Sprintf("Agent '%s' %sed successfully", agentID, dockerAction)})
+}
+
+func monitorAndRecoverAgents() {
+	ticker := time.NewTicker(15 * time.Second)
+	go func() {
+		for range ticker.C {
+			agents, err := loadAgents()
+			if err != nil {
+				log.Printf("Error loading agents for recovery: %v", err)
+				continue
+			}
+
+			for _, agent := range agents {
+				// Check container status
+				cmd := exec.Command("docker", "inspect", "-f", "{{.State.Running}}", agent.Name)
+				output, err := cmd.Output()
+				if err != nil {
+					log.Printf("Error checking container status for %s: %v", agent.Name, err)
+					continue
+				}
+
+				status := strings.TrimSpace(string(output))
+				if status != "true" {
+					log.Printf("Agent %s is not running. Attempting to restart...", agent.Name)
+
+					// Restart the container
+					restartCmd := exec.Command("docker", "restart", agent.Name)
+					if restartOutput, restartErr := restartCmd.CombinedOutput(); restartErr != nil {
+						log.Printf("Failed to restart agent %s: %v, Output: %s",
+							agent.Name, restartErr, string(restartOutput))
+
+						// If restart fails, try to recreate the container
+						recreateErr := recreateAgent(agent)
+						if recreateErr != nil {
+							log.Printf("Failed to recreate agent %s: %v", agent.Name, recreateErr)
+						}
+
+						return
+					}
+
+					// check the status of agent and and set it accordingly for container
+					if agent.Status == "inactive" {
+						actionCmd := exec.Command("docker", "pause", agent.Name)
+						actionOutput, err := actionCmd.CombinedOutput()
+						if err != nil {
+							log.Printf("Error performing action pause on Agent: %s, Output: %s", err, string(actionOutput))
+							return
+						}
+					}
+
+					log.Printf("Agent %s is restored", agent.Name)
+				}
+
+			}
+		}
+	}()
+}
+
+func recreateAgent(agent model.Agent) error {
+	// Stop and remove existing container if it exists
+	stopCmd := exec.Command("docker", "stop", agent.Name)
+	stopCmd.Run()
+
+	removeCmd := exec.Command("docker", "rm", agent.Name)
+	removeCmd.Run()
+
+	// Recreate the container using the original parameters
+	dockerCmd := exec.Command(
+		"docker", "run", "-d",
+		"--name", agent.Name,
+		"-p", fmt.Sprintf("%d:3000", agent.Port),
+		"-v", fmt.Sprintf("%s:/app/characters", "./characters"),
+		os.Getenv("DOCKER_IMAGE_AGENT"),
+		"pnpm", "start", fmt.Sprintf("--character=/app/characters/%s.character.json", agent.Name),
+	)
+
+	output, err := dockerCmd.CombinedOutput()
+	if err != nil {
+		return fmt.Errorf("failed to recreate container: %v, output: %s", err, string(output))
+	}
+
+	return nil
 }
