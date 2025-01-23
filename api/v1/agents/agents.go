@@ -3,6 +3,7 @@ package agents
 import (
 	"encoding/json"
 	"fmt"
+	"io/ioutil"
 	"log"
 	"net"
 	"net/http"
@@ -160,13 +161,6 @@ func addAgent(c *gin.Context) {
 
 	log.Printf("Uploaded file: %s", file.Filename)
 
-	if !strings.HasSuffix(file.Filename, ".character.json") {
-		log.Printf("Invalid file format: %s", file.Filename)
-		c.JSON(http.StatusBadRequest, gin.H{"error": "Invalid character file format"})
-		return
-	}
-
-	agentName := strings.TrimSuffix(file.Filename, ".character.json")
 	characterFilePath := fmt.Sprintf("./characters/%s", file.Filename)
 
 	// Ensure the characters directory exists
@@ -186,6 +180,31 @@ func addAgent(c *gin.Context) {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": fmt.Sprintf("Failed to save character file: %s", err.Error())})
 		return
 	}
+
+	// Read the saved file
+	content, err := ioutil.ReadFile(characterFilePath)
+	if err != nil {
+		log.Printf("Error reading saved file: %v", err)
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to read saved file"})
+		return
+	}
+
+	// Decode the JSON content
+	var character model.CharacterFile
+	if err := json.Unmarshal(content, &character); err != nil {
+		log.Printf("Invalid JSON format: %v", err)
+		c.JSON(http.StatusBadRequest, gin.H{"error": "Invalid JSON file"})
+		return
+	}
+
+	// Ensure the "name" field is present
+	if character.Name == "" {
+		log.Printf("Missing 'name' field in JSON file")
+		c.JSON(http.StatusBadRequest, gin.H{"error": "'name' field is required in the JSON file"})
+		return
+	}
+
+	agentName := character.Name
 
 	// Ensure the Docker image is present
 	dockerImage := os.Getenv("DOCKER_IMAGE_AGENT")
