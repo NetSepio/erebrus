@@ -207,7 +207,11 @@ func addAgent(c *gin.Context) {
 	}
 
 	// Ensure the Docker image is present
-	dockerImage := os.Getenv("DOCKER_IMAGE_AGENT")
+	docker_url := c.DefaultPostForm("docker_url", "")
+	if docker_url == "" {
+		docker_url = os.Getenv("DOCKER_IMAGE_AGENT")
+	}
+	dockerImage := docker_url
 	log.Printf("Checking Docker image: %s", dockerImage)
 	pullCmd := exec.Command("docker", "pull", dockerImage)
 	if output, err := pullCmd.CombinedOutput(); err != nil {
