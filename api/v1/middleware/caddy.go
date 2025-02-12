@@ -5,7 +5,7 @@ import (
 	"fmt"
 	"io"
 	"os"
-	"os/exec"
+	// "os/exec"
 	"path/filepath"
 	"strconv"
 
@@ -293,13 +293,13 @@ func SaveToFile(updatedJSON []byte) error {
 		return err
 	}
 
-	// Restart the Caddy service
-	cmd := exec.Command("sudo", "systemctl", "restart", "caddy")
-	err = cmd.Run()
-	if err != nil {
-		util.LogError("Failed to restart Caddy service: ", err)
-		return err
-	}
+	// // Restart the Caddy service
+	// cmd := exec.Command("sudo", "systemctl", "restart", "caddy")
+	// err = cmd.Run()
+	// if err != nil {
+	// 	util.LogError("Failed to restart Caddy service: ", err)
+	// 	return err
+	// }
 
 	return nil
 }
