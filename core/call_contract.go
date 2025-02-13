@@ -1,7 +1,7 @@
 package core
 
 import (
-	"crypto/rand"
+	"crypto/sha256"
 	"encoding/json"
 	"fmt"
 	"io"
@@ -11,12 +11,20 @@ import (
 	"os"
 	"runtime"
 	"strings"
+	"bytes"
+	"mime/multipart"
 
 	"github.com/NetSepio/erebrus/contract"
-	"github.com/ethereum/go-ethereum/crypto"
+	ethcrypto "github.com/ethereum/go-ethereum/crypto"
 	"github.com/ethereum/go-ethereum/accounts/abi/bind"
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/ethclient"
+	"github.com/libp2p/go-libp2p"
+	libp2pcrypto "github.com/libp2p/go-libp2p/core/crypto"
+	"github.com/libp2p/go-libp2p/core/host"
+	// "github.com/libp2p/go-libp2p/core/peer"
+	bip39 "github.com/tyler-smith/go-bip39"
+	bip32 "github.com/tyler-smith/go-bip32"
 	log "github.com/sirupsen/logrus"
 )
 
@@ -35,6 +43,7 @@ type PeaqIPInfo struct {
 	City    string `json:"city"`
 	Region  string `json:"region"`
 	Country string `json:"country"`
+	Loc     string `json:"loc"`
 }
 
 type SystemMetadata struct {
@@ -61,6 +70,97 @@ type NFTMetadata struct {
 	Attributes  []NFTAttribute `json:"attributes"`
 }
 
+type IPFSResponse struct {
+	Name string `json:"Name"`
+	Hash string `json:"Hash"`
+	Size string `json:"Size"`
+}
+
+// Custom reader for deterministic key generation
+type reader struct {
+	seed []byte
+	pos  int
+}
+
+func (r *reader) Read(p []byte) (n int, err error) {
+	copy(p, r.seed)
+	return len(r.seed), nil
+}
+
+func bytesReader(seed []byte) *reader {
+	return &reader{seed: seed}
+}
+
+// makeBasicHost creates a LibP2P host with a deterministic peer ID using mnemonics
+func makeBasicHost() (host.Host, error) {
+	// Get mnemonic from environment variable or use default
+	mnemonic := os.Getenv("MNEMONIC")
+	if mnemonic == "" {
+		log.Warn("MNEMONIC not set, using default mnemonic")
+		mnemonic = "abandon abandon abandon abandon abandon abandon abandon abandon abandon abandon abandon about"
+	}
+
+	// Convert mnemonic to a BIP-32 seed
+	seed := bip39.NewSeed(mnemonic, "")
+
+	// Derive a master key from the seed
+	masterKey, err := bip32.NewMasterKey(seed)
+	if err != nil {
+		return nil, fmt.Errorf("failed to create master key: %v", err)
+	}
+
+	// Derive a child key
+	childKey, err := masterKey.NewChildKey(bip32.FirstHardenedChild)
+	if err != nil {
+		return nil, fmt.Errorf("failed to derive child key: %v", err)
+	}
+
+	// Convert the private key to an Ed25519 key
+	hashedKey := sha256.Sum256(childKey.Key)
+	priv, _, err := libp2pcrypto.GenerateKeyPairWithReader(libp2pcrypto.Ed25519, 256, bytesReader(hashedKey[:]))
+	if err != nil {
+		return nil, fmt.Errorf("failed to generate libp2p key: %v", err)
+	}
+
+	opts := []libp2p.Option{
+		libp2p.ListenAddrStrings("/ip4/0.0.0.0/tcp/9002"),
+		libp2p.Identity(priv),
+		libp2p.DisableRelay(),
+	}
+
+	host, err := libp2p.New(opts...)
+	if err != nil {
+		return nil, fmt.Errorf("failed to create libp2p host: %v", err)
+	}
+
+	fmt.Printf("\n%s%s%s\n", colorYellow, "====================================", colorReset)
+	fmt.Printf("%s🌟 LibP2P Host Created%s\n", colorGreen, colorReset)
+	fmt.Printf("%s%s%s\n", colorYellow, "====================================", colorReset)
+	fmt.Printf("%s🆔 Peer ID:%s %s\n", colorCyan, colorReset, host.ID().String())
+	fmt.Printf("%s📡 Addresses:%s\n", colorCyan, colorReset)
+	for _, addr := range host.Addrs() {
+		fmt.Printf("   %s%s%s\n", colorBlue, addr.String(), colorReset)
+	}
+	fmt.Printf("%s%s%s\n\n", colorYellow, "====================================", colorReset)
+
+	return host, nil
+}
+
+var libp2pHost host.Host
+
+func GeneratePeaqDID() (string, error) {
+	var err error
+	if libp2pHost == nil {
+		libp2pHost, err = makeBasicHost()
+		if err != nil {
+			return "", fmt.Errorf("%s❌ Failed to create LibP2P host: %v%s", colorRed, err, colorReset)
+		}
+	}
+
+	peerID := libp2pHost.ID().String()
+	return fmt.Sprintf("did:netsepio:%s", peerID), nil
+}
+
 func init() {
 	log.SetFormatter(&log.TextFormatter{
 		ForceColors:      true,
@@ -85,6 +185,81 @@ func getLocalIPs() ([]string, error) {
 	return ips, nil
 }
 
+// isCloudEnvironment detects if the system is running in a cloud environment.
+func isCloudEnvironment() string {
+	// Check for hypervisor UUID, used by major cloud providers
+	if content, err := os.ReadFile("/sys/hypervisor/uuid"); err == nil {
+		uuid := strings.ToLower(strings.TrimSpace(string(content)))
+		if strings.HasPrefix(uuid, "ec2") || strings.HasPrefix(uuid, "google") {
+			return "cloud"
+		}
+	}
+
+	// Check for cloud-init presence
+	if _, err := os.Stat("/var/lib/cloud"); err == nil {
+		return "cloud"
+	}
+
+	return "consumer"
+}
+
+func uploadToIPFS(data string) (string, error) {
+	var b bytes.Buffer
+	w := multipart.NewWriter(&b)
+
+	fw, err := w.CreateFormFile("file", "data.json")
+	if err != nil {
+		return "", fmt.Errorf("error creating form file: %v", err)
+	}
+
+	_, err = io.Copy(fw, bytes.NewReader([]byte(data)))
+	if err != nil {
+		return "", fmt.Errorf("error copying data: %v", err)
+	}
+
+	w.Close()
+
+	req, err := http.NewRequest("POST", "https://ipfs.erebrus.io/api/v0/add", &b)
+	if err != nil {
+		return "", fmt.Errorf("error creating request: %v", err)
+	}
+
+	req.Header.Set("Content-Type", w.FormDataContentType())
+
+	client := &http.Client{}
+	resp, err := client.Do(req)
+	if err != nil {
+		return "", fmt.Errorf("error sending request: %v", err)
+	}
+	defer resp.Body.Close()
+
+	body, err := io.ReadAll(resp.Body)
+	if err != nil {
+		return "", fmt.Errorf("error reading response: %v", err)
+	}
+
+	var ipfsResp IPFSResponse
+	if err := json.Unmarshal(body, &ipfsResp); err != nil {
+		return "", fmt.Errorf("error parsing response: %v", err)
+	}
+
+	fmt.Printf("\n%s%s%s\n", colorYellow, "====================================", colorReset)
+	fmt.Printf("%s📤 IPFS Upload Attempt%s\n", colorBlue, colorReset)
+	fmt.Printf("%s%s%s\n", colorYellow, "====================================", colorReset)
+	fmt.Printf("%s📦 Data Size:%s %d bytes\n", colorCyan, colorReset, len(data))
+
+	// After successful upload
+	fmt.Printf("\n%s%s%s\n", colorYellow, "====================================", colorReset)
+	fmt.Printf("%s✅ IPFS Upload Successful%s\n", colorGreen, colorReset)
+	fmt.Printf("%s%s%s\n", colorYellow, "====================================", colorReset)
+	fmt.Printf("%s📝 File Name:%s %s\n", colorCyan, colorReset, ipfsResp.Name)
+	fmt.Printf("%s📏 File Size:%s %s bytes\n", colorCyan, colorReset, ipfsResp.Size)
+	fmt.Printf("%s🔗 IPFS Hash:%s %s\n", colorCyan, colorReset, ipfsResp.Hash)
+	fmt.Printf("%s%s%s\n\n", colorYellow, "====================================", colorReset)
+
+	return fmt.Sprintf("ipfs://%s", ipfsResp.Hash), nil
+}
+
 func getSystemMetadata() (string, error) {
 	hostname, err := os.Hostname()
 	if err != nil {
@@ -96,8 +271,8 @@ func getSystemMetadata() (string, error) {
 		localIPs = []string{"unknown"}
 	}
 
-	//would soon add code to detect if environment is cloud or local
-	environment := "local"
+	environment := isCloudEnvironment()
+	fmt.Println("environment", environment)
 
 	metadata := SystemMetadata{
 		OS:              runtime.GOOS,
@@ -115,23 +290,13 @@ func getSystemMetadata() (string, error) {
 		return "", fmt.Errorf("failed to marshal system metadata: %v", err)
 	}
 
-	return string(metadataJSON), nil
-}
+	// Upload to IPFS
+	ipfsPath, err := uploadToIPFS(string(metadataJSON))
+	if err != nil {
+		return "", fmt.Errorf("failed to upload metadata to IPFS: %v", err)
+	}
 
-func GeneratePeaqDID(length int) (string, error) {
-	if length <= 0 {
-		length = 51
-	}
-	const validChars = "123456789ABCDEFGHJKLMNPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz"
-	result := make([]byte, length)
-	for i := 0; i < length; i++ {
-		randomIndex, err := rand.Int(rand.Reader, big.NewInt(int64(len(validChars))))
-		if err != nil {
-			return "", fmt.Errorf("failed to generate random number: %v", err)
-		}
-		result[i] = validChars[randomIndex.Int64()]
-	}
-	return fmt.Sprintf("did:netsepio:%s", string(result)), nil
+	return ipfsPath, nil
 }
 
 func generateNFTMetadata(nodeName string, nodeSpec string, nodeConfig string) (string, error) {
@@ -196,13 +361,13 @@ func RegisterNodeOnPeaq() error {
 		return fmt.Errorf("%s❌ Failed to instantiate contract: %v%s", colorRed, err, colorReset)
 	}
 
-	nodeID, err := GeneratePeaqDID(51)
+	nodeID, err := GeneratePeaqDID()
 	if err != nil {
 		return fmt.Errorf("%s❌ Failed to generate Peaq DID: %v%s", colorRed, err, colorReset)
 	}
 
 	// Create auth options for the transaction
-	privateKey, err := crypto.HexToECDSA(os.Getenv("PRIVATE_KEY"))
+	privateKey, err := ethcrypto.HexToECDSA(os.Getenv("PRIVATE_KEY"))
 	if err != nil {
 		log.Fatalf("%s❌ Failed to create private key: %v%s", colorRed, err, colorReset)
 	}
@@ -225,16 +390,21 @@ func RegisterNodeOnPeaq() error {
 	nodeSpec := os.Getenv("NODE_TYPE")
 	nodeConfig := os.Getenv("NODE_CONFIG")
 	
-	// Get system metadata
+	// Get system metadata and upload to IPFS
 	metadata, err := getSystemMetadata()
 	if err != nil {
 		return fmt.Errorf("%s❌ Failed to get system metadata: %v%s", colorRed, err, colorReset)
 	}
 	
-	// Generate NFT metadata
-	nftMetadata, err := generateNFTMetadata(nodeName, nodeSpec, nodeConfig)
+	// Generate NFT metadata and upload to IPFS
+	nftMetadataJSON, err := generateNFTMetadata(nodeName, nodeSpec, nodeConfig)
 	if err != nil {
 		return fmt.Errorf("%s❌ Failed to generate NFT metadata: %v%s", colorRed, err, colorReset)
+	}
+
+	nftMetadata, err := uploadToIPFS(nftMetadataJSON)
+	if err != nil {
+		return fmt.Errorf("%s❌ Failed to upload NFT metadata to IPFS: %v%s", colorRed, err, colorReset)
 	}
 
 	owner := common.HexToAddress(os.Getenv("OWNER"))
@@ -267,15 +437,19 @@ func RegisterNodeOnPeaq() error {
 		nodeConfig,     // config
 		ipInfo.IP,      // ipAddress
 		ipInfo.Region,  // region
-		ipInfo.City,    // location
+		ipInfo.Loc,     // location (coordinates)
 		metadata,       // metadata
 		nftMetadata,    // nftMetadata
 		owner,          // _owner
 	)
 	if err != nil {
-		// Print colored error to stdout
-		fmt.Printf("\n%s❌ Error: Failed to register node: %v%s\n\n", colorRed, err, colorReset)
-		// Log error in JSON format
+		errorMsg := fmt.Sprintf("\n%s%s%s\n", colorRed, "====================================", colorReset)
+		errorMsg += fmt.Sprintf("%s❌ Registration Error%s\n", colorRed, colorReset)
+		errorMsg += fmt.Sprintf("%s%s%s\n", colorRed, "====================================", colorReset)
+		errorMsg += fmt.Sprintf("%s🚫 Error:%s %v\n", colorRed, colorReset, err)
+		errorMsg += fmt.Sprintf("%s%s%s\n\n", colorRed, "====================================", colorReset)
+		
+		fmt.Print(errorMsg)
 		return fmt.Errorf("Failed to register node: %v", err)
 	}
 
@@ -288,22 +462,37 @@ func RegisterNodeOnPeaq() error {
 	fmt.Printf("%s📛 Node Name:%s %s%s%s\n", colorCyan, colorReset, colorPurple, nodeName, colorReset)
 	fmt.Printf("%s🌐 IP Address:%s %s%s%s\n", colorCyan, colorReset, colorYellow, ipInfo.IP, colorReset)
 	fmt.Printf("%s🗺  Region:%s %s%s%s\n", colorCyan, colorReset, colorCyan, ipInfo.Region, colorReset)
-	fmt.Printf("%s📍 Location:%s %s%s%s\n", colorCyan, colorReset, colorCyan, ipInfo.City, colorReset)
-	fmt.Printf("%s🔧 System Metadata:%s %s%s%s\n", colorCyan, colorReset, colorBlue, metadata, colorReset)
-	fmt.Printf("%s🎨 NFT Metadata:%s %s%s%s\n", colorCyan, colorReset, colorPurple, nftMetadata, colorReset)
+	fmt.Printf("%s📍 Coordinates:%s %s%s%s\n", colorCyan, colorReset, colorCyan, ipInfo.Loc, colorReset)
+	fmt.Printf("%s💻 Environment:%s %s%s%s\n", colorCyan, colorReset, colorPurple, isCloudEnvironment(), colorReset)
+	fmt.Printf("%s🔧 System Metadata IPFS:%s %s%s%s\n", colorCyan, colorReset, colorBlue, metadata, colorReset)
+	fmt.Printf("%s🎨 NFT Metadata IPFS:%s %s%s%s\n", colorCyan, colorReset, colorPurple, nftMetadata, colorReset)
+	fmt.Printf("%s👤 Owner Address:%s %s%s%s\n", colorCyan, colorReset, colorYellow, owner.Hex(), colorReset)
 	fmt.Printf("%s%s%s\n", colorYellow, "====================================", colorReset)
 	fmt.Printf("%s✅ Registration Complete! %s\n", colorGreen, colorReset)
 	fmt.Printf("%s%s%s\n\n", colorYellow, "====================================", colorReset)
 
-	// Log success in JSON format
+	// Structured logging with all details
 	log.WithFields(log.Fields{
-		"txHash":      tx.Hash().Hex(),
-		"nodeID":      nodeID,
-		"nodeName":    nodeName,
-		"ipAddress":   ipInfo.IP,
-		"region":      ipInfo.Region,
-		"location":    ipInfo.City,
-	}).Info("Node registration successful")
+		"txHash":           tx.Hash().Hex(),
+		"nodeID":          nodeID,
+		"nodeName":        nodeName,
+		"nodeSpec":        nodeSpec,
+		"nodeConfig":      nodeConfig,
+		"ipAddress":       ipInfo.IP,
+		"region":          ipInfo.Region,
+		"coordinates":     ipInfo.Loc,
+		"environment":     isCloudEnvironment(),
+		"systemMetadata": metadata,
+		"nftMetadata":    nftMetadata,
+		"ownerAddress":   owner.Hex(),
+		"contractAddress": contractAddress.Hex(),
+		"chainID":        chainID.String(),
+	}).Info(fmt.Sprintf("%s🚀 Node registration transaction submitted successfully! 🎉%s", colorGreen, colorReset))
+
+	log.WithFields(log.Fields{
+		"systemMetadataIPFS": metadata,
+		"nftMetadataIPFS":   nftMetadata,
+	}).Info(fmt.Sprintf("%s📤 Metadata uploaded to IPFS successfully%s", colorGreen, colorReset))
 
 	return nil
 }
