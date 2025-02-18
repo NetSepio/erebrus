@@ -3,12 +3,13 @@ package v1
 import (
 	"os"
 
+	"github.com/NetSepio/erebrus/api/v1/agents"
 	"github.com/NetSepio/erebrus/api/v1/authenticate"
 	"github.com/NetSepio/erebrus/api/v1/client"
+	peer_stats "github.com/NetSepio/erebrus/api/v1/peer"
 	"github.com/NetSepio/erebrus/api/v1/server"
 	caddy "github.com/NetSepio/erebrus/api/v1/service"
 	"github.com/NetSepio/erebrus/api/v1/status"
-	"github.com/NetSepio/erebrus/api/v1/agents"
 
 	"github.com/gin-gonic/gin"
 )
@@ -17,6 +18,7 @@ import (
 func ApplyRoutes(r *gin.RouterGroup) {
 	v1 := r.Group("/v1.0")
 	{
+		peer_stats.ApplyRoutes(v1)
 		client.ApplyRoutes(v1)
 		server.ApplyRoutes(v1)
 		status.ApplyRoutes(v1)

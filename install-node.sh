@@ -367,7 +367,7 @@ configure_node() {
     # Prompt for Chain
     printf "Select valid chain from list below:\n"
     PS3="Select a chain (e.g. 1): "
-    options=("SOLANA" "PEAQ" "APTOS" "SUI" "ECLIPSE")
+    options=("SOLANA" "PEAQ" "APTOS" "SUI" "ECLIPSE" "MONAD")
     select CHAIN in "${options[@]}"; do
         if [ -n "$CHAIN" ]; then
             break
