@@ -74,6 +74,7 @@ func installCaddy() error {
 	fmt.Println("Installing Caddy manually...")
 
 	// Download the latest Caddy binary
+	fmt.Println("Downloading Caddy binary...")
 	cmd := exec.Command("curl", "-fsSL", "https://caddyserver.com/api/download?os=linux&arch=amd64", "-o", "caddy.tar.gz")
 	cmd.Stdout = os.Stdout
 	cmd.Stderr = os.Stderr
@@ -82,6 +83,7 @@ func installCaddy() error {
 	}
 
 	// Extract the binary
+	fmt.Println("Extracting Caddy binary...")
 	cmd = exec.Command("tar", "-xzf", "caddy.tar.gz")
 	cmd.Stdout = os.Stdout
 	cmd.Stderr = os.Stderr
@@ -90,6 +92,7 @@ func installCaddy() error {
 	}
 
 	// Move Caddy binary to /usr/local/bin
+	fmt.Println("Moving Caddy binary to /usr/local/bin...")
 	cmd = exec.Command("sudo", "mv", "caddy", "/usr/local/bin/")
 	cmd.Stdout = os.Stdout
 	cmd.Stderr = os.Stderr
@@ -98,6 +101,7 @@ func installCaddy() error {
 	}
 
 	// Give execution permission
+	fmt.Println("Giving execution permission to Caddy binary...")
 	cmd = exec.Command("sudo", "chmod", "+x", "/usr/local/bin/caddy")
 	cmd.Stdout = os.Stdout
 	cmd.Stderr = os.Stderr
@@ -106,6 +110,7 @@ func installCaddy() error {
 	}
 
 	// Verify installation
+	fmt.Println("Verifying Caddy installation...")
 	cmd = exec.Command("caddy", "version")
 	cmd.Stdout = os.Stdout
 	cmd.Stderr = os.Stderr
