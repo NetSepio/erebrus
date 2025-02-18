@@ -71,22 +71,38 @@ func installDocker() error {
 // Install Caddy
 // installCaddy installs Caddy on a Linux system
 func installCaddy() error {
-	fmt.Println("Installing Caddy...")
+	fmt.Println("Installing Caddy manually...")
 
-	// Update package list
-	cmd := exec.Command("sudo", "apt", "update")
+	// Download the latest Caddy binary
+	cmd := exec.Command("curl", "-fsSL", "https://caddyserver.com/api/download?os=linux&arch=amd64", "-o", "caddy.tar.gz")
 	cmd.Stdout = os.Stdout
 	cmd.Stderr = os.Stderr
 	if err := cmd.Run(); err != nil {
-		return fmt.Errorf("failed to update package list: %v", err)
+		return fmt.Errorf("failed to download Caddy: %v", err)
 	}
 
-	// Install Caddy
-	cmd = exec.Command("sudo", "apt", "install", "-y", "caddy")
+	// Extract the binary
+	cmd = exec.Command("tar", "-xzf", "caddy.tar.gz")
 	cmd.Stdout = os.Stdout
 	cmd.Stderr = os.Stderr
 	if err := cmd.Run(); err != nil {
-		return fmt.Errorf("failed to install Caddy: %v", err)
+		return fmt.Errorf("failed to extract Caddy: %v", err)
+	}
+
+	// Move Caddy binary to /usr/local/bin
+	cmd = exec.Command("sudo", "mv", "caddy", "/usr/local/bin/")
+	cmd.Stdout = os.Stdout
+	cmd.Stderr = os.Stderr
+	if err := cmd.Run(); err != nil {
+		return fmt.Errorf("failed to move Caddy binary: %v", err)
+	}
+
+	// Give execution permission
+	cmd = exec.Command("sudo", "chmod", "+x", "/usr/local/bin/caddy")
+	cmd.Stdout = os.Stdout
+	cmd.Stderr = os.Stderr
+	if err := cmd.Run(); err != nil {
+		return fmt.Errorf("failed to set execute permission: %v", err)
 	}
 
 	// Verify installation
