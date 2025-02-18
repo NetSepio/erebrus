@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"fmt"
 	"log"
+	"os"
 	"os/exec"
 )
 
@@ -27,9 +28,9 @@ func EnsureDockerAndCaddy() {
 	// Check and install Caddy
 	if !isCommandAvailable("caddy") {
 		log.Println("Caddy is not installed. Installing Caddy...")
-		err := installCaddy()
-		if err != nil {
-			log.Fatalf("Failed to install Caddy: %v", err)
+		if err := installCaddy(); err != nil {
+			fmt.Fprintf(os.Stderr, "Error: %v\n", err)
+			os.Exit(1)
 		}
 		log.Println("Caddy installed successfully.")
 	} else {
@@ -68,16 +69,36 @@ func installDocker() error {
 }
 
 // Install Caddy
+// installCaddy installs Caddy on a Linux system
 func installCaddy() error {
-	cmd := exec.Command("sh", "-c", `
-		apt-get update -qq &&
-		apt-get install -y debian-keyring debian-archive-keyring apt-transport-https &&
-		curl -fsSL https://dl.cloudsmith.io/public/caddy/stable/gpg.key | gpg --dearmor -o /usr/share/keyrings/caddy-archive-keyring.gpg &&
-		echo "deb [signed-by=/usr/share/keyrings/caddy-archive-keyring.gpg] https://dl.cloudsmith.io/public/caddy/stable/deb/debian all main" > /etc/apt/sources.list.d/caddy-stable.list &&
-		apt-get update -qq &&
-		apt-get install -y caddy
-	`)
-	return runCommand(cmd)
+	fmt.Println("Installing Caddy...")
+
+	// Update package list
+	cmd := exec.Command("sudo", "apt", "update")
+	cmd.Stdout = os.Stdout
+	cmd.Stderr = os.Stderr
+	if err := cmd.Run(); err != nil {
+		return fmt.Errorf("failed to update package list: %v", err)
+	}
+
+	// Install Caddy
+	cmd = exec.Command("sudo", "apt", "install", "-y", "caddy")
+	cmd.Stdout = os.Stdout
+	cmd.Stderr = os.Stderr
+	if err := cmd.Run(); err != nil {
+		return fmt.Errorf("failed to install Caddy: %v", err)
+	}
+
+	// Verify installation
+	cmd = exec.Command("caddy", "version")
+	cmd.Stdout = os.Stdout
+	cmd.Stderr = os.Stderr
+	if err := cmd.Run(); err != nil {
+		return fmt.Errorf("Caddy installation verification failed: %v", err)
+	}
+
+	fmt.Println("Caddy installed successfully!")
+	return nil
 }
 
 // Test Docker functionality
