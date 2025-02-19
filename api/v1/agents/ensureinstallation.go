@@ -10,20 +10,20 @@ import (
 
 func EnsureDockerAndCaddy() {
 	// Check and install Docker
-	if !isCommandAvailable("docker") {
-		log.Println("Docker is not installed. Installing Docker...")
-		err := installDocker()
-		if err != nil {
-			log.Fatalf("Failed to install Docker: %v", err)
-		}
-		log.Println("Docker installed successfully.")
-	} else {
-		log.Println("Docker is already installed.")
-	}
+	// if !isCommandAvailable("docker") {
+	// 	log.Println("Docker is not installed. Installing Docker...")
+	// 	err := installDocker()
+	// 	if err != nil {
+	// 		log.Fatalf("Failed to install Docker: %v", err)
+	// 	}
+	// 	log.Println("Docker installed successfully.")
+	// } else {
+	// 	log.Println("Docker is already installed.")
+	// }
 
-	// Test Docker functionality
-	log.Println("Testing Docker functionality...")
-	testDocker()
+	// // Test Docker functionality
+	// log.Println("Testing Docker functionality...")
+	// testDocker()
 
 	// Check and install Caddy
 	if !isCommandAvailable("caddy") {
