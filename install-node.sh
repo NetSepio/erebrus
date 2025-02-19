@@ -410,7 +410,7 @@ configure_node() {
         return 1
     else
     # Write environment variables to .env file
-    sudo tee ${INSTALL_DIR}/.env  <<EOL  
+    sudo tee ${INSTALL_DIR}/.env  <<EOL
 
 # Application Configuration
 RUNTYPE=released
