@@ -43,7 +43,7 @@ func LoadNodeDetails() {
 		ChainName = strings.ToLower(ChainName)
 		if ChainName == "solana" || ChainName == "eclipse" {
 			GenerateWalletAddressSolanaAndEclipse(os.Getenv("MNEMONIC"))
-		} else if ChainName == "ethereum" || ChainName == "monad" {
+		} else if ChainName == "ethereum" || ChainName == "monad" || ChainName == "peaq" {
 			GenerateEthereumWalletAddress(os.Getenv("MNEMONIC"))
 		} else if ChainName == "sui" {
 			GenerateWalletAddressSui(os.Getenv("MNEMONIC"))
