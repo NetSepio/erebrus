@@ -20,6 +20,7 @@ func ApplyRoutes(r *gin.RouterGroup) {
 	g := r.Group("/peer")
 	{
 		g.GET("/stats", readPeerStats)
+		g.GET("/bandwidth", readPeerStats)
 	}
 }
 
