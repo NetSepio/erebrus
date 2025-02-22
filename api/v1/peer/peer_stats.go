@@ -20,7 +20,7 @@ func ApplyRoutes(r *gin.RouterGroup) {
 	g := r.Group("/peer")
 	{
 		g.GET("/stats", readPeerStats)
-		g.GET("/bandwidth", readPeerStats)
+		g.GET("/bandwidth", readBandwidth)
 	}
 }
 
@@ -35,6 +35,20 @@ type PeerStats struct {
 func readPeerStats(c *gin.Context) {
 	peerID := c.Query("peer_id")
 	peerData, err := getPeerInfos(peerID)
+	if err != nil {
+		log.WithFields(util.StandardFields).Error("Failure in reading server")
+		response := core.MakeErrorResponse(500, err.Error(), nil, nil, nil)
+		c.JSON(http.StatusInternalServerError, response)
+		return
+	}
+
+	c.JSON(http.StatusOK, gin.H{
+		"data": peerData,
+	})
+}
+
+func readBandwidth(c *gin.Context) {
+	peerData, err := getBandwidthStats()
 	if err != nil {
 		log.WithFields(util.StandardFields).Error("Failure in reading server")
 		response := core.MakeErrorResponse(500, err.Error(), nil, nil, nil)
