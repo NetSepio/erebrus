@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"log"
 	"os"
+	"os/exec"
 	"strings"
 
 	"github.com/ethereum/go-ethereum/crypto"
@@ -55,12 +56,12 @@ func LoadNodeDetails() {
 var WalletAddress string
 
 // GenerateEthereumWalletAddress generates an Ethereum wallet address from the given mnemonic
-func GenerateEthereumWalletAddress(mnemonic string) {
+func GenerateEthereumWalletAddress(mnemonic string) (string, *ecdsa.PrivateKey, error) {
 	// Validate the mnemonic
 	if !bip39.IsMnemonicValid(mnemonic) {
 		log.Fatal("Invalid mnemonic")
 	}
-	log.Println("Mnemonic:", mnemonic)
+	// log.Println("Mnemonic:", mnemonic)
 
 	// Derive a seed from the mnemonic
 	seed := bip39.NewSeed(mnemonic, "")
@@ -103,8 +104,8 @@ func GenerateEthereumWalletAddress(mnemonic string) {
 	publicKey := privateKey.Public().(*ecdsa.PublicKey)
 	publicKeyBytes := crypto.FromECDSAPub(publicKey)
 
-	log.Println("Private Key:", hex.EncodeToString(crypto.FromECDSA(privateKey)))
-	log.Println("Public Key:", hex.EncodeToString(publicKeyBytes))
+	// log.Println("Private Key:", hex.EncodeToString(crypto.FromECDSA(privateKey)))
+	// log.Println("Public Key:", hex.EncodeToString(publicKeyBytes))
 
 	// Generate the Ethereum address
 	keccak := sha3.NewLegacyKeccak256()
@@ -113,7 +114,8 @@ func GenerateEthereumWalletAddress(mnemonic string) {
 
 	// Convert to checksummed address
 	WalletAddress = toChecksumAddress(hex.EncodeToString(walletAddress))
-	log.Println("Ethereum Wallet Address:", WalletAddress)
+	// log.Println("Ethereum Wallet Address:", WalletAddress)
+	return WalletAddress, privateKey, nil
 }
 
 // toChecksumAddress converts an address to checksummed format
@@ -276,4 +278,29 @@ func GenerateWalletAddressAptos(mnemonic string) {
 
 	WalletAddress = "0x" + hex.EncodeToString(walletAddress)
 	log.Println("Aptos Wallet Address:", WalletAddress)
+}
+
+func getGitHash() (string, error) {
+	cmd := exec.Command("git", "rev-parse", "HEAD")
+	output, err := cmd.Output()
+	if err != nil {
+		return "", err
+	}
+	// Trim newline from output
+	return string(output[:len(output)-1]), nil
+}
+
+func GetCodeHashAndVersion() (string, string) {
+	hash, err := getGitHash()
+	if err != nil {
+		fmt.Println("Error getting Git hash:", err)
+		return "", "unknown"
+	}
+	if len(CodeHash) == 0 {
+		CodeHash = hash
+	}
+	if len(Version) == 0 {
+		Version = "1.1.1-alpha"
+	}
+	return CodeHash, Version
 }

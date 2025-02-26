@@ -87,6 +87,11 @@ func RungRPCServer() {
 }
 
 func main() {
+	if len(os.Args) > 1 {
+		core.Execute()
+		return
+	}
+	
 	log.WithFields(util.StandardFields).Infof("Starting NetSepio - Erebrus Version: %s", util.Version)
 
 	// check directories or create it
