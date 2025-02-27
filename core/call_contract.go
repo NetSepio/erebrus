@@ -415,7 +415,7 @@ func generateNFTMetadata(nodeName string, nodeSpec string, nodeConfig string) (s
 }
 
 func RegisterNodeOnPeaq() error {
-	if os.Getenv("CHAIN_NAME") != "peaq" {
+	if strings.ToLower(os.Getenv("CHAIN_NAME")) != "peaq" {
 		return nil
 	}
 
@@ -846,7 +846,7 @@ func createCheckpoint(nodeID string, instance *contract.Contract, auth *bind.Tra
 
 // GetNodeStatus retrieves the current status of the node from the contract
 func GetNodeStatus() (*NodeStatus, error) {
-	if os.Getenv("CHAIN_NAME") != "peaq" {
+	if strings.ToLower(os.Getenv("CHAIN_NAME")) != "peaq" {
 		return nil, fmt.Errorf("Chain not configured")
 	}
 
@@ -931,7 +931,7 @@ func (ns *NodeStatus) GetStatusEmoji() string {
 
 // DeactivateNode deactivates the node in the contract
 func DeactivateNode() error {
-	if os.Getenv("CHAIN_NAME") != "peaq" {
+	if strings.ToLower(os.Getenv("CHAIN_NAME")) != "peaq" {
 		return fmt.Errorf("Chain not configured")
 	}
 
@@ -988,7 +988,7 @@ func DeactivateNode() error {
 
 // ActivateNode sets the node status to Online
 func ActivateNode() error {
-	if os.Getenv("CHAIN_NAME") != "peaq" {
+	if strings.ToLower(os.Getenv("CHAIN_NAME")) != "peaq" {
 		return fmt.Errorf("Chain not configured")
 	}
 
