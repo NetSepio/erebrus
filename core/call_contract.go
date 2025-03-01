@@ -562,12 +562,12 @@ func RegisterNodeOnPeaq() error {
 }
 
 func CreatePeriodicCheckpoints(nodeID string, client *ethclient.Client, instance *contract.Contract, auth *bind.TransactOpts) {
-	ticker := time.NewTicker(1 * time.Minute)
+	ticker := time.NewTicker(15 * time.Minute)
 	
 	// Log the start of checkpoint creation
 	log.WithFields(log.Fields{
 		"nodeID": nodeID,
-		"interval": "1 minute",
+		"interval": "15 minutes",
 	}).Info("Periodic checkpoint creation initialized")
 
 	go func() {
