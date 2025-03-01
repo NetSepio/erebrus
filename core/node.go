@@ -280,21 +280,29 @@ func GenerateWalletAddressAptos(mnemonic string) {
 	log.Println("Aptos Wallet Address:", WalletAddress)
 }
 
-func getGitHash() (string, error) {
-	cmd := exec.Command("git", "rev-parse", "HEAD")
-	output, err := cmd.Output()
-	if err != nil {
-		return "", err
-	}
-	// Trim newline from output
-	return string(output[:len(output)-1]), nil
+func getGitHash(repoURL string, branch string) (string, error) {
+	 // Git command to fetch the latest commit hash of the specified branch
+	 cmd := exec.Command("git", "ls-remote", repoURL, branch)
+	 output, err := cmd.Output()
+	 if err != nil {
+		 return "", err
+	 }
+ 
+	 // Parse the output to get the commit hash
+	 result := strings.Fields(string(output))
+	 if len(result) > 0 {
+		 return result[0], nil
+	 }
+	 return "", fmt.Errorf("no commit hash found for branch %s", branch)
 }
 
 func GetCodeHashAndVersion() (string, string) {
-	hash, err := getGitHash()
+	repoURL := "https://github.com/NetSepio/erebrus.git"
+    branch := "main"
+	hash, err := getGitHash(repoURL, branch)
 	if err != nil {
 		fmt.Println("Error getting Git hash:", err)
-		return "", "unknown"
+		return "1234567890", "1.1.1-alpha"
 	}
 	if len(CodeHash) == 0 {
 		CodeHash = hash
