@@ -52,9 +52,6 @@ EREBRUS_DOMAIN=
 DOCKER_IMAGE_AGENT="ghcr.io/netsepio/cyrene"
 
 #Peaq Integration
-CONTRACT_ADDRESS=0x6c98eece41674a878fa388b327a3bf4c991ca8b8
-RPC_URL=https://wss-async.agung.peaq.network
-OWNER=
-PRIVATE_KEY=
-CHAIN_ID=9990
-EREBRUS_NODE_CONFIG=public
+CONTRACT_ADDRESS=0x291eC3328b56d5ECebdF993c3712a400Cb7569c3
+RPC_URL=https://evm.peaq.network
+NODE_ACCESS=
