@@ -1,10 +1,10 @@
 package core
 
 import (
-	"crypto/rand"
+	// "crypto/rand"
 	"errors"
-	"fmt"
-	"math/big"
+	// "fmt"
+	// "math/big"
 	"os"
 	"path/filepath"
 	"regexp"
@@ -214,25 +214,25 @@ func ReadClientConfig(id string) ([]byte, error) {
 }
 
 // LENGTH 16
-func GeneratePeaqDID(length int) (string, string, error) {
-	if length <= 0 {
-		length = 55
-	}
+// func GeneratePeaqDID(length int) (string, string, error) {
+// 	if length <= 0 {
+// 		length = 55
+// 	}
 
-	const validChars = "123456789ABCDEFGHJKLMNPQRSTUVWXYZabcdefghijkmnopqrstuvwxyz"
-	result := make([]byte, length)
+// 	const validChars = "123456789ABCDEFGHJKLMNPQRSTUVWXYZabcdefghijkmnopqrstuvwxyz"
+// 	result := make([]byte, length)
 
-	for i := 0; i < length; i++ {
-		randomIndex, err := rand.Int(rand.Reader, big.NewInt(int64(len(validChars))))
-		if err != nil {
-			return "", "", fmt.Errorf("failed to generate random number: %v", err)
-		}
-		result[i] = validChars[randomIndex.Int64()]
-		fmt.Println("result : ", result)
-	}
+// 	for i := 0; i < length; i++ {
+// 		randomIndex, err := rand.Int(rand.Reader, big.NewInt(int64(len(validChars))))
+// 		if err != nil {
+// 			return "", "", fmt.Errorf("failed to generate random number: %v", err)
+// 		}
+// 		result[i] = validChars[randomIndex.Int64()]
+// 		fmt.Println("result : ", result)
+// 	}
 
-	return fmt.Sprintf("did:peaq:%s", string(result)), string(result), nil
-}
+// 	return fmt.Sprintf("did:peaq:%s", string(result)), string(result), nil
+// }
 
 func IsValidPeaqDID(did string) bool {
 	// Check if the DID starts with "did:peaq:"

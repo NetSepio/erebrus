@@ -385,6 +385,19 @@ configure_node() {
         fi
     done
 
+        # Prompt for Config Type
+    printf "Select an access type from list below:\n"
+    PS3="Select an access type (e.g. 1): "
+    options=("public" "private")
+    select ACCESS in "${options[@]}"; do
+        if [ -n "$ACCESS" ]; then
+            break
+        else
+            echo "Invalid choice. Please select a valid access type."
+        fi
+    done
+
+
     # Display and confirm user-provided variables
     printf "\n\e[1mUser Provided Configuration:\e[0m\n"
     printf "INSTALL DIR=%s\n" "${INSTALL_DIR}"
@@ -395,7 +408,7 @@ configure_node() {
     printf "CHAIN=%s\n" "${CHAIN}"
     printf "CONFIG=%s\n" "${CONFIG}"
     printf "MNEMONIC=%s\n" "${WALLET_MNEMONIC}"
-
+    printf "ACCESS_TYPE=%s\n" "${ACCESS}"
     read -p "Confirm configuration (y/n): " confirm
     if [ "${confirm}" != "y" ]; then
         printf "Configuration not confirmed. Exiting.\n"
@@ -410,7 +423,7 @@ configure_node() {
         return 1
     else
     # Write environment variables to .env file
-    sudo tee ${INSTALL_DIR}/.env  <<EOL  
+    sudo tee ${INSTALL_DIR}/.env  <<EOL
 
 # Application Configuration
 RUNTYPE=released
@@ -429,11 +442,15 @@ FOOTER=NetSepio 2024
 GATEWAY_WALLET=0x0
 GATEWAY_DOMAIN=https://gateway.erebrus.io
 LOAD_CONFIG_FILE=false
-GATEWAY_PEERID=/ip4/130.211.28.223/tcp/9001/p2p/12D3KooWJSMKigKLzehhhmppTjX7iQprA7558uU52hqvKqyjbELf
+GATEWAY_PEERID=/ip4/52.14.92.177/tcp/9001/p2p/12D3KooWJSMKigKLzehhhmppTjX7iQprA7558uU52hqvKqyjbELf
 CHAIN_NAME=${CHAIN}
 NODE_TYPE=VPN
 NODE_CONFIG=${CONFIG}
 MNEMONIC=${WALLET_MNEMONIC}
+CONTRACT_ADDRESS=0x291eC3328b56d5ECebdF993c3712a400Cb7569c3
+RPC_URL=https://evm.peaq.network
+NODE_ACCESS=${ACCESS}
+
 
 # WireGuard Configuration
 WG_CONF_DIR=/etc/wireguard

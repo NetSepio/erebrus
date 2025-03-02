@@ -67,7 +67,7 @@ func LoadNodeDetails() {
 }
 
 // GenerateEthereumWalletAddress generates an Ethereum wallet address from the given mnemonic
-func GenerateEthereumWalletAddress(mnemonic string) {
+func GenerateEthereumWalletAddress(mnemonic string) (string, *ecdsa.PrivateKey, error) {
 	// Validate the mnemonic
 	if !bip39.IsMnemonicValid(mnemonic) {
 		log.Fatal("Invalid mnemonic")
@@ -114,8 +114,8 @@ func GenerateEthereumWalletAddress(mnemonic string) {
 	publicKey := privateKey.Public().(*ecdsa.PublicKey)
 	publicKeyBytes := crypto.FromECDSAPub(publicKey)
 
-	log.Println("Private Key:", hex.EncodeToString(crypto.FromECDSA(privateKey)))
-	log.Println("Public Key:", hex.EncodeToString(publicKeyBytes))
+	// log.Println("Private Key:", hex.EncodeToString(crypto.FromECDSA(privateKey)))
+	// log.Println("Public Key:", hex.EncodeToString(publicKeyBytes))
 
 	// Generate the Ethereum address
 	keccak := sha3.NewLegacyKeccak256()
@@ -124,7 +124,8 @@ func GenerateEthereumWalletAddress(mnemonic string) {
 
 	// Convert to checksummed address
 	WalletAddress = toChecksumAddress(hex.EncodeToString(walletAddress))
-	log.Println("Ethereum Wallet Address:", WalletAddress)
+	// log.Println("Ethereum Wallet Address:", WalletAddress)
+	return WalletAddress, privateKey, nil
 }
 
 // toChecksumAddress converts an address to checksummed format
@@ -278,4 +279,12 @@ func GenerateWalletAddressAptos(mnemonic string) {
 
 	WalletAddress = "0x" + hex.EncodeToString(walletAddress)
 	log.Println("Aptos Wallet Address:", WalletAddress)
+}
+
+
+
+func GetCodeHashAndVersion() (string, string) {
+	CodeHash = "4f5610aae32077a92ac570eeff5f3a404052fd94"
+	Version = "1.1.1"
+	return CodeHash, Version
 }

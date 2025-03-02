@@ -37,8 +37,13 @@ func EnsureDockerAndCaddy() {
 	}
 
 	// Start Caddy
-	log.Println("Starting Caddy server...")
-	startCaddy()
+	log.Println("Starting Caddy")
+	if err := runCommand(exec.Command("systemctl", "restart", "caddy")); err != nil {
+		log.Fatalf("Failed to restart caddy: %v", err)
+	} else {
+		log.Println("Caddy Started Successfully")
+	}
+
 }
 
 // Check if a command is available
@@ -83,6 +88,13 @@ func installCaddy() error {
 // Test Docker functionality
 func testDocker() {
 	log.Println("Pulling Alpine image...")
+	if err := runCommand(exec.Command("systemctl", "enable", "docker")); err != nil {
+		log.Fatalf("Failed to enable docker: %v", err)
+	}
+	if err := runCommand(exec.Command("systemctl", "restart", "docker")); err != nil {
+		log.Fatalf("Failed to restart docker: %v", err)
+	}
+	log.Println("Successfully restarted Docker")
 	if err := runCommand(exec.Command("docker", "pull", "alpine")); err != nil {
 		log.Fatalf("Failed to pull Alpine image: %v", err)
 	}
@@ -99,15 +111,6 @@ func testDocker() {
 		log.Fatalf("Failed to delete Alpine container: %v", err)
 	}
 	log.Println("Successfully deleted Alpine container.")
-}
-
-// Start Caddy
-func startCaddy() {
-	cmd := exec.Command("caddy", "run")
-	if err := cmd.Start(); err != nil {
-		log.Fatalf("Failed to start Caddy: %v", err)
-	}
-	log.Println("Caddy server started successfully.")
 }
 
 // Helper function to run commands and capture output

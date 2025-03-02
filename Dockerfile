@@ -7,6 +7,7 @@ COPY . .
 RUN go build -ldflags "-X main.version=1.1.1-alpha -X main.codeHash=$(git rev-parse HEAD)" -o erebrus .
 
 FROM alpine:latest
+RUN apk update && apk add --no-cache git
 WORKDIR /app
 COPY --from=build-app /app/erebrus .
 COPY --from=build-app /app/webapp ./webapp

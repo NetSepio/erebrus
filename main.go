@@ -86,6 +86,11 @@ func RungRPCServer() {
 }
 
 func main() {
+	if len(os.Args) > 1 {
+		core.Execute()
+		return
+	}
+	
 	log.WithFields(util.StandardFields).Infof("Starting NetSepio - Erebrus Version: %s", util.Version)
 
 	// check directories or create it
@@ -137,6 +142,11 @@ func main() {
 	// Call the function to generate the wallet address and store it in the global variable
 
 	core.LoadNodeDetails()
+
+	// Register node on Peaq if configured
+	if err := core.RegisterNodeOnPeaq(); err != nil {
+		log.WithFields(util.StandardFields).Errorf("Failed to register node on Peaq: %v", err)
+	}
 
 	go p2p.Init()
 	//running updater

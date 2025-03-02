@@ -207,7 +207,11 @@ func addAgent(c *gin.Context) {
 	}
 
 	// Ensure the Docker image is present
-	dockerImage := os.Getenv("DOCKER_IMAGE_AGENT")
+	docker_url := c.DefaultPostForm("docker_url", "")
+	if docker_url == "" {
+		docker_url = os.Getenv("DOCKER_IMAGE_AGENT")
+	}
+	dockerImage := docker_url
 	log.Printf("Checking Docker image: %s", dockerImage)
 	pullCmd := exec.Command("docker", "pull", dockerImage)
 	if output, err := pullCmd.CombinedOutput(); err != nil {
@@ -244,7 +248,27 @@ func addAgent(c *gin.Context) {
 
 	log.Printf("Docker container started successfully: %s", string(output))
 
-	time.Sleep(time.Duration(60) * time.Second)
+	// Replace the time.Sleep with a polling mechanism
+	log.Printf("Waiting for agent container to become ready at http://localhost:%d/agents", exposedPort)
+	maxRetries := 60 // Maximum number of retries (60 attempts = 60 seconds with 1-second interval)
+	for i := 0; i < maxRetries; i++ {
+		agentEndpoint := fmt.Sprintf("http://localhost:%d/agents", exposedPort)
+		resp, err := http.Get(agentEndpoint)
+		if err != nil {
+			log.Printf("Attempt %d/%d: Container not ready yet: %v", i+1, maxRetries, err)
+			time.Sleep(time.Second)
+			continue
+		}
+		defer resp.Body.Close()
+		
+		if resp.StatusCode == http.StatusOK {
+			log.Printf("Container is ready after %d seconds", i+1)
+			break
+		}
+		
+		log.Printf("Attempt %d/%d: Received status code %d, waiting...", i+1, maxRetries, resp.StatusCode)
+		time.Sleep(time.Second)
+	}
 
 	// Determine the domain
 	domain := c.DefaultPostForm("domain", "")

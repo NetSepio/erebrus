@@ -23,8 +23,8 @@ NODE_CONFIG=
 
 #Gateway Specifications
 GATEWAY_WALLET=0x0
-GATEWAY_DOMAIN=https://dev.gateway.erebrus.io/
-GATEWAY_PEERID=/ip4/35.239.34.5/tcp/9001/p2p/12D3KooWH6NjtNwQ3QRELdjqTce38marCzXkA7hHxnuVmJwc8oJA
+GATEWAY_DOMAIN=https://gateway.erebrus.io/
+GATEWAY_PEERID=/ip4/52.14.92.177/tcp/9001/p2p/12D3KooWJSMKigKLzehhhmppTjX7iQprA7558uU52hqvKqyjbELf
 
 #Wireguard Specifications
 WG_CONF_DIR=
@@ -46,3 +46,12 @@ WG_POST_DOWN=iptables -D FORWARD -i %i -j ACCEPT; iptables -D FORWARD -o %i -j A
 SERVICE_CONF_DIR=./erebrus
 CADDY_CONF_DIR=/etc/caddy
 CADDY_INTERFACE_NAME=Caddyfile
+
+# AI Agent Specifications
+EREBRUS_DOMAIN=
+DOCKER_IMAGE_AGENT="ghcr.io/netsepio/cyrene"
+
+#Peaq Integration
+CONTRACT_ADDRESS=0x291eC3328b56d5ECebdF993c3712a400Cb7569c3
+RPC_URL=https://evm.peaq.network
+NODE_ACCESS=
