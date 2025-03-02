@@ -4,6 +4,7 @@ go 1.23.4
 
 require (
 	aidanwoods.dev/go-paseto v1.5.3
+	github.com/blocto/solana-go-sdk v1.30.0
 	github.com/danielkov/gin-helmet v0.0.0-20171108135313-1387e224435e
 	github.com/docker/docker v27.5.0+incompatible
 	github.com/ethereum/go-ethereum v1.15.0
@@ -36,6 +37,7 @@ require (
 require (
 	aidanwoods.dev/go-result v0.1.0 // indirect
 	cloud.google.com/go/compute/metadata v0.5.2 // indirect
+	filippo.io/edwards25519 v1.0.0-rc.1 // indirect
 	github.com/FactomProject/basen v0.0.0-20150613233007-fe3947df716e // indirect
 	github.com/FactomProject/btcutilecc v0.0.0-20130527213604-d3a63a5752ec // indirect
 	github.com/Microsoft/go-winio v0.6.2 // indirect
