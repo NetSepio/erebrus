@@ -283,6 +283,6 @@ func GenerateWalletAddressAptos(mnemonic string) {
 
 func GetCodeHashAndVersion() (string, string) {
 	CodeHash = "4f5610aae32077a92ac570eeff5f3a404052fd94"
-	Version = "1.1.1-alpha"
+	Version = "1.1.1"
 	return CodeHash, Version
 }
