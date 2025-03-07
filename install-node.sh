@@ -355,7 +355,7 @@ configure_node() {
     # Prompt for Config Type
     printf "Select a configuration type from list below:\n"
     PS3="Select a config type (e.g. 1): "
-    options=("MINI" "STANDARD" "HPC")
+    options=("MINI" "STANDARD" "HPC" "MICRO")
     select CONFIG in "${options[@]}"; do
         if [ -n "$CONFIG" ]; then
             break
@@ -415,12 +415,14 @@ configure_node() {
         exit 1
     fi
 
-    # Validate and test IP reachability
-    test_ip_reachability "$HOST_IP"
-    if [ $? -eq 1 ]; then
-        status_stage2="\e[31mFailed\e[0m\n"
-        error_stage2="\e[31mFailed to configure Erebrus node.\e[0m\n"
-        return 1
+   # Validate and test IP reachability only if CONFIG is not MICRO
+    if [ "$CONFIG" != "MICRO" ]; then
+        test_ip_reachability "$HOST_IP"
+        if [ $? -eq 1 ]; then
+            status_stage2="\e[31mFailed\e[0m\n"
+            error_stage2="\e[31mFailed to configure Erebrus node.\e[0m\n"
+            return 1
+        fi
     else
     # Write environment variables to .env file
     sudo tee ${INSTALL_DIR}/.env  <<EOL
