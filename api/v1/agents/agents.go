@@ -127,6 +127,9 @@ func getAgent(c *gin.Context) {
 					"clients": agent.Clients,
 					"domain":  agent.Domain,
 					"status":  agent.Status,
+					"avatar_img": agent.AvatarImg,
+					"cover_img": agent.CoverImg,
+					"voice_model": agent.VoiceModel,
 				},
 			})
 			return
@@ -149,6 +152,11 @@ func getAvailablePort() (int, error) {
 // POST /agents
 func addAgent(c *gin.Context) {
 	log.Println("Received request to add an agent.")
+
+	// Get additional fields from form data
+	avatarImg := c.PostForm("avatar_img")
+	coverImg := c.PostForm("cover_img")
+	voiceModel := c.PostForm("voice_model")
 
 	// Retrieve the file from the request
 	file, err := c.FormFile("character_file")
@@ -324,14 +332,20 @@ func addAgent(c *gin.Context) {
 	createdAgent.Port = exposedPort
 	createdAgent.Domain = domain
 	createdAgent.Status = "active"
+	createdAgent.AvatarImg = avatarImg
+	createdAgent.CoverImg = coverImg
+	createdAgent.VoiceModel = voiceModel
 
 	saveAgents(*createdAgent)
 
 	response := model.AgentResponse{
-		ID:      createdAgent.ID,
-		Name:    createdAgent.Name,
-		Clients: createdAgent.Clients,
-		Status:  createdAgent.Status,
+		ID:         createdAgent.ID,
+		Name:       createdAgent.Name,
+		Clients:    createdAgent.Clients,
+		Status:     createdAgent.Status,
+		AvatarImg:  createdAgent.AvatarImg,
+		CoverImg:   createdAgent.CoverImg,
+		VoiceModel: createdAgent.VoiceModel,
 	}
 
 	log.Printf("Agent created successfully: %+v", response)

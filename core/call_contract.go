@@ -538,25 +538,88 @@ func RegisterNodeOnPeaq() error {
 			fmt.Printf("\n%s%s%s\n", colorYellow, "═══════════ Node Status ═══════════", colorReset)
 			fmt.Printf("%s• Status:%s Already Registered\n", colorCyan, colorReset)
 			fmt.Printf("%s• Node ID:%s %s\n", colorCyan, colorReset, nodeID)
+			
+			// Get node details for already registered node
+			node, err := instance.Nodes(nil, nodeID)
+			if err != nil {
+				return fmt.Errorf("Failed to get node details: %v", err)
+			}
+
+			tokenOwner, err := instance.OwnerOf(nil, node.TokenId)
+			if err != nil {
+				return fmt.Errorf("Failed to get token owner: %v", err)
+			}
+
+			fmt.Printf("%s• Token ID:%s %s\n", colorCyan, colorReset, node.TokenId.String())
+			fmt.Printf("%s• Token Owner:%s %s\n", colorCyan, colorReset, tokenOwner.Hex())
 			fmt.Printf("%s%s%s\n\n", colorYellow, "═════════════════════════════════", colorReset)
+
+			// Start periodic checkpoints for already registered node
+			log.WithFields(log.Fields{
+				"nodeID": nodeID,
+				"interval": "15 minutes",
+			}).Info("Starting periodic checkpoint creation for existing node")
+
+			CreatePeriodicCheckpoints(nodeID, client, instance, auth)
 		} else {
 			return fmt.Errorf("Failed to register node: %v", err)
 		}
 	} else {
 		fmt.Printf("\n%s%s%s\n", colorYellow, "═══════════ Node Registration ═══════════", colorReset)
-		fmt.Printf("%s• Status:%s Registration Successful\n", colorCyan, colorReset)
+		fmt.Printf("%s• Status:%s Registration Initiated\n", colorCyan, colorReset)
 		fmt.Printf("%s• Node ID:%s %s\n", colorCyan, colorReset, nodeID)
 		fmt.Printf("%s• Transaction:%s %s\n", colorCyan, colorReset, tx.Hash().Hex())
 		fmt.Printf("%s%s%s\n\n", colorYellow, "══════════════════════════════════════", colorReset)
+
+		// Wait for transaction to be mined
+		receipt, err := bind.WaitMined(context.Background(), client, tx)
+		if err != nil {
+			return fmt.Errorf("Failed to wait for registration transaction: %v", err)
+		}
+		if receipt.Status == 0 {
+			return fmt.Errorf("Registration transaction failed")
+		}
+
+		// Wait for node to be fully registered by checking token ownership
+		fmt.Printf("%s• Waiting for registration to complete...%s\n", colorCyan, colorReset)
+		maxRetries := 30 // Maximum number of retries
+		retryDelay := 10 * time.Second // Delay between retries
+
+		for i := 0; i < maxRetries; i++ {
+			// Get node details to get tokenId
+			node, err := instance.Nodes(nil, nodeID)
+			if err != nil {
+				time.Sleep(retryDelay)
+				continue
+			}
+
+			// Try to get token owner
+			tokenOwner, err := instance.OwnerOf(nil, node.TokenId)
+			if err != nil {
+				time.Sleep(retryDelay)
+				continue
+			}
+
+			if tokenOwner != (common.Address{}) {
+				fmt.Printf("%s• Registration Complete%s\n", colorGreen, colorReset)
+				fmt.Printf("%s• Token ID:%s %s\n", colorCyan, colorReset, node.TokenId.String())
+				fmt.Printf("%s• Token Owner:%s %s\n", colorCyan, colorReset, tokenOwner.Hex())
+				
+				// Start periodic checkpoints only after confirmed registration
+				log.WithFields(log.Fields{
+					"nodeID": nodeID,
+					"interval": "15 minutes",
+				}).Info("Starting periodic checkpoint creation")
+
+				CreatePeriodicCheckpoints(nodeID, client, instance, auth)
+				return nil
+			}
+
+			time.Sleep(retryDelay)
+		}
+
+		return fmt.Errorf("Timeout waiting for node registration to complete")
 	}
-
-	// Start periodic checkpoints regardless of whether the node was just registered or already existed
-	log.WithFields(log.Fields{
-		"nodeID": nodeID,
-		"interval": "1 minute",
-	}).Info("Starting periodic checkpoint creation")
-
-	CreatePeriodicCheckpoints(nodeID, client, instance, auth)
 
 	return nil
 }
