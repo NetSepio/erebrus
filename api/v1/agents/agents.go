@@ -130,6 +130,7 @@ func getAgent(c *gin.Context) {
 					"avatar_img": agent.AvatarImg,
 					"cover_img": agent.CoverImg,
 					"voice_model": agent.VoiceModel,
+					"organization": agent.Organization,
 				},
 			})
 			return
@@ -157,6 +158,7 @@ func addAgent(c *gin.Context) {
 	avatarImg := c.PostForm("avatar_img")
 	coverImg := c.PostForm("cover_img")
 	voiceModel := c.PostForm("voice_model")
+	organization := c.PostForm("organization")
 
 	// Retrieve the file from the request
 	file, err := c.FormFile("character_file")
@@ -335,7 +337,7 @@ func addAgent(c *gin.Context) {
 	createdAgent.AvatarImg = avatarImg
 	createdAgent.CoverImg = coverImg
 	createdAgent.VoiceModel = voiceModel
-
+	createdAgent.Organization = organization
 	saveAgents(*createdAgent)
 
 	response := model.AgentResponse{
@@ -346,6 +348,7 @@ func addAgent(c *gin.Context) {
 		AvatarImg:  createdAgent.AvatarImg,
 		CoverImg:   createdAgent.CoverImg,
 		VoiceModel: createdAgent.VoiceModel,
+		Organization: createdAgent.Organization,
 	}
 
 	log.Printf("Agent created successfully: %+v", response)
