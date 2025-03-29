@@ -34,6 +34,7 @@ import (
 	"github.com/shirou/gopsutil/v3/disk"
 	"crypto/ecdsa"
 	"context"
+	"golang.org/x/crypto/sha3" 
 )
 
 const (
@@ -175,7 +176,7 @@ func GeneratePeaqDID() (string, error) {
 	}
 
 	peerID := libp2pHost.ID().String()
-	return fmt.Sprintf("did:netsepio:%s", peerID), nil
+	return peerID, nil
 }
 
 func init() {
@@ -236,7 +237,7 @@ func uploadToIPFS(data string) (string, error) {
 
 	w.Close()
 
-	req, err := http.NewRequest("POST", "https://ipfs.erebrus.io/api/v0/add", &b)
+	req, err := http.NewRequest("POST", "https://ipfs.erebrus.io/api/v0/add?cid-version=1", &b) 
 	if err != nil {
 		return "", fmt.Errorf("error creating request: %v", err)
 	}
@@ -414,8 +415,9 @@ func generateNFTMetadata(nodeName string, nodeSpec string, nodeConfig string) (s
 	return string(nftMetadataJSON), nil
 }
 
-func RegisterNodeOnPeaq() error {
-	if strings.ToLower(os.Getenv("CHAIN_NAME")) != "peaq" {
+func RegisterNodeOnChain() error {
+	chainName := strings.ToLower(os.Getenv("CHAIN_NAME"))
+	if chainName != "peaq" && chainName != "monad" {
 		return nil
 	}
 
@@ -435,7 +437,7 @@ func RegisterNodeOnPeaq() error {
 
 	nodeID, err := GeneratePeaqDID()
 	if err != nil {
-		return fmt.Errorf("%s❌ Failed to generate Peaq DID: %v%s", colorRed, err, colorReset)
+		return fmt.Errorf("%s❌ Failed to generate DID: %v%s", colorRed, err, colorReset)
 	}
 
 	// Get wallet details from mnemonic
@@ -454,6 +456,8 @@ func RegisterNodeOnPeaq() error {
 	fmt.Printf("%s• Wallet Address:%s %s\n", colorCyan, colorReset, ownerAddress)
 	fmt.Printf("%s%s%s\n\n", colorYellow, "══════════════════════════════════", colorReset)
 
+	var nodeDID string
+	nodeDID = fmt.Sprintf("did:%s:%s", "netsepio", nodeID)
 
 	// Get chain ID from RPC URL
 	chainID, err := getChainID(rpcURL)
@@ -517,15 +521,36 @@ func RegisterNodeOnPeaq() error {
 		return fmt.Errorf("failed to parse IP info: %v", err)
 	}
 	
-	// Register the node
+	// Hash the IP address using SHA-3
+	ipHash := sha3.Sum256([]byte(ipInfo.IP))
+	hashedIP := fmt.Sprintf("0x%x", ipHash)
+	
+	// Print all parameters being passed to RegisterNode
+	fmt.Printf("\n%s%s%s\n", colorYellow, "═══════════ RegisterNode Parameters ═══════════", colorReset)
+	fmt.Printf("%s• Node Address:%s %s\n", colorCyan, colorReset, nodeAddress.Hex())
+	fmt.Printf("%s• Node ID:%s %s\n", colorCyan, colorReset, nodeID)
+	fmt.Printf("%s• Node DID:%s %s\n", colorCyan, colorReset, nodeDID)
+	fmt.Printf("%s• Node Name:%s %s\n", colorCyan, colorReset, nodeName)
+	fmt.Printf("%s• Node Spec:%s %s\n", colorCyan, colorReset, nodeSpec)
+	fmt.Printf("%s• Node Config:%s %s\n", colorCyan, colorReset, nodeConfig)
+	fmt.Printf("%s• IP Address (Original):%s %s\n", colorCyan, colorReset, ipInfo.IP)
+	fmt.Printf("%s• IP Address (Hashed):%s %s\n", colorCyan, colorReset, hashedIP)
+	fmt.Printf("%s• Region:%s %s\n", colorCyan, colorReset, ipInfo.Region)
+	fmt.Printf("%s• Location:%s %s\n", colorCyan, colorReset, ipInfo.Loc)
+	fmt.Printf("%s• Metadata:%s %s\n", colorCyan, colorReset, metadata)
+	fmt.Printf("%s• NFT Metadata:%s %s\n", colorCyan, colorReset, nftMetadata)
+	fmt.Printf("%s• Owner:%s %s\n", colorCyan, colorReset, owner.Hex())
+	fmt.Printf("%s%s%s\n\n", colorYellow, "══════════════════════════════════════════", colorReset)
+
 	tx, err := instance.RegisterNode(
 		auth,
 		nodeAddress,    // _addr
 		nodeID,         // id
+		nodeDID,        // did (new parameter)
 		nodeName,       // name
 		nodeSpec,       // spec
 		nodeConfig,     // config
-		ipInfo.IP,      // ipAddress
+		hashedIP,       // ipAddress (now using hashed IP)
 		ipInfo.Region,  // region
 		ipInfo.Loc,     // location (coordinates)
 		metadata,       // metadata
@@ -538,6 +563,7 @@ func RegisterNodeOnPeaq() error {
 			fmt.Printf("\n%s%s%s\n", colorYellow, "═══════════ Node Status ═══════════", colorReset)
 			fmt.Printf("%s• Status:%s Already Registered\n", colorCyan, colorReset)
 			fmt.Printf("%s• Node ID:%s %s\n", colorCyan, colorReset, nodeID)
+			fmt.Printf("%s• Node DID:%s %s\n", colorCyan, colorReset, nodeDID)
 			
 			// Get node details for already registered node
 			node, err := instance.Nodes(nil, nodeID)
@@ -568,6 +594,7 @@ func RegisterNodeOnPeaq() error {
 		fmt.Printf("\n%s%s%s\n", colorYellow, "═══════════ Node Registration ═══════════", colorReset)
 		fmt.Printf("%s• Status:%s Registration Initiated\n", colorCyan, colorReset)
 		fmt.Printf("%s• Node ID:%s %s\n", colorCyan, colorReset, nodeID)
+		fmt.Printf("%s• Node DID:%s %s\n", colorCyan, colorReset, nodeDID)
 		fmt.Printf("%s• Transaction:%s %s\n", colorCyan, colorReset, tx.Hash().Hex())
 		fmt.Printf("%s%s%s\n\n", colorYellow, "══════════════════════════════════════", colorReset)
 

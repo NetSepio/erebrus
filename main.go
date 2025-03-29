@@ -144,9 +144,9 @@ func main() {
 
 	core.LoadNodeDetails()
 
-	// Register node on Peaq if configured
-	if err := core.RegisterNodeOnPeaq(); err != nil {
-		log.WithFields(util.StandardFields).Errorf("Failed to register node on Peaq: %v", err)
+	// Register node on Peaq  or Monad if configured
+	if err := core.RegisterNodeOnChain(); err != nil {
+		log.WithFields(util.StandardFields).Errorf("Failed to register node on %s: %v", os.Getenv("CHAIN_NAME"), err)
 	}
 
 	go p2p.Init()
