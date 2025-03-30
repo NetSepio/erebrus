@@ -646,5 +646,46 @@ install_dependencies() {
     echo -e "\e[32mAll dependencies installed successfully.\e[0m"
 }
 
+download_and_run_binary_file() {
+    REPO="NetSepio/erebrus"
+    BINARY_NAME="erebrus"
+    DOWNLOAD_DIR="$(pwd)"
+    ERROR_LOG="$DOWNLOAD_DIR/erebrus_error.log"
+
+    echo "Checking and installing curl..."
+    apt-get update && apt-get install -y curl
+
+    echo "Fetching latest release info..."
+    LATEST_TAG=$(curl -s https://api.github.com/repos/$REPO/releases/latest | grep '"tag_name":' | sed -E 's/.*"([^"]+)".*/\1/')
+
+    if [[ -z "$LATEST_TAG" ]]; then
+        echo "Failed to fetch the latest release tag." | tee "$ERROR_LOG"
+        exit 1
+    fi
+
+    DOWNLOAD_URL="https://github.com/$REPO/releases/download/$LATEST_TAG/$BINARY_NAME"
+
+    echo "Downloading $BINARY_NAME from $DOWNLOAD_URL..."
+    curl -L -o "$DOWNLOAD_DIR/$BINARY_NAME" "$DOWNLOAD_URL"
+
+    if [[ $? -ne 0 ]]; then
+        echo "Download failed!" | tee "$ERROR_LOG"
+        exit 1
+    fi
+
+    chmod +x "$DOWNLOAD_DIR/$BINARY_NAME"
+
+    echo "$BINARY_NAME has been installed successfully in $DOWNLOAD_DIR!"
+
+    # Run the binary and capture errors if any
+    echo "Running $BINARY_NAME..."
+    "$DOWNLOAD_DIR/$BINARY_NAME" 2> "$ERROR_LOG"
+
+    if [[ $? -ne 0 ]]; then
+        echo "Error encountered while running $BINARY_NAME. Check $ERROR_LOG for details."
+        exit 1
+    fi
+}
+
 # Run the function to check and create folders after retrieving the environment variables
 check_and_create_folders
