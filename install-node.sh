@@ -337,7 +337,6 @@ configure_node() {
     done
 
     DEFAULT_HOST_IP=$(get_public_ip)
-    DEFAULT_DOMAIN="http://${DEFAULT_HOST_IP}:9080"
 
     # Prompt for Public IP
     printf "\nAutomatically detected public IP: ${DEFAULT_HOST_IP}\n"
@@ -348,6 +347,8 @@ configure_node() {
     else
         HOST_IP=${DEFAULT_HOST_IP}
     fi
+
+    DEFAULT_DOMAIN="http://${HOST_IP}:9080"
 
     # Prompt for Node Details
     read -p "Enter your node name: " NODE_NAME
