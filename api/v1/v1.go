@@ -3,12 +3,12 @@ package v1
 import (
 	"os"
 
+	"github.com/NetSepio/erebrus/api/v1/agents"
 	"github.com/NetSepio/erebrus/api/v1/authenticate"
 	"github.com/NetSepio/erebrus/api/v1/client"
 	"github.com/NetSepio/erebrus/api/v1/server"
 	caddy "github.com/NetSepio/erebrus/api/v1/service"
 	"github.com/NetSepio/erebrus/api/v1/status"
-	"github.com/NetSepio/erebrus/api/v1/agents"
 
 	"github.com/gin-gonic/gin"
 )
@@ -22,7 +22,7 @@ func ApplyRoutes(r *gin.RouterGroup) {
 		status.ApplyRoutes(v1)
 		authenticate.ApplyRoutes(v1)
 		nodeConfig := os.Getenv("NODE_CONFIG")
-		if nodeConfig == "STANDARD" || nodeConfig == "HPC" {
+		if nodeConfig == "NEXUS" {
 			caddy.ApplyRoutes(v1)
 			agents.ApplyRoutes(v1)
 		}

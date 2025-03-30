@@ -354,16 +354,41 @@ configure_node() {
     read -p "Enter your node name: " NODE_NAME
 
     # Prompt for Config Type
-    printf "Select a configuration type from list below:\n"
+    # printf "Select a configuration type from list below:\n"
+    # PS3="Select a config type (e.g. 1): "
+    # options=("MINI" "STANDARD" "HPC")
+    # select CONFIG in "${options[@]}"; do
+    #     if [ -n "$CONFIG" ]; then
+    #         break
+    #     else
+    #         echo "Invalid choice. Please select a valid config type."
+    #     fi
+    # done
+
+    #!/bin/sh
+
+    printf "Select a configuration type from the list below:\n"
     PS3="Select a config type (e.g. 1): "
-    options=("MINI" "STANDARD" "HPC")
-    select CONFIG in "${options[@]}"; do
-        if [ -n "$CONFIG" ]; then
-            break
-        else
-            echo "Invalid choice. Please select a valid config type."
-        fi
+    options=("ASTRO" "BEACON" "TITAN" "NEXUS" "ZENETH")
+
+    while true; do
+        select CONFIG in "${options[@]}"; do
+            case "$CONFIG" in
+                "ASTRO"|"TITAN")
+                    echo "This configuration will be in upcoming updates. Please choose another option."
+                    break  # Break out of select loop, restart while loop
+                    ;;
+                "BEACON"|"NEXUS"|"ZENETH")
+                    echo "You selected: $CONFIG"
+                    exit 0  # Exit script on valid selection
+                    ;;
+                *)
+                    echo "Invalid choice. Please select a valid config type."
+                    ;;
+            esac
+        done
     done
+
 
     # Prompt for Chain
     printf "Select valid chain from list below:\n"

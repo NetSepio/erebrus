@@ -181,9 +181,9 @@ func MiddlewareForCaddy() gin.HandlerFunc {
 	return func(c *gin.Context) {
 		nodeConfig := os.Getenv("NODE_CONFIG")
 
-		if nodeConfig != "standard" && nodeConfig != "hpc" {
+		if nodeConfig != "NEXUS" {
 			c.JSON(http.StatusBadRequest, gin.H{
-				"error": "Invalid NODE_CONFIG value. It must be 'standard' or 'hpc'.",
+				"error": "Invalid NODE_CONFIG value. It must be 'NEXUS'.",
 			})
 			c.Abort() // Stop further processing of the request
 			return
