@@ -4,8 +4,6 @@ on:
   push:
     branches:
       - node-features # Triggers only on pushes to the node-features branch
-    tags:
-      - 'v*' # Triggers when a new version tag (e.g., v1.0.0) is pushed
 
 jobs:
   build:
@@ -36,6 +34,13 @@ jobs:
     runs-on: ubuntu-latest
 
     steps:
+      - name: Checkout Repository
+        uses: actions/checkout@v4
+
+      - name: Get Commit SHA
+        id: get_sha
+        run: echo "sha=$(git rev-parse --short HEAD)" >> $GITHUB_ENV
+
       - name: Download Artifact
         uses: actions/download-artifact@v4
         with:
@@ -44,6 +49,7 @@ jobs:
       - name: Create GitHub Release
         uses: softprops/action-gh-release@v2
         with:
+          tag_name: ${{ env.sha }}
           files: erebrus
         env:
           GITHUB_TOKEN: ${{ secrets.GHCR_TOKEN }}
