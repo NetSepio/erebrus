@@ -552,7 +552,7 @@ if [ -n "${error_stage1}" ]; then
     printf "%s${error_stage1}"
     exit 1
 else
-    configure_node
+    configure_node 
     if [ -n "${error_stage2}" ]; then
         printf "%s${error_stage2}"
         exit 1
@@ -588,6 +588,37 @@ check_and_create_folders() {
   else
     echo "$EREBRUS_FOLDER already exists."
   fi
+}
+
+install_dependencies() {
+    clear
+    echo -e "\e[1;34mInstalling Wireguard Dependencies...\e[0m"
+
+    # Detect OS
+    if command -v apk > /dev/null; then
+        echo "Installing on Alpine Linux..."
+        apk update && apk add --no-cache bash openresolv bind-tools wireguard-tools gettext inotify-tools iptables
+    elif command -v apt-get > /dev/null; then
+        echo "Installing on Debian-based systems..."
+        apt-get update -qq && apt-get install -y bash resolvconf dnsutils wireguard-tools gettext inotify-tools iptables systemd && apt-get install --reinstall -y systemd
+    elif command -v yum > /dev/null; then
+        echo "Installing on RHEL-based systems..."
+        yum install -y bash openresolv bind-utils wireguard-tools gettext inotify-tools iptables
+    elif command -v pacman > /dev/null; then
+        echo "Installing on Arch-based systems..."
+        pacman -Sy --noconfirm bash openresolv bind-tools wireguard-tools gettext inotify-tools iptables
+    elif command -v dnf > /dev/null; then
+        echo "Installing on Fedora..."
+        dnf install -y bash openresolv bind-utils wireguard-tools gettext inotify-tools iptables
+    elif command -v brew > /dev/null; then
+        echo "Installing on macOS..."
+        brew install bash wireguard-tools gettext coreutils iproute2mac
+    else
+        echo "Unsupported Linux distribution. Exiting."
+        exit 1
+    fi
+
+    echo -e "\e[32mAll dependencies installed successfully.\e[0m"
 }
 
 # Run the function to check and create folders after retrieving the environment variables
