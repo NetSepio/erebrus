@@ -615,7 +615,7 @@ check_and_create_folders() {
   fi
 }
 
-install_dependencies() {
+install_dependencies_wireguard() {
     clear
     echo -e "\e[1;34mInstalling Wireguard Dependencies...\e[0m"
 
