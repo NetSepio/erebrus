@@ -35,6 +35,8 @@ import (
 	"crypto/ecdsa"
 	"context"
 	"golang.org/x/crypto/sha3" 
+	"github.com/ethereum/go-ethereum/accounts/abi"
+	"github.com/ethereum/go-ethereum/core/types"
 )
 
 const (
@@ -378,6 +380,11 @@ func generateNFTMetadata(nodeName string, nodeSpec string, nodeConfig string) (s
 		accessValue = "public"
 	}
 
+	nodeID, err := GeneratePeaqDID()
+	if err != nil {
+		return "", fmt.Errorf("%s❌ Failed to generate node ID for metadata: %v%s", colorRed, err, colorReset)
+	}
+
 	metadata := NFTMetadata{
 		Name: fmt.Sprintf("%s | Erebrus Node", nodeName),
 		Description: "This Soulbound NFT is more than just a token—it's a declaration of digital sovereignty. " +
@@ -387,6 +394,7 @@ func generateNFTMetadata(nodeName string, nodeSpec string, nodeConfig string) (s
 		Image:       "ipfs://bafybeig6unjraufdpiwnzrqudl5vy3ozep2pzc3hwiiqd4lgcjfhaockpm",
 		ExternalURL: "https://erebrus.io",
 		Attributes: []NFTAttribute{
+			{TraitType: "id", Value: nodeID},
 			{TraitType: "name", Value: nodeName},
 			{TraitType: "spec", Value: "erebrus"},
 			{TraitType: "config", Value: configValue},
@@ -413,6 +421,145 @@ func generateNFTMetadata(nodeName string, nodeSpec string, nodeConfig string) (s
 	fmt.Printf("%s%s%s\n\n", colorYellow, "══════════════════════════════════", colorReset)
 
 	return string(nftMetadataJSON), nil
+}
+
+// AddDIDAttribute adds DID attributes to the PEAQ DID registry contract
+func AddDIDAttribute(nodeID string, systemMetadata string, nftMetadata string, privateKey *ecdsa.PrivateKey) error {
+	chainName := strings.ToLower(os.Getenv("CHAIN_NAME"))
+	if chainName != "peaq" {
+		return nil
+	}
+
+	didRegistryContractAddress := "0x0000000000000000000000000000000000000800"
+	
+	// Connect to the Ethereum client
+	rpcURL := os.Getenv("RPC_URL")
+	client, err := ethclient.Dial(rpcURL)
+	if err != nil {
+		return fmt.Errorf("Failed to connect to the Ethereum client: %v", err)
+	}
+
+	chainID, err := client.NetworkID(context.Background())
+	if err != nil {
+		return fmt.Errorf("Failed to get network ID: %v", err)
+	}
+
+	// Get the wallet address from the private key
+	publicKey := privateKey.Public().(*ecdsa.PublicKey)
+	fromAddress := ethcrypto.PubkeyToAddress(*publicKey)
+
+	// Fetch the correct nonce
+	nonce, err := client.PendingNonceAt(context.Background(), fromAddress)
+	if err != nil {
+		return fmt.Errorf("Failed to get nonce: %v", err)
+	}
+
+	gasPrice, err := client.SuggestGasPrice(context.Background())
+	if err != nil {
+		return fmt.Errorf("Failed to get gas price: %v", err)
+	}
+
+	// Get IP info from ipinfo.io for creating IP info IPFS hash
+	resp, err := http.Get("https://ipinfo.io/json")
+	if err != nil {
+		return fmt.Errorf("Failed to get IP info: %v", err)
+	}
+	defer resp.Body.Close()
+
+	body, err := io.ReadAll(resp.Body)
+	if err != nil {
+		return fmt.Errorf("Failed to read IP info response: %v", err)
+	}
+
+	var ipInfo PeaqIPInfo
+	if err := json.Unmarshal(body, &ipInfo); err != nil {
+		return fmt.Errorf("Failed to parse IP info: %v", err)
+	}
+	
+	// Hash the IP address using SHA-3
+	ipHash := sha3.Sum256([]byte(ipInfo.IP))
+	hashedIP := fmt.Sprintf("0x%x", ipHash)
+	
+	ipInfoData := map[string]interface{}{
+		"ip": hashedIP,
+		"region": ipInfo.Region,
+		"location": ipInfo.Loc,
+		"country": ipInfo.Country,
+		"city": ipInfo.City,
+	}
+	
+	ipInfoJSON, err := json.Marshal(ipInfoData)
+	if err != nil {
+		return fmt.Errorf("Failed to marshal IP info: %v", err)
+	}
+	
+	fmt.Printf("\n%s%s%s\n", colorYellow, "====================================", colorReset)
+	fmt.Printf("%sUploading IP Info to IPFS:%s\n", colorCyan, colorReset)
+	ipInfoIPFS, err := uploadToIPFS(string(ipInfoJSON))
+	if err != nil {
+		return fmt.Errorf("Failed to upload IP info to IPFS: %v", err)
+	}
+
+	// Extract CID from ipfs:// URL format
+	systemMetadataCID := strings.TrimPrefix(systemMetadata, "ipfs://")
+	nftMetadataCID := strings.TrimPrefix(nftMetadata, "ipfs://")
+	ipInfoCID := strings.TrimPrefix(ipInfoIPFS, "ipfs://")
+
+	// Create the DID in the format did:peaq:{nodeID}#netsepio
+	didAccount := fromAddress
+	name := fmt.Sprintf("did:peaq:%s#netsepio", fromAddress.Hex())
+
+	valueObject := []map[string]string{
+		{"ID": "#node", "Type": "nodeInfo", "ServiceEndpoint": fmt.Sprintf("ipfs://%s", nftMetadataCID)},
+		{"ID": "#system", "Type": "systemInfo", "ServiceEndpoint": fmt.Sprintf("ipfs://%s", systemMetadataCID)},
+		{"ID": "#ip", "Type": "ipInfo", "ServiceEndpoint": fmt.Sprintf("ipfs://%s", ipInfoCID)},
+	}
+
+	valueJSON, err := json.Marshal(valueObject)
+	if err != nil {
+		return fmt.Errorf("Failed to encode JSON: %v", err)
+	}
+
+	// Set validity for 1 year (31536000 seconds)
+	validityFor := uint32(31536000)
+
+	parsedABI, err := abi.JSON(strings.NewReader(`[ { "name": "addAttribute", "type": "function", "inputs": [ { "name": "did_account", "type": "address" }, { "name": "name", "type": "bytes" }, { "name": "value", "type": "bytes" }, { "name": "validity_for", "type": "uint32" } ] } ]`))
+	if err != nil {
+		return fmt.Errorf("Failed to parse ABI: %v", err)
+	}
+
+	data, err := parsedABI.Pack("addAttribute", didAccount, []byte(name), valueJSON, validityFor)
+	if err != nil {
+		return fmt.Errorf("Failed to encode transaction data: %v", err)
+	}
+
+	tx := types.NewTransaction(
+		nonce, 
+		common.HexToAddress(didRegistryContractAddress), 
+		big.NewInt(0), 
+		200000, // Gas limit
+		gasPrice, 
+		data,
+	)
+	
+	signer := types.LatestSignerForChainID(chainID)
+	signedTx, err := types.SignTx(tx, signer, privateKey)
+	if err != nil {
+		return fmt.Errorf("Failed to sign transaction: %v", err)
+	}
+
+	err = client.SendTransaction(context.Background(), signedTx)
+	if err != nil {
+		return fmt.Errorf("Failed to send transaction: %v", err)
+	}
+
+	fmt.Printf("\n%s%s%s\n", colorYellow, "═══════════ DID Attribute Added ═══════════", colorReset)
+	fmt.Printf("%s• DID Account:%s %s\n", colorCyan, colorReset, didAccount.Hex())
+	fmt.Printf("%s• DID Name:%s %s\n", colorCyan, colorReset, name)
+	fmt.Printf("%s• Transaction Hash:%s %s\n", colorCyan, colorReset, signedTx.Hash().Hex())
+	fmt.Printf("%s%s%s\n\n", colorYellow, "══════════════════════════════════════", colorReset)
+
+	return nil
 }
 
 func RegisterNodeOnChain() error {
@@ -632,6 +779,12 @@ func RegisterNodeOnChain() error {
 				fmt.Printf("%s• Token ID:%s %s\n", colorCyan, colorReset, node.TokenId.String())
 				fmt.Printf("%s• Token Owner:%s %s\n", colorCyan, colorReset, tokenOwner.Hex())
 				
+				// Add DID attributes only after successful registration of a new node
+				err = AddDIDAttribute(nodeID, metadata, nftMetadata, privateKey)
+				if err != nil {
+					log.WithError(err).Warn("Failed to add DID attributes")
+				}
+				
 				// Start periodic checkpoints only after confirmed registration
 				log.WithFields(log.Fields{
 					"nodeID": nodeID,
@@ -652,12 +805,27 @@ func RegisterNodeOnChain() error {
 }
 
 func CreatePeriodicCheckpoints(nodeID string, client *ethclient.Client, instance *contract.Contract, auth *bind.TransactOpts) {
-	ticker := time.NewTicker(15 * time.Minute)
+	checkpointIntervalStr := os.Getenv("CHECKPOINT_INTERVAL_MINUTES")
+	checkpointInterval := 15 * time.Minute // Default: 15 minutes
+	
+	if checkpointIntervalStr != "" {
+		intervalMinutes, err := strconv.Atoi(checkpointIntervalStr)
+		if err == nil && intervalMinutes > 0 {
+			checkpointInterval = time.Duration(intervalMinutes) * time.Minute
+		} else {
+			log.WithFields(log.Fields{
+				"providedValue": checkpointIntervalStr,
+				"defaultValue": "15 minutes",
+			}).Warn("Invalid CHECKPOINT_INTERVAL_MINUTES, using default")
+		}
+	}
+	
+	ticker := time.NewTicker(checkpointInterval)
 	
 	// Log the start of checkpoint creation
 	log.WithFields(log.Fields{
 		"nodeID": nodeID,
-		"interval": "15 minutes",
+		"interval": fmt.Sprintf("%d minutes", int(checkpointInterval.Minutes())),
 	}).Info("Periodic checkpoint creation initialized")
 
 	go func() {
