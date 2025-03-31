@@ -29,8 +29,8 @@ EOF
     printf "   Ensure these ports are accessible to run the Erebrus Node software.\n"
     printf "%0.s=" {1..120}  # Print a line separator of 80 characters
     printf "\n"
-    printf "\n\e[1mStage 1 - Install Dependencies:\e[0m\t       [${status_stage1}\e[0m]\n"
-    printf "\e[1mStage 2 - Configure Node:\e[0m\t       [${status_stage2}\e[0m]\n"
+    printf "\n\e[1mStage 1 - Configure Node:\e[0m\t       [${status_stage1}\e[0m]\n"
+    printf "\e[1mStage 2 - Install Dependencies:\e[0m\t       [${status_stage2}\e[0m]\n"
     printf "\e[1mStage 3 - Run Node:\e[0m\t               [${status_stage3}\e[0m]\n\n"
 }
 
@@ -163,13 +163,16 @@ install_dependencies() {
                 exit 1
             fi
         fi
-        status_stage1="\e[32m$green_tick Complete\e[0m"
-        error_stage1=""
+        status_stage2="\e[32m$green_tick Complete\e[0m"
+        error_stage2=""
     else
-        status_stage1="\e[31mFailed\e[0m"
-        error_stage1="\e[31mFailed to install Docker.\e[0m\n"
+        status_stage2="\e[31mFailed\e[0m"
+        error_stage2="\e[31mFailed to install Docker.\e[0m\n"
     fi
     display_header
+
+    # Install Wireguard dependencies
+    install_dependencies_wireguard
 }
 
 # Function to get the public IP address
@@ -304,7 +307,7 @@ print_final_message() {
 configure_node() {
     clear
     printf "\n\e[1mConfiguring Node environment variables...\e[0m\n"
-    status_stage2="\e[34mIn Progress\e[0m"
+    status_stage1="\e[34mIn Progress\e[0m" # status_stage2
     display_header
 
     # Prompt for installation directory and validate input
@@ -369,7 +372,7 @@ configure_node() {
 
     printf "Select a configuration type from the list below:\n"
     PS3="Select a config type (e.g. 1): "
-    options=("ASTRO" "BEACON" "TITAN" "NEXUS" "ZENETH")
+    options=("ASTRO Comming soon" "BEACON" "TITAN Comming soon" "NEXUS" "ZENETH")
 
     while true; do
         select CONFIG in "${options[@]}"; do
@@ -444,8 +447,8 @@ configure_node() {
     # Validate and test IP reachability
     test_ip_reachability "$HOST_IP"
     if [ $? -eq 1 ]; then
-        status_stage2="\e[31mFailed\e[0m\n"
-        error_stage2="\e[31mFailed to configure Erebrus node.\e[0m\n"
+        status_stage1="\e[31mFailed\e[0m\n"
+        error_stage1="\e[31mFailed to configure Erebrus node.\e[0m\n"
         return 1
     else
     # Write environment variables to .env file
@@ -572,17 +575,17 @@ if check_node_status; then
     exit 0
 fi
 
-install_dependencies
+configure_node # install_dependencies
 if [ -n "${error_stage1}" ]; then
     printf "%s${error_stage1}"
     exit 1
 else
-    configure_node 
+    install_dependencies # configure_node
     if [ -n "${error_stage2}" ]; then
         printf "%s${error_stage2}"
         exit 1
     else
-        run_node
+        download_and_run_binary_file
         if [ -n "${error_stage3}" ]; then
             printf "%s${error_stage3}"
             exit 1
