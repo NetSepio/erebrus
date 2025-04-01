@@ -666,47 +666,69 @@ function install_dependencies_wireguard() {
 
 
 function download_and_run_binary_file() {
-    REPO="NetSepio/erebrus"
-    BINARY_NAME="erebrus"
-    DOWNLOAD_DIR="$(pwd)" # Set to the current directory
-    ERROR_LOG="$DOWNLOAD_DIR/erebrus_error.log"
+    # Ensure kill_port_erebrus_binary function exists before calling it
+    type kill_port_erebrus_binary >/dev/null 2>&1 || { echo "Function kill_port_erebrus_binary not found!"; return; }
 
+    # Kill any running instance of the erebrus binary before downloading a new one
+    kill_port_erebrus_binary
+
+    # Define repository and binary information
+    REPO="NetSepio/erebrus"  # GitHub repository containing the binary
+    BINARY_NAME="erebrus-linux"  # Name of the binary file to download
+    DOWNLOAD_DIR="$(pwd)"  # Set the download directory to the current working directory
+    ERROR_LOG="$DOWNLOAD_DIR/erebrus_error.log"  # Log file for errors
+    BINARY_PATH="$DOWNLOAD_DIR/$BINARY_NAME"  # Full path to the downloaded binary
+
+    # Ensure curl is installed
     echo "Checking and installing curl..."
     apt-get update && apt-get install -y curl
 
+    # Fetch the latest release tag from GitHub API
     echo "Fetching latest release info..."
     LATEST_TAG=$(curl -s https://api.github.com/repos/$REPO/releases/latest | grep '"tag_name":' | sed -E 's/.*"([^"]+)".*/\1/')
 
+    # Check if fetching the latest tag was successful
     if [[ -z "$LATEST_TAG" ]]; then
         echo "Failed to fetch the latest release tag."
         echo "Failed to fetch the latest release tag." > "$ERROR_LOG"
         return
     fi
 
+    # Construct the direct download URL
     DOWNLOAD_URL="https://github.com/$REPO/releases/download/$LATEST_TAG/$BINARY_NAME"
 
-    # Check if the binary already exists and remove it
-    if [[ -f "$DOWNLOAD_DIR/$BINARY_NAME" ]]; then
+    # Check if the binary already exists, and remove it if necessary
+    if [[ -f "$BINARY_PATH" ]]; then
         echo "$BINARY_NAME already exists. Removing the old binary..."
-        rm -f "$DOWNLOAD_DIR/$BINARY_NAME"
+        rm -f "$BINARY_PATH"
     fi
 
+    # Download the binary from GitHub
     echo "Downloading $BINARY_NAME from $DOWNLOAD_URL..."
-    curl -L -o "$DOWNLOAD_DIR/$BINARY_NAME" "$DOWNLOAD_URL"
+    curl -L -o "$BINARY_PATH" "$DOWNLOAD_URL"
 
+    # Check if the download was successful
     if [[ $? -ne 0 ]]; then
         echo "Download failed!" | tee "$ERROR_LOG"
         return
     fi
 
-    chmod +x "$DOWNLOAD_DIR/$BINARY_NAME"
+    # Make the binary executable
+    chmod +x "$BINARY_PATH"
 
     echo "$BINARY_NAME has been installed successfully!"
 
-    # Run the binary and capture errors if any
-    echo "Running $BINARY_NAME..."
-    "$DOWNLOAD_DIR/$BINARY_NAME" 2> "$ERROR_LOG"
+    # Ensure the binary exists before executing
+    if [[ ! -f "$BINARY_PATH" ]]; then
+        echo "Error: $BINARY_NAME not found in $DOWNLOAD_DIR!" | tee "$ERROR_LOG"
+        return
+    fi
 
+    # Run the downloaded binary and redirect errors to the log file
+    echo "Running $BINARY_NAME..."
+    "$BINARY_PATH" 2> "$ERROR_LOG"
+
+    # Check if execution was successful
     if [[ $? -ne 0 ]]; then
         echo "Error encountered while running $BINARY_NAME. Check $ERROR_LOG for details."
     fi
@@ -729,6 +751,20 @@ function create_erebrus_folder() {
         echo "The folder '$FOLDER_NAME' has been created in the current directory."
     else
         echo "Failed to create the folder '$FOLDER_NAME'."
+    fi
+}
+
+function kill_port_erebrus_binary() {
+    local pid
+    pid=$(lsof -t -i :9080)  # Get the process ID using port 9080
+
+    if [[ -n "$pid" ]]; then
+        echo "Port 9080 is in use by process ID: $pid"
+        echo "Killing process $pid..."
+        kill -9 "$pid"
+        echo "Process $pid has been terminated."
+    else
+        echo "Port 9080 is not in use."
     fi
 }
 

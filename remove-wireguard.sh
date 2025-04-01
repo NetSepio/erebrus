@@ -53,6 +53,9 @@ remove_wireguard() {
     fi
 
     echo -e "\e[32mWireguard and dependencies have been removed successfully.\e[0m"
+
+    apt autoremove 
+    apt autoclean 
 }
 
 # Execute the function
