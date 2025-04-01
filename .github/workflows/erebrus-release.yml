@@ -21,14 +21,14 @@ jobs:
       - name: Build Binary for Linux
         run: |
           go mod tidy
-          GOOS=linux GOARCH=amd64 CGO_ENABLED=0 go build -o erebrus .
-          chmod +x erebrus  # Ensure the binary is executable
+          GOOS=linux GOARCH=amd64 CGO_ENABLED=0 go build -o erebrus-linux .
+          chmod +x erebrus-linux  # Ensure the binary is executable
 
       - name: Upload Binary as Artifact
         uses: actions/upload-artifact@v4
         with:
-          name: erebrus-binary
-          path: erebrus
+          name: erebrus-linux-artifact
+          path: erebrus-linux
 
   release:
     needs: build
@@ -45,12 +45,12 @@ jobs:
       - name: Download Artifact
         uses: actions/download-artifact@v4
         with:
-          name: erebrus-binary
+          name: erebrus-linux-artifact
 
       - name: Create GitHub Release
         uses: softprops/action-gh-release@v2
         with:
           tag_name: ${{ env.sha }}
-          files: erebrus
+          files: erebrus-linux
         env:
           GITHUB_TOKEN: ${{ secrets.GHCR_TOKEN }}
