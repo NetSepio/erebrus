@@ -372,18 +372,19 @@ configure_node() {
 
     printf "Select a configuration type from the list below:\n"
     PS3="Select a config type (e.g. 1): "
-    options=("ASTRO Comming soon" "BEACON" "TITAN Comming soon" "NEXUS" "ZENETH")
+    options=("ASTRO - Comming soon" "BEACON" "TITAN - Comming soon" "NEXUS" "ZENETH")
 
     while true; do
-        select CONFIG in "${options[@]}"; do
-            case "$CONFIG" in
+        select choice in "${options[@]}"; do
+            case "$choice" in
                 "ASTRO"|"TITAN")
                     echo "This configuration will be in upcoming updates. Please choose another option."
-                    break  # Break out of select loop, restart while loop
+                    break  # Restart the select prompt
                     ;;
                 "BEACON"|"NEXUS"|"ZENETH")
+                    CONFIG="$choice"
                     echo "You selected: $CONFIG"
-                    exit 0  # Exit script on valid selection
+                    break 2  # Exit both select and while loops
                     ;;
                 *)
                     echo "Invalid choice. Please select a valid config type."
@@ -391,6 +392,7 @@ configure_node() {
             esac
         done
     done
+
 
 
     # Prompt for Chain
@@ -618,38 +620,48 @@ check_and_create_folders() {
   fi
 }
 
-install_dependencies_wireguard() {
+function install_dependencies_wireguard() {
     clear
     echo -e "\e[1;34mInstalling Wireguard Dependencies...\e[0m"
+
+    CURRENT_DIR=$(pwd)  # Get the current directory
+    LOG_FILE="$CURRENT_DIR/install_wireguard_error.log"
+    > "$LOG_FILE"  # Create or clear the log file
 
     # Detect OS
     if command -v apk > /dev/null; then
         echo "Installing on Alpine Linux..."
-        apk update && apk add --no-cache bash openresolv bind-tools wireguard-tools gettext inotify-tools iptables
+        apk update && apk add --no-cache bash openresolv bind-tools wireguard-tools gettext inotify-tools iptables 2>> "$LOG_FILE"
     elif command -v apt-get > /dev/null; then
         echo "Installing on Debian-based systems..."
-        apt-get update -qq && apt-get install -y bash resolvconf dnsutils wireguard-tools gettext inotify-tools iptables systemd && apt-get install --reinstall -y systemd
+        apt-get update -qq && apt-get install -y bash resolvconf dnsutils wireguard-tools gettext inotify-tools iptables systemd 2>> "$LOG_FILE" && apt-get install --reinstall -y systemd 2>> "$LOG_FILE"
     elif command -v yum > /dev/null; then
         echo "Installing on RHEL-based systems..."
-        yum install -y bash openresolv bind-utils wireguard-tools gettext inotify-tools iptables
+        yum install -y bash openresolv bind-utils wireguard-tools gettext inotify-tools iptables 2>> "$LOG_FILE"
     elif command -v pacman > /dev/null; then
         echo "Installing on Arch-based systems..."
-        pacman -Sy --noconfirm bash openresolv bind-tools wireguard-tools gettext inotify-tools iptables
+        pacman -Sy --noconfirm bash openresolv bind-tools wireguard-tools gettext inotify-tools iptables 2>> "$LOG_FILE"
     elif command -v dnf > /dev/null; then
         echo "Installing on Fedora..."
-        dnf install -y bash openresolv bind-utils wireguard-tools gettext inotify-tools iptables
+        dnf install -y bash openresolv bind-utils wireguard-tools gettext inotify-tools iptables 2>> "$LOG_FILE"
     elif command -v brew > /dev/null; then
         echo "Installing on macOS..."
-        brew install bash wireguard-tools gettext coreutils iproute2mac
+        brew install bash wireguard-tools gettext coreutils iproute2mac 2>> "$LOG_FILE"
     else
-        echo "Unsupported Linux distribution. Exiting."
+        echo "Unsupported Linux distribution. Exiting." | tee -a "$LOG_FILE"
         exit 1
     fi
 
-    echo -e "\e[32mAll dependencies installed successfully.\e[0m"
+    if [ -s "$LOG_FILE" ]; then
+        echo -e "\e[31mErrors occurred during installation. Check $LOG_FILE for details.\e[0m"
+    else
+        echo -e "\e[32mAll dependencies installed successfully.\e[0m"
+        rm -f "$LOG_FILE"  # Remove log file if no errors occurred
+    fi
 }
 
-download_and_run_binary_file() {
+
+function download_and_run_binary_file() {
     REPO="NetSepio/erebrus"
     BINARY_NAME="erebrus"
     DOWNLOAD_DIR="$(pwd)" # Set to the current directory
