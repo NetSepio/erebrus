@@ -8,7 +8,6 @@ import (
 	"net/http"
 	"os"
 	"os/exec"
-	"path/filepath"
 	"strings"
 	"time"
 
@@ -32,25 +31,25 @@ func ApplyRoutes(r *gin.RouterGroup) {
 
 var agentsFilePath string
 
-func init() {
-	// Initialize the agentsFilePath during package initialization
-	homeDir, err := os.UserHomeDir()
-	if err != nil {
-		log.Fatalf("Error getting home directory: %v", err)
-	}
-	// Create the "erebrus" folder(SERVICE_CONF_DIR) inside the home directory if it doesn't exist
-	erebrusDir := filepath.Join(homeDir, "erebrus")
-	err = os.MkdirAll(erebrusDir, os.ModePerm)
-	if err != nil {
-		log.Fatalf("Error creating erebrus directory: %v", err)
-	}
+// func init() {
+// 	// Initialize the agentsFilePath during package initialization
+// 	homeDir, err := os.UserHomeDir()
+// 	if err != nil {
+// 		log.Fatalf("Error getting home directory: %v", err)
+// 	}
+// 	// Create the "erebrus" folder(SERVICE_CONF_DIR) inside the home directory if it doesn't exist
+// 	erebrusDir := filepath.Join(homeDir, "erebrus")
+// 	err = os.MkdirAll(erebrusDir, os.ModePerm)
+// 	if err != nil {
+// 		log.Fatalf("Error creating erebrus directory: %v", err)
+// 	}
 
-	// Set the path for agents.json inside the erebrus folder
-	agentsFilePath = filepath.Join(erebrusDir, "agents.json")
+// 	// Set the path for agents.json inside the erebrus folder
+// 	agentsFilePath = filepath.Join(erebrusDir, "agents.json")
 
-	monitorAndRecoverAgents()
+// 	monitorAndRecoverAgents()
 
-}
+// }
 
 // Load agents from file
 func loadAgents() ([]model.Agent, error) {
@@ -122,14 +121,14 @@ func getAgent(c *gin.Context) {
 		if strings.EqualFold(agent.ID, agentID) {
 			c.JSON(http.StatusOK, gin.H{
 				"agent": gin.H{
-					"id":      agent.ID,
-					"name":    agent.Name,
-					"clients": agent.Clients,
-					"domain":  agent.Domain,
-					"status":  agent.Status,
-					"avatar_img": agent.AvatarImg,
-					"cover_img": agent.CoverImg,
-					"voice_model": agent.VoiceModel,
+					"id":           agent.ID,
+					"name":         agent.Name,
+					"clients":      agent.Clients,
+					"domain":       agent.Domain,
+					"status":       agent.Status,
+					"avatar_img":   agent.AvatarImg,
+					"cover_img":    agent.CoverImg,
+					"voice_model":  agent.VoiceModel,
 					"organization": agent.Organization,
 				},
 			})
@@ -270,12 +269,12 @@ func addAgent(c *gin.Context) {
 			continue
 		}
 		defer resp.Body.Close()
-		
+
 		if resp.StatusCode == http.StatusOK {
 			log.Printf("Container is ready after %d seconds", i+1)
 			break
 		}
-		
+
 		log.Printf("Attempt %d/%d: Received status code %d, waiting...", i+1, maxRetries, resp.StatusCode)
 		time.Sleep(time.Second)
 	}
@@ -341,13 +340,13 @@ func addAgent(c *gin.Context) {
 	saveAgents(*createdAgent)
 
 	response := model.AgentResponse{
-		ID:         createdAgent.ID,
-		Name:       createdAgent.Name,
-		Clients:    createdAgent.Clients,
-		Status:     createdAgent.Status,
-		AvatarImg:  createdAgent.AvatarImg,
-		CoverImg:   createdAgent.CoverImg,
-		VoiceModel: createdAgent.VoiceModel,
+		ID:           createdAgent.ID,
+		Name:         createdAgent.Name,
+		Clients:      createdAgent.Clients,
+		Status:       createdAgent.Status,
+		AvatarImg:    createdAgent.AvatarImg,
+		CoverImg:     createdAgent.CoverImg,
+		VoiceModel:   createdAgent.VoiceModel,
 		Organization: createdAgent.Organization,
 	}
 
