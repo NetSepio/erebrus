@@ -173,6 +173,10 @@ install_dependencies() {
 
     # Install Wireguard dependencies
     install_dependencies_wireguard
+
+    # Check and create folders
+    create_erebrus_folder
+
 }
 
 # Function to get the public IP address
@@ -681,6 +685,12 @@ function download_and_run_binary_file() {
 
     DOWNLOAD_URL="https://github.com/$REPO/releases/download/$LATEST_TAG/$BINARY_NAME"
 
+    # Check if the binary already exists and remove it
+    if [[ -f "$DOWNLOAD_DIR/$BINARY_NAME" ]]; then
+        echo "$BINARY_NAME already exists. Removing the old binary..."
+        rm -f "$DOWNLOAD_DIR/$BINARY_NAME"
+    fi
+
     echo "Downloading $BINARY_NAME from $DOWNLOAD_URL..."
     curl -L -o "$DOWNLOAD_DIR/$BINARY_NAME" "$DOWNLOAD_URL"
 
@@ -695,10 +705,30 @@ function download_and_run_binary_file() {
 
     # Run the binary and capture errors if any
     echo "Running $BINARY_NAME..."
-    "$DOWNLOAD_DIR./$BINARY_NAME" 2> "$ERROR_LOG"
+    "$DOWNLOAD_DIR/$BINARY_NAME" 2> "$ERROR_LOG"
 
     if [[ $? -ne 0 ]]; then
         echo "Error encountered while running $BINARY_NAME. Check $ERROR_LOG for details."
+    fi
+}
+
+
+# Function to create the "erebrus" folder in the current directory
+function create_erebrus_folder() {
+    # Get the current directory
+    CURRENT_DIR=$(pwd)
+
+    # Define the folder name
+    FOLDER_NAME="erebrus"
+
+    # Create the folder in the current directory
+    mkdir -p "$CURRENT_DIR/$FOLDER_NAME"
+
+    # Check if the folder was created successfully
+    if [ -d "$CURRENT_DIR/$FOLDER_NAME" ]; then
+        echo "The folder '$FOLDER_NAME' has been created in the current directory."
+    else
+        echo "Failed to create the folder '$FOLDER_NAME'."
     fi
 }
 
