@@ -18,10 +18,11 @@ jobs:
         with:
           go-version: "1.23.4"
 
-      - name: Build Binary
+      - name: Build Binary for Linux
         run: |
           go mod tidy
-          go build -o erebrus .
+          GOOS=linux GOARCH=amd64 CGO_ENABLED=0 go build -o erebrus .
+          chmod +x erebrus  # Ensure the binary is executable
 
       - name: Upload Binary as Artifact
         uses: actions/upload-artifact@v4
