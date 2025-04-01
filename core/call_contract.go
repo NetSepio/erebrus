@@ -603,12 +603,8 @@ func RegisterNodeOnChain() error {
 	fmt.Printf("%s• Wallet Address:%s %s\n", colorCyan, colorReset, ownerAddress)
 	fmt.Printf("%s%s%s\n\n", colorYellow, "══════════════════════════════════", colorReset)
 
-	var nodeDID string
-	if strings.ToLower(chainName) == "peaq" {
-		nodeDID = fmt.Sprintf("did:peaq:%s#netsepio", ownerAddress.Hex())
-	} else {
-		nodeDID = fmt.Sprintf("did:%s:%s", "netsepio", nodeID)
-	}
+	// Generate the standard DID format for use in the contract
+	nodeDID := fmt.Sprintf("did:%s:%s", "netsepio", nodeID)
 
 	// Get chain ID from RPC URL
 	chainID, err := getChainID(rpcURL)
@@ -680,7 +676,13 @@ func RegisterNodeOnChain() error {
 	fmt.Printf("\n%s%s%s\n", colorYellow, "═══════════ RegisterNode Parameters ═══════════", colorReset)
 	fmt.Printf("%s• Node Address:%s %s\n", colorCyan, colorReset, nodeAddress.Hex())
 	fmt.Printf("%s• Node ID:%s %s\n", colorCyan, colorReset, nodeID)
-	fmt.Printf("%s• Node DID:%s %s\n", colorCyan, colorReset, nodeDID)	
+	
+	if strings.ToLower(chainName) == "peaq" {
+		displayDID := fmt.Sprintf("did:peaq:%s#netsepio", ownerAddress.Hex())
+		fmt.Printf("%s• Node DID:%s %s\n", colorCyan, colorReset, displayDID)
+	} else {
+		fmt.Printf("%s• Node DID:%s %s\n", colorCyan, colorReset, nodeDID)
+	}	
 	fmt.Printf("%s• Node Name:%s %s\n", colorCyan, colorReset, nodeName)
 	fmt.Printf("%s• Node Spec:%s %s\n", colorCyan, colorReset, nodeSpec)
 	fmt.Printf("%s• Node Config:%s %s\n", colorCyan, colorReset, nodeConfig)
@@ -714,7 +716,13 @@ func RegisterNodeOnChain() error {
 			fmt.Printf("\n%s%s%s\n", colorYellow, "═══════════ Node Status ═══════════", colorReset)
 			fmt.Printf("%s• Status:%s Already Registered\n", colorCyan, colorReset)
 			fmt.Printf("%s• Node ID:%s %s\n", colorCyan, colorReset, nodeID)
-			fmt.Printf("%s• Node DID:%s %s\n", colorCyan, colorReset, nodeDID)
+			
+			if strings.ToLower(chainName) == "peaq" {
+				displayDID := fmt.Sprintf("did:peaq:%s#netsepio", ownerAddress.Hex())
+				fmt.Printf("%s• Node DID:%s %s\n", colorCyan, colorReset, displayDID)
+			} else {
+				fmt.Printf("%s• Node DID:%s %s\n", colorCyan, colorReset, nodeDID)
+			}
 			
 			// Get node details for already registered node
 			node, err := instance.Nodes(nil, nodeID)
@@ -745,7 +753,14 @@ func RegisterNodeOnChain() error {
 		fmt.Printf("\n%s%s%s\n", colorYellow, "═══════════ Node Registration ═══════════", colorReset)
 		fmt.Printf("%s• Status:%s Registration Initiated\n", colorCyan, colorReset)
 		fmt.Printf("%s• Node ID:%s %s\n", colorCyan, colorReset, nodeID)
+		
+		if strings.ToLower(chainName) == "peaq" {
+			displayDID := fmt.Sprintf("did:peaq:%s#netsepio", ownerAddress.Hex())
+			fmt.Printf("%s• Node DID:%s %s\n", colorCyan, colorReset, displayDID)
+		} else {
 			fmt.Printf("%s• Node DID:%s %s\n", colorCyan, colorReset, nodeDID)
+		}
+		
 		fmt.Printf("%s• Transaction:%s %s\n", colorCyan, colorReset, tx.Hash().Hex())
 		fmt.Printf("%s%s%s\n\n", colorYellow, "══════════════════════════════════════", colorReset)
 
