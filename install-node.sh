@@ -652,7 +652,7 @@ install_dependencies_wireguard() {
 download_and_run_binary_file() {
     REPO="NetSepio/erebrus"
     BINARY_NAME="erebrus"
-    DOWNLOAD_DIR="$(pwd)"
+    DOWNLOAD_DIR="$(pwd)" # Set to the current directory
     ERROR_LOG="$DOWNLOAD_DIR/erebrus_error.log"
 
     echo "Checking and installing curl..."
@@ -662,8 +662,9 @@ download_and_run_binary_file() {
     LATEST_TAG=$(curl -s https://api.github.com/repos/$REPO/releases/latest | grep '"tag_name":' | sed -E 's/.*"([^"]+)".*/\1/')
 
     if [[ -z "$LATEST_TAG" ]]; then
-        echo "Failed to fetch the latest release tag." | tee "$ERROR_LOG"
-        exit 1
+        echo "Failed to fetch the latest release tag."
+        echo "Failed to fetch the latest release tag." > "$ERROR_LOG"
+        return
     fi
 
     DOWNLOAD_URL="https://github.com/$REPO/releases/download/$LATEST_TAG/$BINARY_NAME"
@@ -673,20 +674,19 @@ download_and_run_binary_file() {
 
     if [[ $? -ne 0 ]]; then
         echo "Download failed!" | tee "$ERROR_LOG"
-        exit 1
+        return
     fi
 
     chmod +x "$DOWNLOAD_DIR/$BINARY_NAME"
 
-    echo "$BINARY_NAME has been installed successfully in $DOWNLOAD_DIR!"
+    echo "$BINARY_NAME has been installed successfully!"
 
     # Run the binary and capture errors if any
     echo "Running $BINARY_NAME..."
-    "$DOWNLOAD_DIR/$BINARY_NAME" 2> "$ERROR_LOG"
+    "$DOWNLOAD_DIR./$BINARY_NAME" 2> "$ERROR_LOG"
 
     if [[ $? -ne 0 ]]; then
         echo "Error encountered while running $BINARY_NAME. Check $ERROR_LOG for details."
-        exit 1
     fi
 }
 
