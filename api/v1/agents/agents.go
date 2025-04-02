@@ -8,6 +8,7 @@ import (
 	"net/http"
 	"os"
 	"os/exec"
+	"path/filepath"
 	"strings"
 	"time"
 
@@ -31,25 +32,25 @@ func ApplyRoutes(r *gin.RouterGroup) {
 
 var agentsFilePath string
 
-// func init() {
-// 	// Initialize the agentsFilePath during package initialization
-// 	homeDir, err := os.UserHomeDir()
-// 	if err != nil {
-// 		log.Fatalf("Error getting home directory: %v", err)
-// 	}
-// 	// Create the "erebrus" folder(SERVICE_CONF_DIR) inside the home directory if it doesn't exist
-// 	erebrusDir := filepath.Join(homeDir, "erebrus")
-// 	err = os.MkdirAll(erebrusDir, os.ModePerm)
-// 	if err != nil {
-// 		log.Fatalf("Error creating erebrus directory: %v", err)
-// 	}
+func init() {
+	// Initialize the agentsFilePath during package initialization
+	homeDir, err := os.UserHomeDir()
+	if err != nil {
+		log.Fatalf("Error getting home directory: %v", err)
+	}
+	// Create the "erebrus" folder(SERVICE_CONF_DIR) inside the home directory if it doesn't exist
+	erebrusDir := filepath.Join(homeDir, "erebrus")
+	// err = os.MkdirAll(erebrusDir, os.ModePerm)
+	// if err != nil {
+	// 	log.Fatalf("Error creating erebrus directory: %v", err)
+	// }
 
-// 	// Set the path for agents.json inside the erebrus folder
-// 	agentsFilePath = filepath.Join(erebrusDir, "agents.json")
+	// Set the path for agents.json inside the erebrus folder
+	agentsFilePath = filepath.Join(erebrusDir, "agents.json")
 
-// 	monitorAndRecoverAgents()
+	monitorAndRecoverAgents()
 
-// }
+}
 
 // Load agents from file
 func loadAgents() ([]model.Agent, error) {
