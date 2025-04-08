@@ -174,7 +174,7 @@ install_dependencies() {
 
 # Function to get the public IP address
 get_public_ip() {
-    echo $(curl -s ifconfig.io)
+    echo $(curl -s ipinfo.io | grep -o '"ip": "[^"]*' | cut -d'"' -f4)
 }
 
 # Function to get region
@@ -337,7 +337,6 @@ configure_node() {
     done
 
     DEFAULT_HOST_IP=$(get_public_ip)
-    DEFAULT_DOMAIN="http://${DEFAULT_HOST_IP}:9080"
 
     # Prompt for Public IP
     printf "\nAutomatically detected public IP: ${DEFAULT_HOST_IP}\n"
@@ -349,13 +348,15 @@ configure_node() {
         HOST_IP=${DEFAULT_HOST_IP}
     fi
 
+    DEFAULT_DOMAIN="http://${HOST_IP}:9080"
+
     # Prompt for Node Details
     read -p "Enter your node name: " NODE_NAME
 
     # Prompt for Config Type
     printf "Select a configuration type from list below:\n"
     PS3="Select a config type (e.g. 1): "
-    options=("MINI" "STANDARD" "HPC")
+    options=("BEACON" "NEXUS")
     select CONFIG in "${options[@]}"; do
         if [ -n "$CONFIG" ]; then
             break
@@ -367,7 +368,7 @@ configure_node() {
     # Prompt for Chain
     printf "Select valid chain from list below:\n"
     PS3="Select a chain (e.g. 1): "
-    options=("SOLANA" "PEAQ" "APTOS" "SUI" "ECLIPSE")
+    options=("SOLANA" "PEAQ" "MONADTestnet" "RISETestnet")
     select CHAIN in "${options[@]}"; do
         if [ -n "$CHAIN" ]; then
             break
@@ -375,6 +376,26 @@ configure_node() {
             echo "Invalid choice. Please select a valid chain."
         fi
     done
+
+    # Set RPC_URL and CONTRACT_ADDRESS based on CHAIN_NAME
+    case "$CHAIN" in
+        "PEAQ")
+            RPC_URL="https://peaq-rpc.publicnode.com"
+            CONTRACT_ADDRESS="0x8811Ffaa9565B5be4a030f3da4c5F1B9eC1d2177"
+            ;;
+        "MONADTestnet")
+            RPC_URL="https://testnet-rpc.monad.xyz/"
+            CONTRACT_ADDRESS="0x4b4Fd104fb1f33a508300C1196cd5893f016F81c"
+            ;;
+        "RISETestnet")
+            RPC_URL="https://testnet.riselabs.xyz/"
+            CONTRACT_ADDRESS="0xa5c3c7207B4362431bD02D0E02af3B8a73Bb35eD"
+            ;;
+        *)
+            RPC_URL=""
+            CONTRACT_ADDRESS=""
+            ;;
+    esac
 
     while true; do
         read -p "Enter your wallet mnemonic: " WALLET_MNEMONIC
@@ -385,7 +406,10 @@ configure_node() {
         fi
     done
 
-        # Prompt for Config Type
+    # Prompt for checkpoint interval
+    read -p "Enter the interval for creating checkpoints (in minutes): " CHECKPOINT_INTERVAL_MINUTES
+
+    # Prompt for Config Type
     printf "Select an access type from list below:\n"
     PS3="Select an access type (e.g. 1): "
     options=("public" "private")
@@ -409,6 +433,9 @@ configure_node() {
     printf "CONFIG=%s\n" "${CONFIG}"
     printf "MNEMONIC=%s\n" "${WALLET_MNEMONIC}"
     printf "ACCESS_TYPE=%s\n" "${ACCESS}"
+    printf "RPC_URL=%s\n" "${RPC_URL}"
+    printf "CONTRACT_ADDRESS=%s\n" "${CONTRACT_ADDRESS}"
+    printf "CHECKPOINT_INTERVAL=%s minutes\n" "${CHECKPOINT_INTERVAL_MINUTES}"
     read -p "Confirm configuration (y/n): " confirm
     if [ "${confirm}" != "y" ]; then
         printf "Configuration not confirmed. Exiting.\n"
@@ -442,15 +469,15 @@ FOOTER=NetSepio 2024
 GATEWAY_WALLET=0x0
 GATEWAY_DOMAIN=https://gateway.erebrus.io
 LOAD_CONFIG_FILE=false
-GATEWAY_PEERID=/ip4/52.14.92.177/tcp/9001/p2p/12D3KooWJSMKigKLzehhhmppTjX7iQprA7558uU52hqvKqyjbELf
+GATEWAY_PEERID=/ip4/178.156.141.248/tcp/9001/p2p/12D3KooWJSMKigKLzehhhmppTjX7iQprA7558uU52hqvKqyjbELf
 CHAIN_NAME=${CHAIN}
 NODE_TYPE=VPN
 NODE_CONFIG=${CONFIG}
 MNEMONIC=${WALLET_MNEMONIC}
-CONTRACT_ADDRESS=0x291eC3328b56d5ECebdF993c3712a400Cb7569c3
-RPC_URL=https://evm.peaq.network
+CONTRACT_ADDRESS=${CONTRACT_ADDRESS}
+RPC_URL=${RPC_URL}
 NODE_ACCESS=${ACCESS}
-
+CHECKPOINT_INTERVAL_MINUTES=${CHECKPOINT_INTERVAL_MINUTES}
 
 # WireGuard Configuration
 WG_CONF_DIR=/etc/wireguard
