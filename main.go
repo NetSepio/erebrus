@@ -9,7 +9,6 @@ import (
 	"time"
 
 	"github.com/NetSepio/erebrus/api"
-	// "github.com/NetSepio/erebrus/api/v1/agents"
 	"github.com/NetSepio/erebrus/core"
 	grpc "github.com/NetSepio/erebrus/gRPC"
 	"github.com/NetSepio/erebrus/p2p"

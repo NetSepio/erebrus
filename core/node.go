@@ -9,11 +9,11 @@ import (
 	"os"
 	"strings"
 
+	"github.com/blocto/solana-go-sdk/pkg/hdwallet"
+	"github.com/blocto/solana-go-sdk/types"
 	"github.com/ethereum/go-ethereum/crypto"
-	"github.com/mr-tron/base58"
 	"github.com/tyler-smith/go-bip32"
 	"github.com/tyler-smith/go-bip39"
-	"golang.org/x/crypto/pbkdf2"
 	"golang.org/x/crypto/sha3"
 )
 
@@ -23,10 +23,13 @@ var (
 	CodeHash string
 )
 
-var NodeName string
-var ChainName string
-var NodeType string
-var NodeConfig string
+var (
+	NodeName   string
+	ChainName  string
+	NodeType   string
+	NodeConfig string
+)
+var WalletAddress string
 
 // Function to load the node details from the environment and save it to the global variable
 func LoadNodeDetails() {
@@ -36,6 +39,17 @@ func LoadNodeDetails() {
 	ChainName = os.Getenv("CHAIN_NAME")
 	if ChainName == "" {
 		log.Fatalf("CHAIN_NAME environment variable is not set")
+	} else {
+		ChainName = strings.ToLower(ChainName)
+		if ChainName == "solana" || ChainName == "eclipse" {
+			GenerateWalletAddressSolanaAndEclipse(os.Getenv("MNEMONIC"))
+		} else if ChainName == "ethereum" {
+			GenerateEthereumWalletAddress(os.Getenv("MNEMONIC"))
+		} else if ChainName == "sui" {
+			GenerateWalletAddressSui(os.Getenv("MNEMONIC"))
+		} else if ChainName == "aptos" {
+			GenerateWalletAddressAptos(os.Getenv("MNEMONIC"))
+		}
 	}
 	fmt.Printf("Chain Name: %s\n", ChainName)
 
@@ -52,15 +66,12 @@ func LoadNodeDetails() {
 	fmt.Printf("Node Config: %s\n", NodeConfig)
 }
 
-var WalletAddress string
-
 // GenerateEthereumWalletAddress generates an Ethereum wallet address from the given mnemonic
 func GenerateEthereumWalletAddress(mnemonic string) (string, *ecdsa.PrivateKey, error) {
 	// Validate the mnemonic
 	if !bip39.IsMnemonicValid(mnemonic) {
 		log.Fatal("Invalid mnemonic")
 	}
-	// log.Println("Mnemonic:", mnemonic)
 
 	// Derive a seed from the mnemonic
 	seed := bip39.NewSeed(mnemonic, "")
@@ -143,30 +154,21 @@ func toChecksumAddress(address string) string {
 }
 
 // GenerateWalletAddressSolana generates a Solana wallet address from the given mnemonic
-func GenerateWalletAddressSolana(mnemonic string) {
+func GenerateWalletAddressSolanaAndEclipse(mnemonic string) {
 	// Validate the mnemonic
 	if !bip39.IsMnemonicValid(mnemonic) {
 		fmt.Println("Invalid mnemonic")
 		return
 	}
-	fmt.Printf("Mnemonic: %s\n", mnemonic)
+	// mnemonic := "curtain century depth trim slogan stay case human farm ivory case merge"
+	seed := bip39.NewSeed(mnemonic, "") // (mnemonic, password)
+	path := `m/44'/501'/0'/0'`
+	derivedKey, _ := hdwallet.Derived(path, seed)
+	account, _ := types.AccountFromSeed(derivedKey.PrivateKey)
 
-	// Derive a seed from the mnemonic
-	seed := bip39.NewSeed(mnemonic, "")
+	WalletAddress = account.PublicKey.ToBase58()
 
-	// Derive the keypair using PBKDF2 with the Solana-specific path
-	derivedKey := pbkdf2.Key(seed, []byte("ed25519 seed"), 2048, 64, sha3.New512)
-
-	// The first 32 bytes are the private key, the next 32 bytes are the chain code (unused here)
-	privateKey := derivedKey[:32]
-
-	// Generate the public key
-	publicKey := ed25519.NewKeyFromSeed(privateKey).Public().(ed25519.PublicKey)
-
-	// Encode the public key to Base58
-	WalletAddress = base58.Encode(publicKey)
-
-	fmt.Printf("Solona Wallet Address: %s\n", WalletAddress)
+	fmt.Printf("Solona OR Eclipse Wallet Address: %s\n", WalletAddress)
 }
 
 // GenerateWalletAddressSui generates a Sui wallet address from the given mnemonic
