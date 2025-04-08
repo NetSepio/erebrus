@@ -426,7 +426,7 @@ func generateNFTMetadata(nodeName string, nodeSpec string, nodeConfig string) (s
 // AddDIDAttribute adds DID attributes to the PEAQ DID registry contract
 func AddDIDAttribute(nodeID string, systemMetadata string, nftMetadata string, privateKey *ecdsa.PrivateKey) error {
 	chainName := strings.ToLower(os.Getenv("CHAIN_NAME"))
-	if chainName != "peaq" {
+	if chainName != "peaq" && chainName != "monadtestnet" && chainName != "risetestnet" {
 		return nil
 	}
 
@@ -564,7 +564,7 @@ func AddDIDAttribute(nodeID string, systemMetadata string, nftMetadata string, p
 
 func RegisterNodeOnChain() error {
 	chainName := strings.ToLower(os.Getenv("CHAIN_NAME"))
-	if chainName != "peaq" && chainName != "monad" {
+	if chainName != "peaq" && chainName != "monadtestnet" && chainName != "risetestnet" {
 		return nil
 	}
 
@@ -1123,7 +1123,8 @@ func createCheckpoint(nodeID string, instance *contract.Contract, auth *bind.Tra
 
 // GetNodeStatus retrieves the current status of the node from the contract
 func GetNodeStatus() (*NodeStatus, error) {
-	if strings.ToLower(os.Getenv("CHAIN_NAME")) != "peaq" {
+	chainName := strings.ToLower(os.Getenv("CHAIN_NAME"))
+	if chainName != "peaq" && chainName != "monadtestnet" && chainName != "risetestnet" {
 		return nil, fmt.Errorf("Chain not configured")
 	}
 
@@ -1208,7 +1209,8 @@ func (ns *NodeStatus) GetStatusEmoji() string {
 
 // DeactivateNode deactivates the node in the contract
 func DeactivateNode() error {
-	if strings.ToLower(os.Getenv("CHAIN_NAME")) != "peaq" {
+	chainName := strings.ToLower(os.Getenv("CHAIN_NAME"))
+	if chainName != "peaq" && chainName != "monadtestnet" && chainName != "risetestnet" {
 		return fmt.Errorf("Chain not configured")
 	}
 
@@ -1265,7 +1267,8 @@ func DeactivateNode() error {
 
 // ActivateNode sets the node status to Online
 func ActivateNode() error {
-	if strings.ToLower(os.Getenv("CHAIN_NAME")) != "peaq" {
+	chainName := strings.ToLower(os.Getenv("CHAIN_NAME"))
+	if chainName != "peaq" && chainName != "monadtestnet" && chainName != "risetestnet" {
 		return fmt.Errorf("Chain not configured")
 	}
 
