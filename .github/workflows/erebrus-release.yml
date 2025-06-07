@@ -3,11 +3,15 @@ name: Build and Release Go Binary
 on:
   push:
     branches:
-      - node-features # Triggers only on pushes to the node-features branch
+      - node-features
 
 jobs:
   build:
     runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        os: [linux, darwin]
+        arch: [amd64, arm64]
 
     steps:
       - name: Checkout Repository
@@ -16,18 +20,20 @@ jobs:
       - name: Set up Go
         uses: actions/setup-go@v5
         with:
-          go-version: stable
+          go-version: "1.23.4"
 
       - name: Build Binary
         run: |
           go mod tidy
-          go build -o erebrus
+          BINARY_NAME=erebrus-${{ matrix.os }}-${{ matrix.arch }}
+          GOOS=${{ matrix.os }} GOARCH=${{ matrix.arch }} CGO_ENABLED=0 go build -o $BINARY_NAME .
+          chmod +x $BINARY_NAME
 
       - name: Upload Binary as Artifact
         uses: actions/upload-artifact@v4
         with:
-          name: erebrus-binary
-          path: erebrus
+          name: erebrus-${{ matrix.os }}-${{ matrix.arch }}
+          path: erebrus-${{ matrix.os }}-${{ matrix.arch }}
 
   release:
     needs: build
@@ -41,15 +47,15 @@ jobs:
         id: get_sha
         run: echo "sha=$(git rev-parse --short HEAD)" >> $GITHUB_ENV
 
-      - name: Download Artifact
+      - name: Download All Artifacts
         uses: actions/download-artifact@v4
         with:
-          name: erebrus-binary
+          path: ./artifacts
 
       - name: Create GitHub Release
         uses: softprops/action-gh-release@v2
         with:
           tag_name: ${{ env.sha }}
-          files: erebrus
+          files: ./artifacts/**
         env:
           GITHUB_TOKEN: ${{ secrets.GHCR_TOKEN }}
