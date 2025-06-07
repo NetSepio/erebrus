@@ -1,18 +1,18 @@
-name: Build and Release Go Binary
+name: Build Erebrus Binary
 
 on:
   push:
     branches:
-      - node-features
       - main
+      - node-features
 
 jobs:
   build:
     runs-on: ubuntu-latest
     strategy:
       matrix:
-        os: [linux, darwin]
         arch: [amd64, arm64]
+        os: [linux, darwin]
 
     steps:
       - name: Checkout Repository
@@ -21,24 +21,29 @@ jobs:
       - name: Set up Go
         uses: actions/setup-go@v5
         with:
-          go-version: "1.23.4"
+          go-version: stable
 
-      - name: Build Binary
+      - name: Set Environment Variables
+        run: |
+          echo "GOOS=${{ matrix.os }}" >> $GITHUB_ENV
+          echo "GOARCH=${{ matrix.arch }}" >> $GITHUB_ENV
+          echo "BINARY_NAME=erebrus-${{ matrix.os }}-${{ matrix.arch }}" >> $GITHUB_ENV
+
+      - name: Build Erebrus Binary
         run: |
           go mod tidy
-          BINARY_NAME=erebrus-${{ matrix.os }}-${{ matrix.arch }}
-          GOOS=${{ matrix.os }} GOARCH=${{ matrix.arch }} CGO_ENABLED=0 go build -o $BINARY_NAME .
-          chmod +x $BINARY_NAME
+          CGO_ENABLED=0 go build -o $BINARY_NAME .
 
-      - name: Upload Binary as Artifact
+      - name: Upload Artifact
         uses: actions/upload-artifact@v4
         with:
-          name: erebrus-${{ matrix.os }}-${{ matrix.arch }}
-          path: erebrus-${{ matrix.os }}-${{ matrix.arch }}
+          name: ${{ env.BINARY_NAME }}
+          path: ${{ env.BINARY_NAME }}
 
   release:
     needs: build
     runs-on: ubuntu-latest
+    if: github.ref == 'refs/heads/main' || github.ref == 'refs/heads/node-features'
 
     steps:
       - name: Checkout Repository
@@ -59,4 +64,4 @@ jobs:
           tag_name: ${{ env.sha }}
           files: ./artifacts/**
         env:
-          GITHUB_TOKEN: ${{ secrets.GHCR_TOKEN }}
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
