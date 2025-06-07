@@ -33,7 +33,7 @@ jobs:
         run: |
           go mod tidy
           CGO_ENABLED=0 go build -o $BINARY_NAME .
-          chmod +x BINARY_NAME  # Ensure the binary is executable
+          chmod +x $BINARY_NAME  # Ensure the binary is executable
 
       - name: Upload Artifact
         uses: actions/upload-artifact@v4
