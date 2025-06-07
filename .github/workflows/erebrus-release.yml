@@ -1,13 +1,18 @@
-name: Build and Release Go Binary
+name: Build Erebrus Binary
 
 on:
   push:
     branches:
-      - node-features # Triggers only on pushes to the node-features branch
+      - main
+      - node-features
 
 jobs:
   build:
     runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        arch: [amd64, arm64]
+        os: [linux, darwin]
 
     steps:
       - name: Checkout Repository
@@ -16,22 +21,29 @@ jobs:
       - name: Set up Go
         uses: actions/setup-go@v5
         with:
-          go-version: "1.23.4"
+          go-version: stable
 
-      - name: Build Binary for Linux
+      - name: Set Environment Variables
+        run: |
+          echo "GOOS=${{ matrix.os }}" >> $GITHUB_ENV
+          echo "GOARCH=${{ matrix.arch }}" >> $GITHUB_ENV
+          echo "BINARY_NAME=erebrus-${{ matrix.os }}-${{ matrix.arch }}" >> $GITHUB_ENV
+
+      - name: Build Erebrus Binary
         run: |
           go mod tidy
-          GOOS=linux GOARCH=amd64 CGO_ENABLED=0 go build -o erebrus-linux .
-          chmod +x erebrus-linux  # Ensure the binary is executable
-      - name: Upload Binary as Artifact
+          CGO_ENABLED=0 go build -o $BINARY_NAME ./main
+
+      - name: Upload Artifact
         uses: actions/upload-artifact@v4
         with:
-          name: erebrus-linux
-          path: erebrus-linux
+          name: ${{ env.BINARY_NAME }}
+          path: ${{ env.BINARY_NAME }}
 
   release:
     needs: build
     runs-on: ubuntu-latest
+    if: github.ref == 'refs/heads/main' || github.ref == 'refs/heads/node-features'
 
     steps:
       - name: Checkout Repository
@@ -41,10 +53,10 @@ jobs:
         id: get_sha
         run: echo "sha=$(git rev-parse --short HEAD)" >> $GITHUB_ENV
 
-      - name: Download Artifact
+      - name: Download All Artifacts
         uses: actions/download-artifact@v4
         with:
-          name: ./artifacts
+          path: ./artifacts
 
       - name: Create GitHub Release
         uses: softprops/action-gh-release@v2
