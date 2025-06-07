@@ -32,7 +32,7 @@ jobs:
       - name: Build Erebrus Binary
         run: |
           go mod tidy
-          CGO_ENABLED=0 go build -o $BINARY_NAME ./main
+          CGO_ENABLED=0 go build -o $BINARY_NAME .
 
       - name: Upload Artifact
         uses: actions/upload-artifact@v4
