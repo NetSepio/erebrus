@@ -4,6 +4,7 @@ on:
   push:
     branches:
       - node-features
+      - main
 
 jobs:
   build:
