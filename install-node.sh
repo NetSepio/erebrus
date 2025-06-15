@@ -65,7 +65,7 @@ display_header() {
 EOF
 )
     header_buffer+="\e[0m\n\n"
-    header_buffer+="\033[1m\033[4mErebrus Node Software Installer - Version 1.0\033[0m\n"
+    header_buffer+="\033[1m\033[4mErebrus Node Software Installer v1.1\033[0m\n"
     printf '─%.0s' {1..80}
 
     # Add separator and requirements
@@ -1216,9 +1216,15 @@ create_manage_script() {
 #!/bin/bash
 #Erebrus Node Management Script
 
+# Ensure script runs with sudo/root
+if [[ "$EUID" -ne 0 ]]; then
+  exec sudo "$0" "$@"
+fi
+
 DEBUG=false
 ARGS=()
 FOLLOW_LOGS=false
+
 
 print_help() {
   cat <<HELP_TEXT
