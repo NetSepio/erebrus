@@ -72,7 +72,7 @@ EOF
     header_buffer+=$(printf '─%.0s' {1..100})
     header_buffer+="\n\e[1mRequirements:\e[0m\n"
     header_buffer+="→ Erebrus node needs static public IP that is routable from internet & controlled by you.\n"
-    header_buffer+="→ Ports 9080, 9002, 51820, and 8088 must be open on your firewall and/or host system.\n"
+    header_buffer+="→ Ports 9080, 9002, 9003, 51820, and 8088 must be open on your firewall and/or host system.\n"
     header_buffer+=$(printf '─%.0s' {1..100})
     header_buffer+="\n"
 
@@ -464,6 +464,8 @@ print_final_message() {
         printf "\e[32mErebrus node installation is finished.\e[0m\n"
         printf "Erebrus Node API is accessible at http://${HOST_IP}:9080\n"
         printf "Refer \e[4mhttps://github.com/NetSepio/erebrus/blob/main/docs/docs.md\e[0m for API documentation.\n"
+        printf "\nYou can now manage the node using the \e[1merebrus\e[0m command. Try:\n"
+        printf "  \e[36merebrus status\e[0m\n"
         printf "\n\e[32mAll stages completed successfully!\e[0m\n\n"
         log_success "Installation completed successfully - Node is running"
     else
@@ -540,20 +542,18 @@ configure_node() {
         done
     done
 
-    read -p "Enable Xray (default: y) (y/n): " enable_xray
-    enable_xray=${enable_xray:-y}  # default to 'y' if empty
+    read -p "Enable Xray (default: n) (y/n): " enable_xray
+    enable_xray=${enable_xray:-n}  # default to 'n' if empty
     log_info "Xray enable choice: $enable_xray"
 
-    if [[ "$enable_xray" =~ ^[nN]$ ]]; then
-        XRAY_ENABLED="false"
-        echo "XRAY_ENABLED=false" >> "${INSTALL_DIR}/.env"
-        printf "\033[0;31mXray will be disabled on this node.\033[0m\n"
-        log_info "Xray disabled"
-    else
+    if [[ "$enable_xray" =~ ^[yY]$ ]]; then
         XRAY_ENABLED="true"
-        echo "XRAY_ENABLED=true" >> "${INSTALL_DIR}/.env"
         printf "\033[0;32mXray will be enabled on this node.\033[0m\n"
         log_info "Xray enabled"
+    else
+        XRAY_ENABLED="false"
+        printf "\033[0;31mXray will be disabled on this node.\033[0m\n"
+        log_info "Xray disabled"
     fi
 
     # Prompt for Chain
@@ -599,6 +599,7 @@ SERVER=0.0.0.0
 HTTP_PORT=9080
 GRPC_PORT=9003
 LIBP2P_PORT=9002
+XRAY_ENABLED=${XRAY_ENABLED}
 REGION=$(get_region)
 NODE_NAME=${NODE_NAME}
 DOMAIN=${DEFAULT_DOMAIN}
@@ -1208,6 +1209,251 @@ check_previous_stage() {
     return 0
 }
 
+create_manage_script() {
+    log_info "Installing node management script"
+    show_spinner $! "→ Installing node management script"
+    cat > ${INSTALL_DIR}/manage.sh <<'EOF'
+#!/bin/bash
+#Erebrus Node Management Script
+
+DEBUG=false
+ARGS=()
+FOLLOW_LOGS=false
+
+print_help() {
+  cat <<HELP_TEXT
+Erebrus Node Management
+Usage: erebrus [OPTIONS] ACTION [SERVICE]
+
+Actions:
+  start       Start the service(s)
+  stop        Stop the service(s)
+  status      Show status of the service(s)
+  restart     Restart the service(s)
+  log         Show logs of the service(s)
+
+Services:
+  node        Manage erebrus-node binary
+  xray        Manage erebrus-xray binary
+  (if SERVICE is omitted, action applies to both node and xray)
+
+Options:
+  -v, --verbose  Enable debug output
+  -h, --help     Show this help message
+  -f             Follow logs in real-time (use with 'log' action)
+
+Examples:
+  erebrus start node
+  erebrus stop xray
+  erebrus status
+  erebrus restart -v node
+  erebrus log node
+  erebrus log xray -f
+  erebrus log
+HELP_TEXT
+}
+
+# Parse arguments and flags
+for arg in "$@"; do
+  case "$arg" in
+    -v|--verbose) DEBUG=true ;;
+    -h|--help)
+      print_help
+      exit 0
+      ;;
+    -f) FOLLOW_LOGS=true ;;
+    *) ARGS+=("$arg") ;;
+  esac
+done
+
+set -- "${ARGS[@]}"
+
+log_debug() {
+  if $DEBUG; then
+    printf "\e[36m[DEBUG]\e[0m %s\n" "$1"
+  fi
+}
+
+load_env_file() {
+  INSTALL_DIR="$(cd "$(dirname "$(readlink -f "$0")")" && pwd)"
+  local env_file="$INSTALL_DIR/.env"
+
+  if [[ -f "$env_file" ]]; then
+    while IFS='=' read -r key val; do
+      key="$(echo "$key" | xargs)"
+      val="$(echo "$val" | sed -E 's/^ *| *$//g')"
+      [[ "$key" == \#* || -z "$key" ]] && continue
+      val="${val%\"}"
+      val="${val#\"}"
+      val="${val%\'}"
+      val="${val#\'}"
+      export "$key=$val"
+    done < "$env_file"
+  fi
+}
+
+show_logs() {
+  local service="$1"
+  local log_args="-n 50"
+  $FOLLOW_LOGS && log_args="$log_args -f"
+
+  if [[ "$service" == "node" ]]; then
+    tail $log_args "$INSTALL_DIR/erebrus.log"
+  elif [[ "$service" == "xray" ]]; then
+    tail $log_args "$INSTALL_DIR/xray.log"
+  elif [[ -z "$service" ]]; then
+    printf "\e[36m--- erebrus-node log ---\e[0m\n"
+    tail $log_args "$INSTALL_DIR/erebrus.log" &
+    pid1=$!
+    printf "\e[36m--- erebrus-xray log ---\e[0m\n"
+    tail $log_args "$INSTALL_DIR/xray.log" &
+    pid2=$!
+    wait $pid1 $pid2
+  else
+    printf "\e[31mUnknown service for log: %s\e[0m\n" "$service"
+    exit 1
+  fi
+}
+
+load_env_file
+
+EREBRUS_PATH=$(cat $INSTALL_DIR/erebrus_binary_path 2>/dev/null)
+XRAY_PATH=$(cat $INSTALL_DIR/xray_binary_path 2>/dev/null)
+if [[ ! -x "$EREBRUS_PATH" ]]; then
+  echo "Error: erebrus_binary_path is missing or not executable"
+  exit 1
+fi
+
+if [[ "$XRAY_ENABLED" == "true" && ! -x "$XRAY_PATH" ]]; then
+  echo "Error: xray_binary_path is missing or not executable"
+  exit 1
+fi
+
+get_pids() {
+  local binary="$1"
+  local binary_name
+  binary_name=$(basename "$binary")
+  pgrep -f "$binary_name" | paste -sd ' ' -
+}
+
+start_service() {
+  local name="$1"
+  local binary="$2"
+
+  log_debug "Starting $name with binary: $binary"
+
+  local pids
+  pids=$(get_pids "$binary")
+  if [[ -n "$pids" ]]; then
+    printf "\e[32m%s is already running (PIDs: %s)\e[0m\n" "$name" "$(echo "$pids" | paste -sd ',' -)"
+  else
+    if [[ "$name" == "erebrus-node" ]]; then
+      "$binary" > "$INSTALL_DIR/erebrus.log" 2>&1 &
+    elif [[ "$name" == "erebrus-xray" ]]; then
+      "$binary" -c "$INSTALL_DIR/config.json" > "$INSTALL_DIR/xray.log" 2>&1 &
+    else
+      "$binary" > /dev/null 2>&1 &
+    fi
+    printf "\e[32m%s started (PID: %s)\e[0m\n" "$name" "$!"
+  fi
+}
+
+stop_service() {
+  local name="$1"
+  local binary="$2"
+
+  log_debug "Stopping $name with binary: $binary"
+
+  local pids
+  pids=$(get_pids "$binary")
+  if [[ -n "$pids" ]]; then
+    echo "$pids" | xargs kill
+    printf "\e[31m%s stopped (PIDs: %s)\e[0m\n" "$name" "$pids"
+  else
+    printf "\e[31m%s is not running\e[0m\n" "$name"
+  fi
+}
+
+status_service() {
+  local name="$1"
+  local binary="$2"
+
+  log_debug "Checking status of $name with binary: $binary"
+
+  local pids
+  pids=$(get_pids "$binary")
+  if [[ -n "$pids" ]]; then
+    printf "\e[32m%s is running (PIDs: %s)\e[0m\n" "$name" "$pids"
+  else
+    printf "\e[31m%s is not running\e[0m\n" "$name"
+  fi
+}
+
+ACTION="$1"
+SERVICE="$2"
+
+run_action() {
+  local action="$1"
+  local service="$2"
+  local binary name
+
+  if [[ "$action" != "log" ]]; then
+    case "$service" in
+      node)
+        binary="$EREBRUS_PATH"
+        name="erebrus-node"
+        ;;
+      xray)
+        if [[ "$XRAY_ENABLED" != "true" ]]; then
+          printf "\e[31mXray is not installed on this node\e[0m\n"
+          return
+        fi
+        binary="$XRAY_PATH"
+        name="erebrus-xray"
+        ;;
+      *)
+        printf "\e[31mUnknown service: %s\e[0m\n" "$service"
+        exit 1
+        ;;
+    esac
+  fi
+
+  case "$action" in
+    start) start_service "$name" "$binary" ;;
+    stop) stop_service "$name" "$binary" ;;
+    status) status_service "$name" "$binary" ;;
+    restart)
+      stop_service "$name" "$binary"
+      sleep 1
+      start_service "$name" "$binary"
+      ;;
+    log) show_logs "$service" ;;
+    *)
+      printf "\e[31mInvalid action: %s\e[0m\n" "$action"
+      exit 1
+      ;;
+  esac
+}
+
+if [[ -z "$ACTION" ]]; then
+  print_help
+  exit 1
+fi
+
+if [[ -z "$SERVICE" ]]; then
+  run_action "$ACTION" node
+  run_action "$ACTION" xray
+else
+  run_action "$ACTION" "$SERVICE"
+fi
+EOF
+
+    chmod +x ${INSTALL_DIR}/manage.sh
+    sudo ln -s ${INSTALL_DIR}/manage.sh /usr/local/bin/erebrus
+    log_info "manage.sh script created and made executable."
+    return $?
+}
+
 # Run stage1
 # For each run_stage function, change the order of operations:
 run_stage_1() {
@@ -1253,10 +1499,17 @@ run_stage_2() {
         STAGE_STATUS[1]="In Progress"   
         display_header     
         if install_dependencies; then
-            STAGE_STATUS[1]="✔ Complete"
-            display_header
-            echo "✅ Stage 2: Dependencies installed successfully!"
-            log_success "Stage 2: Dependencies installed successfully!"
+            if create_manage_script; then
+                STAGE_STATUS[1]="✔ Complete"
+                display_header
+                echo "✅ Stage 2: Dependencies installed successfully & node management script installed!"
+                log_success "Stage 2: Dependencies installed successfully and node management script installed!"
+            else
+                STAGE_STATUS[2]="✘ Failed"
+                display_header
+                echo "❌ Stage 2: Node management script installation failed"
+                log_error "Stage 2: Installing dependencies completed, but Node management script installation failed"
+            fi
         else
             STAGE_STATUS[1]="✘ Failed"
             echo "❌ Stage 2: Dependencies installation failed!"
@@ -1332,7 +1585,7 @@ trap cleanup EXIT
 #####################################################################################################################
 STAGE_STATUS=("Pending" "Pending" "Pending")
 INSTALLATION_MODE="binary"  #valid options "binary" , "container"
-XRAY_ENABLED="true"
+XRAY_ENABLED="false"
 
 # Set default directories
 BASE_DIR=$(pwd)
@@ -1365,3 +1618,8 @@ print_final_message
 
 # Show cursor again
 tput cnorm
+if [ -n "$BASH_VERSION" ]; then
+  hash -r
+elif [ -n "$ZSH_VERSION" ]; then
+  rehash
+fi
