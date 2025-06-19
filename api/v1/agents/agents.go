@@ -258,8 +258,9 @@ func addAgent(c *gin.Context) {
 
 	log.Printf("Docker container started successfully: %s", string(output))
 
-	// Replace the time.Sleep with a polling mechanism
-	log.Printf("Waiting for agent container to become ready at http://localhost:%d/agents", exposedPort)
+	// Wait for 30 seconds after Docker container is started
+	log.Printf("Waiting 30 seconds for agent container to become ready at http://localhost:%d/agents", exposedPort)
+	time.Sleep(30 * time.Second)
 	maxRetries := 60 // Maximum number of retries (60 attempts = 60 seconds with 1-second interval)
 	for i := 0; i < maxRetries; i++ {
 		agentEndpoint := fmt.Sprintf("http://localhost:%d/agents", exposedPort)
