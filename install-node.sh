@@ -1,8 +1,36 @@
 #!/usr/bin/env bash
 # Initialize logging
+# Function to display help text
+print_help() {
+    cat <<HELP_TEXT
+Erebrus Node Installation Script
+
+Usage: $0 [OPTIONS]
+
+This script installs the Erebrus node software or its Xray component, including
+binaries, configuration files, and a management script.
+
+Options:
+  --xray-only    Install only the Xray binary and management script, skipping
+                 full node installation (dependencies and node binary).
+                 Default: Full node installation.
+  -h, --help     Display this help message and exit.
+
+Examples:
+  $0             Installs the full Erebrus node (default).
+  $0 --xray-only Installs only the Xray binary and management script.
+  $0 --help      Shows this help text.
+
+For more details, refer to:
+https://docs.netsepio.com/latest/erebrus/nodes/beacon-node
+HELP_TEXT
+    exit 0
+}
+
 init_logging() {
     LOG_DIR="/tmp"
-    LOG_FILE="${LOG_DIR}/erebrus_install.log"
+    local INSTALLATION_ID=$(LC_ALL=C tr -dc A-Za-z0-9 </dev/urandom | head -c 8; echo)
+    LOG_FILE="${LOG_DIR}/erebrus-install-${INSTALLATION_ID}.log"
     
     # Clear previous log and start fresh
     > "$LOG_FILE"
@@ -961,13 +989,12 @@ function download_xray_binary() {
         return 1
     fi
     
-    log_info "=== Finished download_xray_binary ==="
+    log_info "Finished download_xray_binary to $XRAY_PATH"
     return 0
 }
 
 function download_erebrus_binary() {
     log_info "=== Starting download_erebrus_binary ==="
-    kill_port_erebrus
     REPO="NetSepio/erebrus"
     DOWNLOAD_DIR="${INSTALL_DIR}"
     #ERROR_LOG="$DOWNLOAD_DIR/erebrus_error.log"
@@ -1056,7 +1083,7 @@ run_erebrus_binary() {
             log_error "Failed to change to installation directory: ${INSTALL_DIR}"
             return 1
         }
-        
+        kill_port_erebrus
         # Run the binary with sudo (should work now that we ensured credentials)
         sudo "$binary" > "${INSTALL_DIR}/erebrus.log" 2>&1 &
         EREBRUS_PID=$!    
@@ -1079,12 +1106,14 @@ run_erebrus_binary() {
 
 function run_xray_binary() {
     log_info "=== Starting run_xray_binary ==="
-    
+    kill_port_erebrus 8088
     # Create config file first
-    create_xray_config || {
-        log_error "Failed to create Xray configuration"
-        return 1
-    }
+    if ! INSTALL_XRAY_ONLY; then
+        create_xray_config || {
+            log_error "Failed to create Xray configuration"
+            return 1
+        }
+    fi
     
     local path="${INSTALL_DIR}/xray_binary_path"
     if [[ -f "$path" ]]; then
@@ -1121,15 +1150,35 @@ function create_erebrus_folder() {
 }
 
 function kill_port_erebrus() {
-    local ports=(9080 9002 8088)
+    local ports=()
+    
+    # If a port is provided as an argument, use it; otherwise, use default ports
+    if [[ -n "$1" && "$1" =~ ^[0-9]+$ ]]; then
+        ports=("$1")
+        log_info "Collecting and killing processes on specified port: $1"
+    else
+        ports=(9080 9002 8088)
+        log_info "Collecting and killing processes on default ports: ${ports[*]}"
+    fi
     
     for port in "${ports[@]}"; do
+        # Collect all PIDs listening on the port
         local pids
         pids=$(sudo lsof -t -i :$port 2>/dev/null)
         
         if [[ -n "$pids" ]]; then
-            log_info "Killing processes on port $port: $pids"
-            echo "$pids" | xargs kill -9 2>/dev/null
+            # Log all collected PIDs
+            log_info "Collected PIDs on port $port: $pids"
+            
+            # Kill all collected PIDs in one command
+            echo "$pids" | xargs -r kill -9 2>/dev/null
+            if [[ $? -eq 0 ]]; then
+                log_success "Successfully killed PIDs ($pids) on port $port"
+            else
+                log_error "Failed to kill PIDs ($pids) on port $port"
+            fi
+        else
+            log_info "No processes found on port $port"
         fi
     done
 }
@@ -1525,44 +1574,70 @@ fi
 EOF
 
     chmod +x ${INSTALL_DIR}/manage.sh
-    sudo ln -s ${INSTALL_DIR}/manage.sh /usr/local/bin/erebrus
+    sudo ln -sf ${INSTALL_DIR}/manage.sh /usr/local/bin/erebrus >> "$LOG_FILE" 2>&1
     log_info "manage.sh script created and made executable."
     return $?
 }
-
 # Run stage1
 # For each run_stage function, change the order of operations:
 run_stage_1() {
     if declare -f configure_node > /dev/null; then
         STAGE_STATUS[0]="In Progress"
         display_header  # Update header BEFORE running the function
-        
-        if configure_node; then
-            if test_ip_reachability; then
-                if enable_ip_forwarding; then
-                    STAGE_STATUS[0]="✔ Complete"
-                    display_header  # Update header AFTER status change
-                    echo "✅ Stage 1: Node configuration completed, IP test succeded and IP forwarding enabled"
-                    log_success "Stage 1: Node configuration completed, IP test succeded and IP forwarding enabled!"
+
+        if [[ "$INSTALL_XRAY_ONLY" == true ]]; then
+            log_info "Stage 1: Configuring Xray"
+            
+            # Create installation directory (using default)
+            if ! create_install_directory "$BASE_DIR"; then
+                log_error "Failed to create installation directory: $INSTALL_DIR"
+                echo "❌ Failed to create installation directory"
+                STAGE_STATUS[0]="✘ Failed"
+                display_header
+                exit 1
+            fi
+            
+            # Create Xray configuration with spinner
+            create_xray_config &
+            show_spinner $! "→ Creating Xray configuration"
+            if [ $? -eq 0 ]; then
+                log_success "Xray configuration created successfully at $INSTALL_DIR/config.json"
+            else
+                log_error "Failed to create Xray configuration"
+                echo "❌ Failed to create Xray configuration"
+                STAGE_STATUS[0]="✘ Failed"
+                display_header
+                exit 1
+            fi
+            STAGE_STATUS[0]="✔ Complete"        
+        else
+            if configure_node; then
+                if test_ip_reachability; then
+                    if enable_ip_forwarding; then
+                        STAGE_STATUS[0]="✔ Complete"
+                        display_header  # Update header AFTER status change
+                        echo "✅ Stage 1: Node configuration completed, IP test succeded and IP forwarding enabled"
+                        log_success "Stage 1: Node configuration completed, IP test succeded and IP forwarding enabled!"
+                    else
+                        STAGE_STATUS[0]="✘ Failed"
+                        display_header  # Update header AFTER status change
+                        echo "❌ Stage 1: Failed to enable IP forwarding!"
+                        log_error "Stage 1: Failed to enable IP forwarding!"
+                    fi
                 else
                     STAGE_STATUS[0]="✘ Failed"
                     display_header  # Update header AFTER status change
-                    echo "❌ Stage 1: Failed to enable IP forwarding!"
-                    log_error "Stage 1: Failed to enable IP forwarding!"
+                    echo "❌ Stage 1: IP and port accessability check failed!"
+                    log_error "Stage 1: IP and port accessability check failed!"
                 fi
             else
                 STAGE_STATUS[0]="✘ Failed"
                 display_header  # Update header AFTER status change
-                echo "❌ Stage 1: IP and port accessability check failed!"
-                log_error "Stage 1: IP and port accessability check failed!"
+                echo "❌ Stage 1: Node configuration failed!"
+                log_error "Stage 1: Node configuration failed!"
             fi
-        else
-            STAGE_STATUS[0]="✘ Failed"
-            display_header  # Update header AFTER status change
-            echo "❌ Stage 1: Node configuration failed!"
-            log_error "Stage 1: Node configuration failed!"
+            sleep 3
         fi
-        sleep 3
     else
         STAGE_STATUS[0]="✘ Skipped"
         display_header
@@ -1583,30 +1658,58 @@ run_stage_2() {
         sleep 2
         return 1
     fi
-    
+
     if declare -f install_dependencies > /dev/null; then
         STAGE_STATUS[1]="In Progress"   
-        display_header     
-        if install_dependencies; then
-            if create_manage_script; then
-                STAGE_STATUS[1]="✔ Complete"
+        display_header
+        if [[ "$INSTALL_XRAY_ONLY" == true ]]; then
+            log_info "Stage 2: Downloading Xray binary"
+            
+            # Download Xray binary with spinner
+           download_xray_binary &
+            show_spinner $! "→ Downloading Xray binary"
+            local xray_binary_download_status=$?
+            if [ $xray_binary_download_status -ne 0 ]; then
+                log_error "Failed to download Xray binary"
+                echo "❌ Failed to download Xray binary"
+                STAGE_STATUS[1]="✘ Failed"
                 display_header
-                echo "✅ Stage 2: Dependencies installed successfully & node management script installed!"
-                log_success "Stage 2: Dependencies installed successfully and node management script installed!"
-            else
-                STAGE_STATUS[2]="✘ Failed"
-                display_header
-                echo "❌ Stage 2: Node management script installation failed"
-                log_error "Stage 2: Installing dependencies completed, but Node management script installation failed"
+                exit 1
             fi
+            log_success "Xray binary downloaded successfully to $INSTALL_DIR"
+            sleep 3
+            if create_manage_script; then
+                log_success "Node management script installed successfully"
+            else
+                log_error "Failed to install node management script"
+                echo "❌ Failed to install node management script"
+                STAGE_STATUS[1]="✘ Failed"
+                display_header
+                exit 1
+            fi
+            sleep 3
+            STAGE_STATUS[1]="✔ Complete"
+            display_header
         else
-            STAGE_STATUS[1]="✘ Failed"
-            echo "❌ Stage 2: Dependencies installation failed!"
-            log_error "Stage 2: Dependencies installation failed!"
+            if install_dependencies; then
+                if create_manage_script; then
+                    STAGE_STATUS[1]="✔ Complete"
+                    display_header
+                    echo "✅ Stage 2: Dependencies installed successfully & node management script installed!"
+                    log_success "Stage 2: Dependencies installed successfully and node management script installed!"
+                else
+                    STAGE_STATUS[2]="✘ Failed"
+                    display_header
+                    echo "❌ Stage 2: Node management script installation failed"
+                    log_error "Stage 2: Installing dependencies completed, but Node management script installation failed"
+                fi
+            else
+                STAGE_STATUS[1]="✘ Failed"
+                echo "❌ Stage 2: Dependencies installation failed!"
+                log_error "Stage 2: Dependencies installation failed!"
+            fi
+            sleep 3
         fi
-        
-        sleep 3
-        # clear_subprocess_output  # Add this line
     else
         STAGE_STATUS[1]="✘ Skipped"
         display_header
@@ -1632,26 +1735,42 @@ run_stage_3() {
     if declare -f run_node > /dev/null; then
         STAGE_STATUS[2]="In Progress"
         display_header
-        if run_node; then
-            if validate_post_install; then
+
+        if [[ "$INSTALL_XRAY_ONLY" == true ]]; then
+            log_info "Stage 3: Running Xray binary"
+            
+            # Run Xray binary with spinner
+            run_xray_binary &
+            show_spinner $! "→ Starting Erebrus-Xray"
+            if [ $? -eq 0 ]; then
+                log_success "Xray binary started successfully (PID: $XRAY_PID)"
                 STAGE_STATUS[2]="✔ Complete"
-                display_header
-                echo "✅ Stage 3: Node started and validated successfully!"
-                log_success "Stage 3: Node started and validated successfully!"
+            else
+                log_error "Failed to start Xray binary"
+                echo "❌ Failed to start Xray binary"
+                STAGE_STATUS[2]="✘ Failed"
+            fi
+        else
+            if run_node; then
+                if validate_post_install; then
+                    STAGE_STATUS[2]="✔ Complete"
+                    display_header
+                    echo "✅ Stage 3: Node started and validated successfully!"
+                    log_success "Stage 3: Node started and validated successfully!"
+                else
+                    STAGE_STATUS[2]="✘ Failed"
+                    display_header
+                    echo "❌ Stage 3: Node started but validation failed"
+                    log_error "Stage 3: Node started but validation failed"
+                fi
             else
                 STAGE_STATUS[2]="✘ Failed"
                 display_header
-                echo "❌ Stage 3: Node started but validation failed"
-                log_error "Stage 3: Node started but validation failed"
+                echo "❌ Stage 3: Failed to start node"
+                log_error "Stage 3: Failed to start node"
             fi
-        else
-            STAGE_STATUS[2]="✘ Failed"
-            display_header
-            echo "❌ Stage 3: Failed to start node"
-            log_error "Stage 3: Failed to start node"
-        fi
-        
         sleep 3
+        fi
     else
         STAGE_STATUS[2]="✘ Skipped"
         display_header
@@ -1672,13 +1791,37 @@ trap cleanup EXIT
 #####################################################################################################################
 # Main script execution starts here
 #####################################################################################################################
+# Ensure script runs with sudo/root
+if [[ "$EUID" -ne 0 ]]; then
+  exec sudo "$0" "$@"
+fi
+
 STAGE_STATUS=("Pending" "Pending" "Pending")
 INSTALLATION_MODE="binary"  #valid options "binary" , "container"
 XRAY_ENABLED="false"
+INSTALL_XRAY_ONLY=false
 
 # Set default directories
 BASE_DIR=$(pwd)
 INSTALL_DIR="$BASE_DIR/erebrus"
+
+while [[ $# -gt 0 ]]; do
+    case "$1" in
+        --xray-only)
+            INSTALL_XRAY_ONLY=true
+            shift
+            ;;
+        -h|--help)
+            print_help
+            ;;
+        *)
+            echo "Unknown option: $1"
+            echo "Use --help for usage information."
+            exit 1
+            ;;
+    esac
+done
+
 
 init_logging
 display_header  # Show header once
@@ -1703,7 +1846,25 @@ display_header
 
 # Print final message
 echo ""
-print_final_message
+# Print final message
+if [[ "$INSTALL_XRAY_ONLY" == true ]]; then
+    if [[ "${STAGE_STATUS[0]}" == "✔ Complete" && "${STAGE_STATUS[1]}" == "✔ Complete" && "${STAGE_STATUS[2]}" == "✔ Complete" ]]; then
+        printf "\e[32m ✅ Erebrus xray installation is finished.\e[0m\n"
+        printf "Refer \e[4mhttps://github.com/NetSepio/erebrus/blob/main/docs/docs.md\e[0m for API documentation.\n"
+        printf "\nYou can manage the erebrus node using the \e[1merebrus\e[0m command. Try:\n"
+        printf "  \e[36merebrus status xray\e[0m\n"
+        log_success "Installation completed successfully - Erebrus Xray is running"
+
+    else
+        log_error "Xray installation failed"
+        echo "❌ Xray installation failed"
+        tput cnorm
+        exit 1
+    fi
+else
+    echo ""
+    print_final_message
+fi
 
 # Show cursor again
 tput cnorm
