@@ -1,8 +1,36 @@
 #!/usr/bin/env bash
 # Initialize logging
+# Function to display help text
+print_help() {
+    cat <<HELP_TEXT
+Erebrus Node Installation Script
+
+Usage: $0 [OPTIONS]
+
+This script installs the Erebrus node software or its Xray component, including
+binaries, configuration files, and a management script.
+
+Options:
+  --xray-only    Install only the Xray binary and management script, skipping
+                 full node installation (dependencies and node binary).
+                 Default: Full node installation.
+  -h, --help     Display this help message and exit.
+
+Examples:
+  $0             Installs the full Erebrus node (default).
+  $0 --xray-only Installs only the Xray binary and management script.
+  $0 --help      Shows this help text.
+
+For more details, refer to:
+https://docs.netsepio.com/latest/erebrus/nodes/beacon-node
+HELP_TEXT
+    exit 0
+}
+
 init_logging() {
     LOG_DIR="/tmp"
-    LOG_FILE="${LOG_DIR}/erebrus_install.log"
+    local INSTALLATION_ID=$(LC_ALL=C tr -dc A-Za-z0-9 </dev/urandom | head -c 8; echo)
+    LOG_FILE="${LOG_DIR}/erebrus-install-${INSTALLATION_ID}.log"
     
     # Clear previous log and start fresh
     > "$LOG_FILE"
@@ -66,7 +94,7 @@ EOF
 )
     header_buffer+="\e[0m\n\n"
     header_buffer+="\033[1m\033[4mErebrus Node Software Installer v1.1\033[0m\n"
-    printf '─%.0s' {1..80}
+    # printf '─%.0s' {1..80}
 
     # Add separator and requirements
     header_buffer+=$(printf '─%.0s' {1..100})
@@ -232,92 +260,66 @@ is_docker_installed() {
     fi
 }
 
-# Function to test if the IP is directly reachable from the internet
-test_ip_reachability() {
+# This function does the actual test and returns success/failure. It doesn't print any messages
+do_ip_port_test() {
     local host_ip=$1
-    local port=9080
-    local max_retries=2
-    local retry=0
-    local user_retry_choice=""
+    local port=$2
     local listener_pid=""
 
-    log_info "Testing IP reachability for $host_ip:$port"
+    log_info "Performing IP:Port reachability test on $host_ip:$port"
 
-    # This function does the actual test and returns success/failure. It doesn't print any messages
-    do_ip_test() {
-        local host_ip=$1
-        local port=$2
-        local listener_pid=""
-        
-        # Check if port is already in use
-        if sudo lsof -i :$port > /dev/null 2>&1; then
-            log_warning "Port $port is already in use, skipping reachability test"
-            return 0  # Consider this a success to continue installation
-        fi
-        
-        # Start a netcat listener in the background
-        nc -l $port > /dev/null 2>&1 &
+    if sudo lsof -i TCP:"$port" >/dev/null 2>&1; then
+        log_warning "Port $port is already in use, skipping reachability test"
+        return 0
+    fi
+
+    # Prefer socat
+    if command -v socat >/dev/null 2>&1; then
+        log_info "Using socat for testing IP and port"
+        socat TCP-LISTEN:"$port",fork,reuseaddr - >/dev/null 2>&1 &
         listener_pid=$!
-        
-        # Verify the listener started successfully
-        sleep 1
-        if ! kill -0 "$listener_pid" 2>/dev/null; then
-            log_error "Failed to start netcat listener on port $port"
-            return 1
-        fi
-        
-        sleep 1  # Give the listener more time to bind to the port
+    # Fallback to python3
+    elif command -v python3 >/dev/null 2>&1; then
+        log_info "Using python3 for testing IP and port"
+        python3 -c "
+import socket
+s = socket.socket()
+s.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
+s.bind(('0.0.0.0', $port))
+s.listen(1)
+conn, addr = s.accept()
+conn.close()
+s.close()
+" >/dev/null 2>&1 &
+        listener_pid=$!
+    else
+        log_warning "No supported listener tool (socat/python3); skipping IP reachability test"
+        return 0
+    fi
 
-        # Try to connect to the listener using netcat
-        if echo "test" | nc -w 3 $host_ip $port > /dev/null 2>&1; then
-            # Kill the listener if it's still running
-            if [ -n "$listener_pid" ] && kill -0 "$listener_pid" 2>/dev/null; then
-                kill "$listener_pid" > /dev/null 2>&1
-            fi
-            log_success "IP reachability test passed for $host_ip:$port"
-            return 0
-        else
-            # Kill the listener if it's still running
-            if [ -n "$listener_pid" ] && kill -0 "$listener_pid" 2>/dev/null; then
-                kill "$listener_pid" > /dev/null 2>&1
-            fi
-            log_error "IP reachability test failed for $host_ip:$port"
-            return 1
-        fi
-    }
+    ( sleep 5 && kill -0 "$listener_pid" 2>/dev/null && kill "$listener_pid" ) &
 
-    while [ $retry -le $max_retries ]; do
-        # Run the test with spinner
-        do_ip_test "$host_ip" "$port" &
-        show_spinner $! "→ Verifying IP reachability"
-        local test_result=$?
-        
-        if [ $test_result -eq 0 ]; then
-            return 0  # Success
-        else
-            # If we have retries left, ask the user if they want to retry
-            if [ $retry -lt $max_retries ]; then
-                printf "\nThe IP address %s is not reachable from internet. IP reachability test failed.\n" "$host_ip"
-                printf "Make sure port 9002 and 9080 are open on your firewall and/or host system and try again.\n"
-                
-                read -p "Would you like to retry? (y/n): " user_retry_choice
-                if [ "$user_retry_choice" != "y" ]; then
-                    log_error "User chose not to retry IP reachability test"
-                    return 1
-                fi
-            else
-                printf "\nYou do not have a public IP that is routable and reachable from internet.\n"
-                log_error "IP reachability test failed after $max_retries attempts"
-                return 1
-            fi
-        fi
-        
-        ((retry++))
-        log_warning "IP reachability test failed for $host_ip:$port - retry $retry"
-    done
+    sleep 2
 
-    log_error "IP reachability test failed completely"
-    return 1
+    if echo "test" | nc "$host_ip" "$port" >/dev/null 2>&1; then
+        kill "$listener_pid" >/dev/null 2>&1
+        log_success "IP reachability test passed for $host_ip:$port"
+        return 0
+    else
+        kill "$listener_pid" >/dev/null 2>&1
+        log_error "IP reachability test failed for $host_ip:$port"
+        return 1
+    fi
+}
+
+# Function to test if the IP is directly reachable from the internet
+test_ip_reachability() {
+    local host_ip=$HOST_IP
+    local port=9080
+
+    do_ip_port_test "$host_ip" "$port" &
+    show_spinner $! "→ Verifying IP & port reachability"
+    return $?
 }
 
 # Docker check_node_status() has been deprecated. See bottom of script if needed.
@@ -475,6 +477,80 @@ print_final_message() {
     fi
 }
 
+#Function to enable IP forwarding on host. Required for wireguard to forward traffic
+enable_ip_forwarding() {
+    local os
+    os=$(uname)
+    local config_file
+    local setting
+
+    if [[ "$os" == "Linux" ]]; then
+        config_file="/etc/sysctl.conf"
+        setting="net.ipv4.ip_forward=1"
+
+        # Check if setting exists exactly
+        if grep -qE "^${setting}$" "$config_file"; then
+            log_info "IP forwarding is already enabled in $config_file"
+        else
+            # Remove old or conflicting settings
+            sudo sed -i '/^net\.ipv4\.ip_forward/d' "$config_file"
+            # Add the correct setting
+            echo "$setting" | sudo tee -a "$config_file" > /dev/null
+            log_info "IP forwarding added to $config_file"
+        fi
+
+        log_info "Applying sysctl settings..."
+        if sudo sysctl -p | grep -q "$setting"; then
+            log_success "sysctl applied successfully, IP forwarding is enabled"
+        else
+            log_error "Failed to apply sysctl settings"
+            return 1
+        fi
+
+    elif [[ "$os" == "Darwin" ]]; then
+        config_file="/etc/sysctl.conf"
+        setting="net.inet.ip.forwarding=1"
+
+        # Enable immediately
+        if [[ $(sysctl -n net.inet.ip.forwarding) -eq 1 ]]; then
+            log_info "IP forwarding is already enabled on this macOS system"
+        else
+            log_info "Enabling IP forwarding immediately"
+            sudo sysctl -w net.inet.ip.forwarding=1
+        fi
+
+        # Persist setting
+        if [[ ! -f "$config_file" ]]; then
+            echo "$setting" | sudo tee "$config_file" > /dev/null
+            log_info "Created $config_file and enabled IP forwarding persistently"
+        else
+            if grep -qE "^${setting}$" "$config_file"; then
+                log_info "IP forwarding is already enabled in $config_file"
+            else
+                sudo sed -i.bak '/net\.inet\.ip\.forwarding/d' "$config_file"
+                echo "$setting" | sudo tee -a "$config_file" > /dev/null
+                log_info "IP forwarding added to $config_file"
+            fi
+        fi
+
+        log_info "Note: On macOS, a reboot may be required for persistent IP forwarding to take effect."
+
+    else
+        log_error "Unsupported OS: $os"
+        return 1
+    fi
+
+    return 0
+}
+
+#Test if IP forwarding is enable on host
+test_ip_forwarding() {
+    log_info "Checking IP forwarding setting..."
+    enable_ip_forwarding &
+    show_spinner $! "→ Validating IP Forwarding"
+    return $?
+}
+
 # Stage #1 - Configure Node environment variables
 configure_node() {
     log_info "=== Starting Stage 1: Configure Node ==="
@@ -569,6 +645,29 @@ configure_node() {
         fi
     done
 
+    # Set RPC_URL and CONTRACT_ADDRESS based on CHAIN_NAME
+    case "$CHAIN" in
+        "PEAQ")
+            RPC_URL="https://peaq-rpc.publicnode.com"
+            CONTRACT_ADDRESS="0x8811Ffaa9565B5be4a030f3da4c5F1B9eC1d2177"
+            ;;
+        "MONADTestnet")
+            RPC_URL="https://testnet-rpc.monad.xyz/"
+            CONTRACT_ADDRESS="0x4b4Fd104fb1f33a508300C1196cd5893f016F81c"
+            ;;
+        "RISETestnet")
+            RPC_URL="https://testnet.riselabs.xyz/"
+            CONTRACT_ADDRESS="0xa5c3c7207B4362431bD02D0E02af3B8a73Bb35eD"
+            ;;
+        "Solana")
+            RPC_URL=""
+            CONTRACT_ADDRESS="0x291eC3328b56d5ECebdF993c3712a400Cb7569c3"
+            ;;
+        *)
+            RPC_URL=""
+            CONTRACT_ADDRESS=""
+    esac
+
     while true; do
         read -p "Enter your wallet mnemonic: " WALLET_MNEMONIC
         if check_mnemonic_format "$WALLET_MNEMONIC"; then
@@ -615,8 +714,8 @@ CHAIN_NAME=${CHAIN}
 NODE_TYPE=VPN
 NODE_CONFIG=${CONFIG}
 MNEMONIC=${WALLET_MNEMONIC}
-CONTRACT_ADDRESS=0x291eC3328b56d5ECebdF993c3712a400Cb7569c3
-RPC_URL=https://evm.peaq.network
+CONTRACT_ADDRESS=${CONTRACT_ADDRESS}
+RPC_URL=${RPC_URL}
 NODE_ACCESS=${ACCESS}
 
 
@@ -677,7 +776,7 @@ function install_dependencies(){
             download_xray_binary &
             show_spinner $! "→ Downloading Xray binary"
             local xray_status=$?       
-            fi
+        fi
     fi
     # Return overall status (non-zero if any subprocess failed)
     [[ $deps_status -eq 0 && $binary_status -eq 0 && ${xray_status:-0} -eq 0 ]]
@@ -740,11 +839,11 @@ install_dependencies_docker_mode() {
     else
         printf "   → Installing Docker...\n"
         if command -v apt-get > /dev/null; then
-            (sudo apt-get update -qq && sudo apt-get install -y containerd docker.io && sudo apt-get install netcat-* -y && sudo apt-get install lsof -y  >> "$LOG_FILE" 2>&1) &
+            (sudo apt-get update -qq && sudo apt-get install -y containerd docker.io && sudo apt-get install socat-* -y && sudo apt-get install lsof -y  >> "$LOG_FILE" 2>&1) &
         elif command -v yum > /dev/null; then
-            (sudo yum install yum-utils -y && sudo yum install nmap-ncat.x86_64 -y && sudo yum install lsof -y && sudo yum-config-manager --add-repo https://download.docker.com/linux/centos/docker-ce.repo && yum install -y docker >> "$LOG_FILE" 2>&1 && sudo systemctl start docker && sudo systemctl enable docker >> "$LOG_FILE" 2>&1) &
+            (sudo yum install yum-utils -y && sudo yum install nmap-ncat.x86_64 -y && sudo yum install lsof socat -y && sudo yum-config-manager --add-repo https://download.docker.com/linux/centos/docker-ce.repo && yum install -y docker >> "$LOG_FILE" 2>&1 && sudo systemctl start docker && sudo systemctl enable docker >> "$LOG_FILE" 2>&1) &
         elif command -v pacman > /dev/null; then
-            (sudo pacman -Sy --noconfirm docker >> "$LOG_FILE" 2>&1 && sudo systemctl start docker && sudo systemctl enable docker >> "$LOG_FILE" 2>&1) &
+            (sudo pacman -Sy --noconfirm docker socat >> "$LOG_FILE" 2>&1 && sudo systemctl start docker && sudo systemctl enable docker >> "$LOG_FILE" 2>&1) &
         elif command -v dnf > /dev/null; then
             printf "   → Installing Docker on Fedora...\n"
             (sudo dnf install dnf-plugins-core && dnf config-manager --add-repo https://download.docker.com/linux/fedora/docker-ce.repo && dnf install -y docker-ce docker-ce-cli containerd.io  >> "$LOG_FILE" 2>&1) &
@@ -754,7 +853,7 @@ install_dependencies_docker_mode() {
                 printf "   ✗ Homebrew not found. Please install Homebrew first.\n"
                 exit 1
             fi
-            (brew install --cask docker >> "$LOG_FILE" 2>&1 && open /Applications/Docker.app) &
+            (brew install --cask docker socat >> "$LOG_FILE" 2>&1 && open /Applications/Docker.app) &
             printf "   ✓ Docker installation complete\n"
         else
             printf "   ✗ Unsupported Linux distribution.\n"
@@ -793,15 +892,15 @@ function install_dependencies_binary_mode() {
         apk add --no-cache bash openresolv bind-tools wireguard-tools gettext inotify-tools iptables >> "$LOG_FILE" 2>&1 || INSTALL_FAILED=true
     elif command -v apt-get > /dev/null; then
         sudo apt-get update -qq >> "$LOG_FILE" 2>&1
-        sudo apt-get install -y bash resolvconf dnsutils wireguard-tools gettext inotify-tools iptables systemd netcat-* lsof >> "$LOG_FILE" 2>&1 || INSTALL_FAILED=true
+        sudo apt-get install -y bash resolvconf dnsutils wireguard-tools gettext inotify-tools iptables systemd socat-* lsof >> "$LOG_FILE" 2>&1 || INSTALL_FAILED=true
     elif command -v yum > /dev/null; then
-        sudo yum install -y bash openresolv bind-utils wireguard-tools gettext inotify-tools iptables nmap-ncat lsof >> "$LOG_FILE" 2>&1 || INSTALL_FAILED=true
+        sudo yum install -y bash openresolv bind-utils wireguard-tools gettext inotify-tools iptables socat lsof >> "$LOG_FILE" 2>&1 || INSTALL_FAILED=true
     elif command -v pacman > /dev/null; then
-        sudo pacman -Sy --noconfirm bash openresolv bind-tools wireguard-tools gettext inotify-tools iptables netcat lsof >> "$LOG_FILE" 2>&1 || INSTALL_FAILED=true
+        sudo pacman -Sy --noconfirm bash openresolv bind-tools wireguard-tools gettext inotify-tools iptables socat lsof >> "$LOG_FILE" 2>&1 || INSTALL_FAILED=true
     elif command -v dnf > /dev/null; then
-        sudo dnf install -y bash openresolv bind-utils wireguard-tools gettext inotify-tools iptables nmap-ncat lsof >> "$LOG_FILE" 2>&1 || INSTALL_FAILED=true
+        sudo dnf install -y bash openresolv bind-utils wireguard-tools gettext inotify-tools iptables socat lsof >> "$LOG_FILE" 2>&1 || INSTALL_FAILED=true
     elif command -v brew > /dev/null; then
-        brew install bash wireguard-tools gettext coreutils iproute2mac curl netcat lsof >> "$LOG_FILE" 2>&1 || INSTALL_FAILED=true
+        sudo -u "$SUDO_USER" brew install bash wireguard-tools gettext coreutils iproute2mac curl socat lsof >> "$LOG_FILE" 2>&1 || INSTALL_FAILED=true
     else
         echo "   ✗ Unsupported Linux distribution. Exiting." | tee -a "$LOG_FILE"
         exit 1
@@ -890,13 +989,12 @@ function download_xray_binary() {
         return 1
     fi
     
-    log_info "=== Finished download_xray_binary ==="
+    log_info "Finished download_xray_binary to $XRAY_PATH"
     return 0
 }
 
 function download_erebrus_binary() {
     log_info "=== Starting download_erebrus_binary ==="
-    kill_port_erebrus
     REPO="NetSepio/erebrus"
     DOWNLOAD_DIR="${INSTALL_DIR}"
     #ERROR_LOG="$DOWNLOAD_DIR/erebrus_error.log"
@@ -985,7 +1083,7 @@ run_erebrus_binary() {
             log_error "Failed to change to installation directory: ${INSTALL_DIR}"
             return 1
         }
-        
+        kill_port_erebrus
         # Run the binary with sudo (should work now that we ensured credentials)
         sudo "$binary" > "${INSTALL_DIR}/erebrus.log" 2>&1 &
         EREBRUS_PID=$!    
@@ -1008,12 +1106,14 @@ run_erebrus_binary() {
 
 function run_xray_binary() {
     log_info "=== Starting run_xray_binary ==="
-    
+    kill_port_erebrus 8088
     # Create config file first
-    create_xray_config || {
-        log_error "Failed to create Xray configuration"
-        return 1
-    }
+    if ! INSTALL_XRAY_ONLY; then
+        create_xray_config || {
+            log_error "Failed to create Xray configuration"
+            return 1
+        }
+    fi
     
     local path="${INSTALL_DIR}/xray_binary_path"
     if [[ -f "$path" ]]; then
@@ -1050,15 +1150,35 @@ function create_erebrus_folder() {
 }
 
 function kill_port_erebrus() {
-    local ports=(9080 9002 8088)
+    local ports=()
+    
+    # If a port is provided as an argument, use it; otherwise, use default ports
+    if [[ -n "$1" && "$1" =~ ^[0-9]+$ ]]; then
+        ports=("$1")
+        log_info "Collecting and killing processes on specified port: $1"
+    else
+        ports=(9080 9002 8088)
+        log_info "Collecting and killing processes on default ports: ${ports[*]}"
+    fi
     
     for port in "${ports[@]}"; do
+        # Collect all PIDs listening on the port
         local pids
         pids=$(sudo lsof -t -i :$port 2>/dev/null)
         
         if [[ -n "$pids" ]]; then
-            log_info "Killing processes on port $port: $pids"
-            echo "$pids" | xargs kill -9 2>/dev/null
+            # Log all collected PIDs
+            log_info "Collected PIDs on port $port: $pids"
+            
+            # Kill all collected PIDs in one command
+            echo "$pids" | xargs -r kill -9 2>/dev/null
+            if [[ $? -eq 0 ]]; then
+                log_success "Successfully killed PIDs ($pids) on port $port"
+            else
+                log_error "Failed to kill PIDs ($pids) on port $port"
+            fi
+        else
+            log_info "No processes found on port $port"
         fi
     done
 }
@@ -1224,7 +1344,6 @@ fi
 DEBUG=false
 ARGS=()
 FOLLOW_LOGS=false
-
 
 print_help() {
   cat <<HELP_TEXT
@@ -1455,31 +1574,70 @@ fi
 EOF
 
     chmod +x ${INSTALL_DIR}/manage.sh
-    sudo ln -s ${INSTALL_DIR}/manage.sh /usr/local/bin/erebrus
+    sudo ln -sf ${INSTALL_DIR}/manage.sh /usr/local/bin/erebrus >> "$LOG_FILE" 2>&1
     log_info "manage.sh script created and made executable."
     return $?
 }
-
 # Run stage1
 # For each run_stage function, change the order of operations:
 run_stage_1() {
     if declare -f configure_node > /dev/null; then
         STAGE_STATUS[0]="In Progress"
         display_header  # Update header BEFORE running the function
-        
-        if configure_node; then
-            STAGE_STATUS[0]="✔ Complete"
-            display_header  # Update header AFTER status change
-            echo "✅ Stage 1: Node configuration completed!"
-            log_success "Stage 1: Node configuration completed!"
+
+        if [[ "$INSTALL_XRAY_ONLY" == true ]]; then
+            log_info "Stage 1: Configuring Xray"
+            
+            # Create installation directory (using default)
+            if ! create_install_directory "$BASE_DIR"; then
+                log_error "Failed to create installation directory: $INSTALL_DIR"
+                echo "❌ Failed to create installation directory"
+                STAGE_STATUS[0]="✘ Failed"
+                display_header
+                exit 1
+            fi
+            
+            # Create Xray configuration with spinner
+            create_xray_config &
+            show_spinner $! "→ Creating Xray configuration"
+            if [ $? -eq 0 ]; then
+                log_success "Xray configuration created successfully at $INSTALL_DIR/config.json"
+            else
+                log_error "Failed to create Xray configuration"
+                echo "❌ Failed to create Xray configuration"
+                STAGE_STATUS[0]="✘ Failed"
+                display_header
+                exit 1
+            fi
+            STAGE_STATUS[0]="✔ Complete"        
         else
-            STAGE_STATUS[0]="✘ Failed"
-            display_header  # Update header AFTER status change
-            echo "❌ Stage 1: Node configuration failed!"
-            log_error "Stage 1: Node configuration failed!"
+            if configure_node; then
+                if test_ip_reachability; then
+                    if enable_ip_forwarding; then
+                        STAGE_STATUS[0]="✔ Complete"
+                        display_header  # Update header AFTER status change
+                        echo "✅ Stage 1: Node configuration completed, IP test succeded and IP forwarding enabled"
+                        log_success "Stage 1: Node configuration completed, IP test succeded and IP forwarding enabled!"
+                    else
+                        STAGE_STATUS[0]="✘ Failed"
+                        display_header  # Update header AFTER status change
+                        echo "❌ Stage 1: Failed to enable IP forwarding!"
+                        log_error "Stage 1: Failed to enable IP forwarding!"
+                    fi
+                else
+                    STAGE_STATUS[0]="✘ Failed"
+                    display_header  # Update header AFTER status change
+                    echo "❌ Stage 1: IP and port accessability check failed!"
+                    log_error "Stage 1: IP and port accessability check failed!"
+                fi
+            else
+                STAGE_STATUS[0]="✘ Failed"
+                display_header  # Update header AFTER status change
+                echo "❌ Stage 1: Node configuration failed!"
+                log_error "Stage 1: Node configuration failed!"
+            fi
+            sleep 3
         fi
-        
-        sleep 3
     else
         STAGE_STATUS[0]="✘ Skipped"
         display_header
@@ -1500,30 +1658,58 @@ run_stage_2() {
         sleep 2
         return 1
     fi
-    
+
     if declare -f install_dependencies > /dev/null; then
         STAGE_STATUS[1]="In Progress"   
-        display_header     
-        if install_dependencies; then
-            if create_manage_script; then
-                STAGE_STATUS[1]="✔ Complete"
+        display_header
+        if [[ "$INSTALL_XRAY_ONLY" == true ]]; then
+            log_info "Stage 2: Downloading Xray binary"
+            
+            # Download Xray binary with spinner
+           download_xray_binary &
+            show_spinner $! "→ Downloading Xray binary"
+            local xray_binary_download_status=$?
+            if [ $xray_binary_download_status -ne 0 ]; then
+                log_error "Failed to download Xray binary"
+                echo "❌ Failed to download Xray binary"
+                STAGE_STATUS[1]="✘ Failed"
                 display_header
-                echo "✅ Stage 2: Dependencies installed successfully & node management script installed!"
-                log_success "Stage 2: Dependencies installed successfully and node management script installed!"
-            else
-                STAGE_STATUS[2]="✘ Failed"
-                display_header
-                echo "❌ Stage 2: Node management script installation failed"
-                log_error "Stage 2: Installing dependencies completed, but Node management script installation failed"
+                exit 1
             fi
+            log_success "Xray binary downloaded successfully to $INSTALL_DIR"
+            sleep 3
+            if create_manage_script; then
+                log_success "Node management script installed successfully"
+            else
+                log_error "Failed to install node management script"
+                echo "❌ Failed to install node management script"
+                STAGE_STATUS[1]="✘ Failed"
+                display_header
+                exit 1
+            fi
+            sleep 3
+            STAGE_STATUS[1]="✔ Complete"
+            display_header
         else
-            STAGE_STATUS[1]="✘ Failed"
-            echo "❌ Stage 2: Dependencies installation failed!"
-            log_error "Stage 2: Dependencies installation failed!"
+            if install_dependencies; then
+                if create_manage_script; then
+                    STAGE_STATUS[1]="✔ Complete"
+                    display_header
+                    echo "✅ Stage 2: Dependencies installed successfully & node management script installed!"
+                    log_success "Stage 2: Dependencies installed successfully and node management script installed!"
+                else
+                    STAGE_STATUS[2]="✘ Failed"
+                    display_header
+                    echo "❌ Stage 2: Node management script installation failed"
+                    log_error "Stage 2: Installing dependencies completed, but Node management script installation failed"
+                fi
+            else
+                STAGE_STATUS[1]="✘ Failed"
+                echo "❌ Stage 2: Dependencies installation failed!"
+                log_error "Stage 2: Dependencies installation failed!"
+            fi
+            sleep 3
         fi
-        
-        sleep 3
-        # clear_subprocess_output  # Add this line
     else
         STAGE_STATUS[1]="✘ Skipped"
         display_header
@@ -1549,26 +1735,42 @@ run_stage_3() {
     if declare -f run_node > /dev/null; then
         STAGE_STATUS[2]="In Progress"
         display_header
-        if run_node; then
-            if validate_post_install; then
+
+        if [[ "$INSTALL_XRAY_ONLY" == true ]]; then
+            log_info "Stage 3: Running Xray binary"
+            
+            # Run Xray binary with spinner
+            run_xray_binary &
+            show_spinner $! "→ Starting Erebrus-Xray"
+            if [ $? -eq 0 ]; then
+                log_success "Xray binary started successfully (PID: $XRAY_PID)"
                 STAGE_STATUS[2]="✔ Complete"
-                display_header
-                echo "✅ Stage 3: Node started and validated successfully!"
-                log_success "Stage 3: Node started and validated successfully!"
+            else
+                log_error "Failed to start Xray binary"
+                echo "❌ Failed to start Xray binary"
+                STAGE_STATUS[2]="✘ Failed"
+            fi
+        else
+            if run_node; then
+                if validate_post_install; then
+                    STAGE_STATUS[2]="✔ Complete"
+                    display_header
+                    echo "✅ Stage 3: Node started and validated successfully!"
+                    log_success "Stage 3: Node started and validated successfully!"
+                else
+                    STAGE_STATUS[2]="✘ Failed"
+                    display_header
+                    echo "❌ Stage 3: Node started but validation failed"
+                    log_error "Stage 3: Node started but validation failed"
+                fi
             else
                 STAGE_STATUS[2]="✘ Failed"
                 display_header
-                echo "❌ Stage 3: Node started but validation failed"
-                log_error "Stage 3: Node started but validation failed"
+                echo "❌ Stage 3: Failed to start node"
+                log_error "Stage 3: Failed to start node"
             fi
-        else
-            STAGE_STATUS[2]="✘ Failed"
-            display_header
-            echo "❌ Stage 3: Failed to start node"
-            log_error "Stage 3: Failed to start node"
-        fi
-        
         sleep 3
+        fi
     else
         STAGE_STATUS[2]="✘ Skipped"
         display_header
@@ -1589,13 +1791,37 @@ trap cleanup EXIT
 #####################################################################################################################
 # Main script execution starts here
 #####################################################################################################################
+# Ensure script runs with sudo/root
+if [[ "$EUID" -ne 0 ]]; then
+  exec sudo "$0" "$@"
+fi
+
 STAGE_STATUS=("Pending" "Pending" "Pending")
 INSTALLATION_MODE="binary"  #valid options "binary" , "container"
 XRAY_ENABLED="false"
+INSTALL_XRAY_ONLY=false
 
 # Set default directories
 BASE_DIR=$(pwd)
 INSTALL_DIR="$BASE_DIR/erebrus"
+
+while [[ $# -gt 0 ]]; do
+    case "$1" in
+        --xray-only)
+            INSTALL_XRAY_ONLY=true
+            shift
+            ;;
+        -h|--help)
+            print_help
+            ;;
+        *)
+            echo "Unknown option: $1"
+            echo "Use --help for usage information."
+            exit 1
+            ;;
+    esac
+done
+
 
 init_logging
 display_header  # Show header once
@@ -1620,7 +1846,25 @@ display_header
 
 # Print final message
 echo ""
-print_final_message
+# Print final message
+if [[ "$INSTALL_XRAY_ONLY" == true ]]; then
+    if [[ "${STAGE_STATUS[0]}" == "✔ Complete" && "${STAGE_STATUS[1]}" == "✔ Complete" && "${STAGE_STATUS[2]}" == "✔ Complete" ]]; then
+        printf "\e[32m ✅ Erebrus xray installation is finished.\e[0m\n"
+        printf "Refer \e[4mhttps://github.com/NetSepio/erebrus/blob/main/docs/docs.md\e[0m for API documentation.\n"
+        printf "\nYou can manage the erebrus node using the \e[1merebrus\e[0m command. Try:\n"
+        printf "  \e[36merebrus status xray\e[0m\n"
+        log_success "Installation completed successfully - Erebrus Xray is running"
+
+    else
+        log_error "Xray installation failed"
+        echo "❌ Xray installation failed"
+        tput cnorm
+        exit 1
+    fi
+else
+    echo ""
+    print_final_message
+fi
 
 # Show cursor again
 tput cnorm
