@@ -556,7 +556,7 @@ configure_node() {
     log_info "=== Starting Stage 1: Configure Node ==="
     echo "📋 Configuring node..."
     
-    # Prompt for installation directory and validate input
+     # Prompt for installation directory and validate input
     read -p "Enter installation directory (default: current directory): " INSTALL_DIR_INPUT
     # Set base directory from input or use current default
     BASE_DIR=${INSTALL_DIR_INPUT:-$(pwd)}
@@ -569,136 +569,178 @@ configure_node() {
         return 1
     fi
 
-    DEFAULT_HOST_IP=$(get_public_ip)
-
-    # Prompt for Public IP
-    printf "\nAutomatically detected public IP: ${DEFAULT_HOST_IP}\n"
-    read -p "Do you want to use this public IP? (default: y) (y/n): " use_default_host_ip
-    log_info "User choice for public IP: $use_default_host_ip"
-    if [ "$use_default_host_ip" = "n" ]; then
-        read -p "Enter your public IP (default: ${DEFAULT_HOST_IP}): " HOST_IP
-        HOST_IP=${HOST_IP:-$DEFAULT_HOST_IP}
-        log_info "User provided custom IP: $HOST_IP"
-    else
-        HOST_IP=${DEFAULT_HOST_IP}
-        log_info "Using detected IP: $HOST_IP"
-    fi
-
-    DEFAULT_DOMAIN="http://${HOST_IP}:9080"
-
-    # Prompt for Node Details
-    while [[ -z "$NODE_NAME" ]]; do
-        read -p "Enter your node name: " NODE_NAME
-        if [[ -z "$NODE_NAME" ]]; then
-            echo "❌ Node name cannot be empty. Please try again."
-        fi
-    done
-    log_info "Node name set: $NODE_NAME"
-    printf "Select a configuration type from the list below:\n"
-    PS3="Select a config type (e.g. 1): "
-    options=("ASTRO - Coming soon" "BEACON" "TITAN - Coming soon" "NEXUS" "ZENETH")
-
-    while true; do
-        select choice in "${options[@]}"; do
-            case "$choice" in
-                "ASTRO - Coming soon"|"TITAN - Coming soon")
-                    echo "This configuration will be in upcoming updates. Please choose another option."
-                    break  # Restart the select prompt
-                    ;;
-                "BEACON"|"NEXUS"|"ZENETH")
-                    CONFIG="$choice"
-                    echo "You selected: $CONFIG"
-                    log_info "Configuration type selected: $CONFIG"
-                    break 2  # Exit both select and while loops
-                    ;;
-                *)
-                    echo "Invalid choice. Please select a valid config type."
-                    ;;
-            esac
-        done
-    done
-
-    read -p "Enable Xray (default: n) (y/n): " enable_xray
-    enable_xray=${enable_xray:-n}  # default to 'n' if empty
-    log_info "Xray enable choice: $enable_xray"
-
-    if [[ "$enable_xray" =~ ^[yY]$ ]]; then
-        XRAY_ENABLED="true"
-        printf "\033[0;32mXray will be enabled on this node.\033[0m\n"
-        log_info "Xray enabled"
-    else
-        XRAY_ENABLED="false"
-        printf "\033[0;31mXray will be disabled on this node.\033[0m\n"
-        log_info "Xray disabled"
-    fi
-
-    # Prompt for Chain
-    printf "Select valid chain from list below:\n"
-    PS3="Select a chain (e.g. 1): "
-    options=("SOLANA" "PEAQ")
-    select CHAIN in "${options[@]}"; do
-        if [ -n "$CHAIN" ]; then
-            log_info "Chain selected: $CHAIN"
-            break
+    # Configure .env for xray-only installation mode
+    if $INSTALL_XRAY_ONLY; then
+        log_info "INSTALL_XRAY_ONLY=true, XRAY_ENABLED=${XRAY_ENABLED}"
+        if [[ -f "${INSTALL_DIR}/.env" ]]; then
+            # Verify file is writable
+            if [[ ! -w "${INSTALL_DIR}/.env" ]]; then
+                log_error "Cannot write to ${INSTALL_DIR}/.env: Permission denied"
+                return 1
+            fi
+            # Debug: Log current .env content
+            log_info "Current .env content before update:"
+            log_info "$(cat "${INSTALL_DIR}/.env")"
+            # Check if XRAY_ENABLED exists in .env
+            if grep -q "^XRAY_ENABLED=" "${INSTALL_DIR}/.env"; then
+                # Update existing XRAY_ENABLED (cross-platform sed)
+                if sed -i.bak "s/^XRAY_ENABLED=.*/XRAY_ENABLED=${XRAY_ENABLED}/" "${INSTALL_DIR}/.env" 2>/dev/null || sed -i "" "s/^XRAY_ENABLED=.*/XRAY_ENABLED=${XRAY_ENABLED}/" "${INSTALL_DIR}/.env"; then
+                    log_info "Updated XRAY_ENABLED to ${XRAY_ENABLED} in ${INSTALL_DIR}/.env"
+                else
+                    log_error "Failed to update XRAY_ENABLED in ${INSTALL_DIR}/.env"
+                    return 1
+                fi
+                # Remove backup file if created
+                rm -f "${INSTALL_DIR}/.env.bak"
+            else
+                # Append XRAY_ENABLED
+                printf "\n# #Erebrus Xray Installation Flag\nXRAY_ENABLED=${XRAY_ENABLED}\n" >> "${INSTALL_DIR}/.env"
+                log_info "Appended XRAY_ENABLED=${XRAY_ENABLED} to ${INSTALL_DIR}/.env"
+            fi
+            # Debug: Log .env content after update
+            log_info "Current .env content after update:"
+            log_info "$(cat "${INSTALL_DIR}/.env")"
         else
-            echo "Invalid choice. Please select a valid chain."
-        fi
-    done
-
-    # Set RPC_URL and CONTRACT_ADDRESS based on CHAIN_NAME
-    case "$CHAIN" in
-        "PEAQ")
-            RPC_URL="https://peaq-rpc.publicnode.com"
-            CONTRACT_ADDRESS="0x8811Ffaa9565B5be4a030f3da4c5F1B9eC1d2177"
-            ;;
-        "MONADTestnet")
-            RPC_URL="https://testnet-rpc.monad.xyz/"
-            CONTRACT_ADDRESS="0x4b4Fd104fb1f33a508300C1196cd5893f016F81c"
-            ;;
-        "RISETestnet")
-            RPC_URL="https://testnet.riselabs.xyz/"
-            CONTRACT_ADDRESS="0xa5c3c7207B4362431bD02D0E02af3B8a73Bb35eD"
-            ;;
-        "Solana")
-            RPC_URL=""
-            CONTRACT_ADDRESS="0x291eC3328b56d5ECebdF993c3712a400Cb7569c3"
-            ;;
-        *)
-            RPC_URL=""
-            CONTRACT_ADDRESS=""
-    esac
-
-    while true; do
-        read -p "Enter your wallet mnemonic: " WALLET_MNEMONIC
-        if check_mnemonic_format "$WALLET_MNEMONIC"; then
-            break
-        else
-            printf "Wrong mnemonic, try again with correct mnemonic.\n"
-        fi
-    done
-
-    # Prompt for Config Type
-    printf "Select an access type from list below:\n"
-    PS3="Select an access type (e.g. 1): "
-    options=("public" "private")
-    select ACCESS in "${options[@]}"; do
-        if [ -n "$ACCESS" ]; then
-            log_info "Access type selected: $ACCESS"
-            break
-        else
-            echo "Invalid choice. Please select a valid access type."
-        fi
-    done
-
-    # Write environment variables to .env file
-    bash -c "cat > ${INSTALL_DIR}/.env" <<EOL
+            # Create new .env with XRAY_ENABLED
+            bash -c "cat > ${INSTALL_DIR}/.env" <<EOL
 # Application Configuration
+XRAY_ENABLED=${XRAY_ENABLED}
+EOL
+            log_info "Created new ${INSTALL_DIR}/.env with XRAY_ENABLED=${XRAY_ENABLED}"
+        fi
+
+    #Continue with regular node configuration
+    else
+
+        DEFAULT_HOST_IP=$(get_public_ip)
+
+        # Prompt for Public IP
+        printf "\nAutomatically detected public IP: ${DEFAULT_HOST_IP}\n"
+        read -p "Do you want to use this public IP? (default: y) (y/n): " use_default_host_ip
+        log_info "User choice for public IP: $use_default_host_ip"
+        if [ "$use_default_host_ip" = "n" ]; then
+            read -p "Enter your public IP (default: ${DEFAULT_HOST_IP}): " HOST_IP
+            HOST_IP=${HOST_IP:-$DEFAULT_HOST_IP}
+            log_info "User provided custom IP: $HOST_IP"
+        else
+            HOST_IP=${DEFAULT_HOST_IP}
+            log_info "Using detected IP: $HOST_IP"
+        fi
+
+        DEFAULT_DOMAIN="http://${HOST_IP}:9080"
+
+        # Prompt for Node Details
+        while [[ -z "$NODE_NAME" ]]; do
+            read -p "Enter your node name: " NODE_NAME
+            if [[ -z "$NODE_NAME" ]]; then
+                echo "❌ Node name cannot be empty. Please try again."
+            fi
+        done
+        log_info "Node name set: $NODE_NAME"
+        printf "Select a configuration type from the list below:\n"
+        PS3="Select a config type (e.g. 1): "
+        options=("ASTRO - Coming soon" "BEACON" "TITAN - Coming soon" "NEXUS" "ZENETH")
+
+        while true; do
+            select choice in "${options[@]}"; do
+                case "$choice" in
+                    "ASTRO - Coming soon"|"TITAN - Coming soon")
+                        echo "This configuration will be in upcoming updates. Please choose another option."
+                        break  # Restart the select prompt
+                        ;;
+                    "BEACON"|"NEXUS"|"ZENETH")
+                        CONFIG="$choice"
+                        echo "You selected: $CONFIG"
+                        log_info "Configuration type selected: $CONFIG"
+                        break 2  # Exit both select and while loops
+                        ;;
+                    *)
+                        echo "Invalid choice. Please select a valid config type."
+                        ;;
+                esac
+            done
+        done
+
+        read -p "Enable Xray (default: n) (y/n): " enable_xray
+        enable_xray=${enable_xray:-n}  # default to 'n' if empty
+        log_info "Xray enable choice: $enable_xray"
+
+        if [[ "$enable_xray" =~ ^[yY]$ ]]; then
+            XRAY_ENABLED="true"
+            printf "\033[0;32mXray will be enabled on this node.\033[0m\n"
+            log_info "Xray enabled"
+        else
+            XRAY_ENABLED="false"
+            printf "\033[0;31mXray will be disabled on this node.\033[0m\n"
+            log_info "Xray disabled"
+        fi
+
+        # Prompt for Chain
+        printf "Select valid chain from list below:\n"
+        PS3="Select a chain (e.g. 1): "
+        options=("SOLANA" "PEAQ")
+        select CHAIN in "${options[@]}"; do
+            if [ -n "$CHAIN" ]; then
+                log_info "Chain selected: $CHAIN"
+                break
+            else
+                echo "Invalid choice. Please select a valid chain."
+            fi
+        done
+
+        # Set RPC_URL and CONTRACT_ADDRESS based on CHAIN_NAME
+        case "$CHAIN" in
+            "PEAQ")
+                RPC_URL="https://peaq-rpc.publicnode.com"
+                CONTRACT_ADDRESS="0x8811Ffaa9565B5be4a030f3da4c5F1B9eC1d2177"
+                ;;
+            "MONADTestnet")
+                RPC_URL="https://testnet-rpc.monad.xyz/"
+                CONTRACT_ADDRESS="0x4b4Fd104fb1f33a508300C1196cd5893f016F81c"
+                ;;
+            "RISETestnet")
+                RPC_URL="https://testnet.riselabs.xyz/"
+                CONTRACT_ADDRESS="0xa5c3c7207B4362431bD02D0E02af3B8a73Bb35eD"
+                ;;
+            "Solana")
+                RPC_URL=""
+                CONTRACT_ADDRESS="0x291eC3328b56d5ECebdF993c3712a400Cb7569c3"
+                ;;
+            *)
+                RPC_URL=""
+                CONTRACT_ADDRESS=""
+        esac
+
+        while true; do
+            read -p "Enter your wallet mnemonic: " WALLET_MNEMONIC
+            if check_mnemonic_format "$WALLET_MNEMONIC"; then
+                break
+            else
+                printf "Wrong mnemonic, try again with correct mnemonic.\n"
+            fi
+        done
+
+        # Prompt for Config Type
+        printf "Select an access type from list below:\n"
+        PS3="Select an access type (e.g. 1): "
+        options=("public" "private")
+        select ACCESS in "${options[@]}"; do
+            if [ -n "$ACCESS" ]; then
+                log_info "Access type selected: $ACCESS"
+                break
+            else
+                echo "Invalid choice. Please select a valid access type."
+            fi
+        done
+
+        # Write environment variables to .env file
+        bash -c "cat > ${INSTALL_DIR}/.env" <<EOL
+# Erebrus dVPN Node Configuration
 RUNTYPE=released
 SERVER=0.0.0.0
 HTTP_PORT=9080
 GRPC_PORT=9003
 LIBP2P_PORT=9002
-XRAY_ENABLED=${XRAY_ENABLED}
 REGION=$(get_region)
 NODE_NAME=${NODE_NAME}
 DOMAIN=${DEFAULT_DOMAIN}
@@ -745,8 +787,16 @@ AUTH_EULA=I Accept the Erebrus Terms of Service https://erebrus.io/terms
 # Caddy Specifications
 CADDY_CONF_DIR=/etc/caddy # /etc/caddy
 CADDY_INTERFACE_NAME=Caddyfile
+
+#Erebrus Xray Installation Flag
+XRAY_ENABLED=${XRAY_ENABLED}
 EOL
+    fi
     log_success "Environment file created successfully: ${INSTALL_DIR}/.env"
+    if [[ "$XRAY_ENABLED" == "true" ]]; then
+        create_xray_config
+        return $?
+    fi
     return 0
 }
 
@@ -1107,13 +1157,6 @@ run_erebrus_binary() {
 function run_xray_binary() {
     log_info "=== Starting run_xray_binary ==="
     kill_port_erebrus 8088
-    # Create config file first
-    if ! INSTALL_XRAY_ONLY; then
-        create_xray_config || {
-            log_error "Failed to create Xray configuration"
-            return 1
-        }
-    fi
     
     local path="${INSTALL_DIR}/xray_binary_path"
     if [[ -f "$path" ]]; then
@@ -1334,7 +1377,7 @@ create_manage_script() {
     show_spinner $! "→ Installing node management script"
     cat > ${INSTALL_DIR}/manage.sh <<'EOF'
 #!/bin/bash
-#Erebrus Node Management Script
+# Erebrus Node Management Script
 
 # Ensure script runs with sudo/root
 if [[ "$EUID" -ne 0 ]]; then
@@ -1344,6 +1387,9 @@ fi
 DEBUG=false
 ARGS=()
 FOLLOW_LOGS=false
+EREBRUS_AVAILABLE=false
+XRAY_AVAILABLE=false
+SERVICES_STARTED=""
 
 print_help() {
   cat <<HELP_TEXT
@@ -1442,16 +1488,21 @@ show_logs() {
 
 load_env_file
 
-EREBRUS_PATH=$(cat $INSTALL_DIR/erebrus_binary_path 2>/dev/null)
-XRAY_PATH=$(cat $INSTALL_DIR/xray_binary_path 2>/dev/null)
-if [[ ! -x "$EREBRUS_PATH" ]]; then
-  echo "Error: erebrus_binary_path is missing or not executable"
-  exit 1
+EREBRUS_PATH=$(cat "$INSTALL_DIR/erebrus_binary_path" 2>/dev/null)
+XRAY_PATH=$(cat "$INSTALL_DIR/xray_binary_path" 2>/dev/null)
+
+if [[ -n "$EREBRUS_PATH" && -x "$EREBRUS_PATH" &&  $NODE_NAME ]]; then
+  EREBRUS_AVAILABLE=true
+  log_debug "Erebrus node binary found and executable at $EREBRUS_PATH"
+else
+  log_debug "Erebrus node binary not found or not executable at $EREBRUS_PATH"
 fi
 
-if [[ "$XRAY_ENABLED" == "true" && ! -x "$XRAY_PATH" ]]; then
-  echo "Error: xray_binary_path is missing or not executable"
-  exit 1
+if [[ -n "$XRAY_PATH" && -x "$XRAY_PATH" && "$XRAY_ENABLED" == "true" ]]; then
+  XRAY_AVAILABLE=true
+  log_debug "Erebrus Xray binary found and executable at $XRAY_PATH"
+else
+  log_debug "Erebrus Xray binary not found or not executable at $XRAY_PATH"
 fi
 
 get_pids() {
@@ -1471,6 +1522,7 @@ start_service() {
   pids=$(get_pids "$binary")
   if [[ -n "$pids" ]]; then
     printf "\e[32m%s is already running (PIDs: %s)\e[0m\n" "$name" "$(echo "$pids" | paste -sd ',' -)"
+    return 1
   else
     if [[ "$name" == "erebrus-node" ]]; then
       "$binary" > "$INSTALL_DIR/erebrus.log" 2>&1 &
@@ -1479,7 +1531,22 @@ start_service() {
     else
       "$binary" > /dev/null 2>&1 &
     fi
-    printf "\e[32m%s started (PID: %s)\e[0m\n" "$name" "$!"
+    local pid=$!
+    log_debug "Started $name with PID: $pid"
+    sleep 1  # Give the process time to start or fail
+    if [[ -n "$(get_pids "$binary")" ]]; then
+      printf "\e[32m%s started (PID: %s)\e[0m\n" "$name" "$pid"
+      if [[ "$name" == "erebrus-node" ]]; then
+        SERVICES_STARTED="$SERVICES_STARTED node"
+      elif [[ "$name" == "erebrus-xray" ]]; then
+        SERVICES_STARTED="$SERVICES_STARTED xray"
+      fi
+      return 0
+    else
+      printf "\e[31mFailed to start %s\e[0m\n" "$name"
+      log_debug "No PIDs found for $name after start attempt"
+      return 1
+    fi
   fi
 }
 
@@ -1495,7 +1562,7 @@ stop_service() {
     echo "$pids" | xargs kill
     printf "\e[31m%s stopped (PIDs: %s)\e[0m\n" "$name" "$pids"
   else
-    printf "\e[31m%s is not running\e[0m\n" "$name"
+    printf "%s is not running\n" "$name"
   fi
 }
 
@@ -1510,7 +1577,7 @@ status_service() {
   if [[ -n "$pids" ]]; then
     printf "\e[32m%s is running (PIDs: %s)\e[0m\n" "$name" "$pids"
   else
-    printf "\e[31m%s is not running\e[0m\n" "$name"
+    printf "%s is not running\n" "$name"
   fi
 }
 
@@ -1525,12 +1592,16 @@ run_action() {
   if [[ "$action" != "log" ]]; then
     case "$service" in
       node)
+        if ! $EREBRUS_AVAILABLE; then
+          printf "\e[31mErebrus node is disabled  or not installed\e[0m\n"
+          return
+        fi
         binary="$EREBRUS_PATH"
         name="erebrus-node"
         ;;
       xray)
-        if [[ "$XRAY_ENABLED" != "true" ]]; then
-          printf "\e[31mXray is not installed on this node\e[0m\n"
+        if ! $XRAY_AVAILABLE; then
+          printf "\e[31mErebrus Xray is disabled  or not installed\e[0m\n"
           return
         fi
         binary="$XRAY_PATH"
@@ -1571,6 +1642,17 @@ if [[ -z "$SERVICE" ]]; then
 else
   run_action "$ACTION" "$SERVICE"
 fi
+
+# Print additional info message
+if [[ "$ACTION" == "start" || "$ACTION" == "restart" ]]; then
+  printf "\nSee logs, Try: "
+  if [[ -z "$SERVICE" ]]; then
+    # No service specified, applies to both (or available) services
+    printf "  \e[36merebrus log\e[0m\n"
+  else
+    printf "  \e[1merebrus log ${SERVICE}\e[0m\n"
+  fi
+fi
 EOF
 
     chmod +x ${INSTALL_DIR}/manage.sh
@@ -1586,29 +1668,29 @@ run_stage_1() {
         display_header  # Update header BEFORE running the function
 
         if [[ "$INSTALL_XRAY_ONLY" == true ]]; then
+            XRAY_ENABLED="true"
             log_info "Stage 1: Configuring Xray"
-            
             # Create installation directory (using default)
-            if ! create_install_directory "$BASE_DIR"; then
-                log_error "Failed to create installation directory: $INSTALL_DIR"
-                echo "❌ Failed to create installation directory"
+            if ! configure_node; then
+                log_error "Failed to configure erebrus xray"
+                echo "❌ Failed to configure erebrus xray"
                 STAGE_STATUS[0]="✘ Failed"
                 display_header
                 exit 1
             fi
             
-            # Create Xray configuration with spinner
-            create_xray_config &
-            show_spinner $! "→ Creating Xray configuration"
-            if [ $? -eq 0 ]; then
-                log_success "Xray configuration created successfully at $INSTALL_DIR/config.json"
-            else
-                log_error "Failed to create Xray configuration"
-                echo "❌ Failed to create Xray configuration"
-                STAGE_STATUS[0]="✘ Failed"
-                display_header
-                exit 1
-            fi
+            # # Create Xray configuration with spinner
+            # create_xray_config &
+            # show_spinner $! "→ Creating Xray configuration"
+            # if [ $? -eq 0 ]; then
+            #     log_success "Xray configuration created successfully at $INSTALL_DIR/config.json"
+            # else
+            #     log_error "Failed to create Xray configuration"
+            #     echo "❌ Failed to create Xray configuration"
+            #     STAGE_STATUS[0]="✘ Failed"
+            #     display_header
+            #     exit 1
+            # fi
             STAGE_STATUS[0]="✔ Complete"        
         else
             if configure_node; then
@@ -1743,11 +1825,8 @@ run_stage_3() {
             run_xray_binary &
             show_spinner $! "→ Starting Erebrus-Xray"
             if [ $? -eq 0 ]; then
-                log_success "Xray binary started successfully (PID: $XRAY_PID)"
                 STAGE_STATUS[2]="✔ Complete"
             else
-                log_error "Failed to start Xray binary"
-                echo "❌ Failed to start Xray binary"
                 STAGE_STATUS[2]="✘ Failed"
             fi
         else
@@ -1780,13 +1859,50 @@ run_stage_3() {
     fi
 }
 
+# Set ownership of all the installation and log files to SUDO_USER and its Primary Group
+set_all_file_ownership() {
+    log_info "Setting ownership for $LOG_DIR/erebrus-install-*.log and $INSTALL_DIR"
+    if [[ -n "$SUDO_USER" ]]; then
+        # Get the primary group of SUDO_USER
+        primary_group=$(id -gn "$SUDO_USER" 2>>"$LOG_FILE")
+        if [[ -z "$primary_group" ]]; then
+            log_error "Failed to determine primary group for $SUDO_USER; falling back to $SUDO_USER"
+            primary_group="$SUDO_USER"
+        else
+            log_info "Primary group for $SUDO_USER is $primary_group"
+        fi
+
+        # Set ownership for log files in /tmp matching erebrus-install-*.log
+        for log_file in "$LOG_DIR"/erebrus-install-*.log; do
+            if [[ -f "$log_file" ]]; then
+                sudo chown "$SUDO_USER:$primary_group" "$log_file" 2>>"$LOG_FILE"
+                if [[ $? -eq 0 ]]; then
+                    log_info "Set ownership of $log_file to $SUDO_USER:$primary_group"
+                else
+                    log_error "Failed to set ownership of $log_file to $SUDO_USER:$primary_group"
+                fi
+            fi
+        done
+        # Set ownership for INSTALL_DIR recursively
+        if [[ -d "$INSTALL_DIR" ]]; then
+            sudo chown -R "$SUDO_USER:$primary_group" "$INSTALL_DIR" 2>>"$LOG_FILE"
+            if [[ $? -eq 0 ]]; then
+                log_info "Set ownership of $INSTALL_DIR to $SUDO_USER:$primary_group"
+            else
+                log_error "Failed to set ownership of $INSTALL_DIR to $SUDO_USER:$primary_group"
+            fi
+        else
+            log_warning "INSTALL_DIR $INSTALL_DIR does not exist; skipping ownership change"
+        fi
+    else
+        log_warning "SUDO_USER not set; skipping ownership changes"
+    fi
+}
+
 # Cleanup function to restore terminal on exit
 cleanup() {
     tput cnorm  # Show cursor
 }
-
-# Set trap to cleanup on exit
-trap cleanup EXIT
 
 #####################################################################################################################
 # Main script execution starts here
@@ -1848,13 +1964,13 @@ display_header
 echo ""
 # Print final message
 if [[ "$INSTALL_XRAY_ONLY" == true ]]; then
+    set_all_file_ownership
     if [[ "${STAGE_STATUS[0]}" == "✔ Complete" && "${STAGE_STATUS[1]}" == "✔ Complete" && "${STAGE_STATUS[2]}" == "✔ Complete" ]]; then
         printf "\e[32m ✅ Erebrus xray installation is finished.\e[0m\n"
         printf "Refer \e[4mhttps://github.com/NetSepio/erebrus/blob/main/docs/docs.md\e[0m for API documentation.\n"
         printf "\nYou can manage the erebrus node using the \e[1merebrus\e[0m command. Try:\n"
         printf "  \e[36merebrus status xray\e[0m\n"
         log_success "Installation completed successfully - Erebrus Xray is running"
-
     else
         log_error "Xray installation failed"
         echo "❌ Xray installation failed"
@@ -1862,14 +1978,19 @@ if [[ "$INSTALL_XRAY_ONLY" == true ]]; then
         exit 1
     fi
 else
-    echo ""
+    set_all_file_ownership
     print_final_message
 fi
 
-# Show cursor again
-tput cnorm
+
 if [ -n "$BASH_VERSION" ]; then
   hash -r
 elif [ -n "$ZSH_VERSION" ]; then
   rehash
 fi
+
+# Show cursor again
+tput cnorm
+
+# Set trap to cleanup on exit
+trap cleanup EXIT
