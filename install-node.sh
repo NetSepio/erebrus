@@ -485,25 +485,33 @@ enable_ip_forwarding() {
     local setting
 
     if [[ "$os" == "Linux" ]]; then
-        config_file="/etc/sysctl.conf"
+        config_file="/etc/sysctl.d/99-erebrus.conf"
         setting="net.ipv4.ip_forward=1"
 
-        # Check if setting exists exactly
-        if grep -qE "^${setting}$" "$config_file"; then
-            log_info "IP forwarding is already enabled in $config_file"
-        else
-            # Remove old or conflicting settings
+        log_info "Configuring IP forwarding in $config_file"
+
+        # Remove any conflicting settings from the target file if it exists
+        if [[ -f "$config_file" ]]; then
             sudo sed -i '/^net\.ipv4\.ip_forward/d' "$config_file"
-            # Add the correct setting
-            echo "$setting" | sudo tee -a "$config_file" > /dev/null
-            log_info "IP forwarding added to $config_file"
         fi
 
-        log_info "Applying sysctl settings..."
-        if sudo sysctl -p | grep -q "$setting"; then
-            log_success "sysctl applied successfully, IP forwarding is enabled"
+        # Add the correct setting
+        echo "$setting" | sudo tee "$config_file" > /dev/null
+        log_info "IP forwarding setting written to $config_file"
+
+        # Apply all sysctl settings from all config files
+        log_info "Applying sysctl settings using sysctl --system..."
+        if sudo sysctl --system >> "$LOG_FILE" 2>&1; then
+            # Verify the setting actually took effect
+            if [[ "$(sysctl -n net.ipv4.ip_forward)" == "1" ]]; then
+                log_success "IP forwarding is enabled and verified"
+                return 0
+            else
+                log_error "sysctl applied, but IP forwarding not active"
+                return 1
+            fi
         else
-            log_error "Failed to apply sysctl settings"
+            log_error "Failed to apply sysctl settings with sysctl --system"
             return 1
         fi
 
