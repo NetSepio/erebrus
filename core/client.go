@@ -36,6 +36,9 @@ func RegisterClient(client *model.Client) (*model.Client, error) {
 	}
 
 	u, err := uuid.NewRandom()
+	if err != nil {
+		return nil, err
+	}
 	client.UUID = u.String()
 
 	presharedKey, err := wgtypes.GenerateKey()

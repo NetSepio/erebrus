@@ -12,6 +12,8 @@ import (
 	"github.com/NetSepio/erebrus/util/pkg/node"
 	"github.com/docker/docker/pkg/namesgenerator"
 	pubsub "github.com/libp2p/go-libp2p-pubsub"
+	"github.com/libp2p/go-libp2p/core/host"
+	"github.com/libp2p/go-libp2p/core/network"
 	"github.com/multiformats/go-multiaddr"
 	"github.com/sirupsen/logrus"
 )
@@ -23,31 +25,43 @@ const DiscoveryInterval = time.Second * 10
 // other peers.
 const DiscoveryServiceTag = "erebrus"
 
-var StartTimeStamp int64
+var (
+	StartTimeStamp int64
+	quicManager    *QUICManager
+)
 
 func Init() {
-
 	var name string
 
 	if os.Getenv("NODE_NAME") != "" {
 		name = os.Getenv("NODE_NAME")
 	} else {
-		name = namesgenerator.GetRandomName(0) 
-
+		name = namesgenerator.GetRandomName(0)
 	}
 	StartTimeStamp = time.Now().Unix()
 	ctx := context.Background()
 
-	// create a new libp2p Host
+	// create a new libp2p Host with enhanced QUIC support
 	ha, err := makeBasicHost()
 	if err != nil {
 		log.Fatal(err)
 	}
 
+	// Initialize QUIC manager for enhanced connection management
+	quicManager = NewQUICManager(ha)
+
+	// Setup connection event listeners for QUIC optimization
+	setupConnectionEventListeners(ha)
+
 	fullAddr := getHostAddress(ha)
 	log.Printf("I am %s\n", fullAddr)
 
-	remoteAddr := "/ip4/" + os.Getenv("HOST_IP") + "/tcp/" + os.Getenv("LIBP2P_PORT") + "/p2p/" + ha.ID().String()
+	// Use QUIC/UDP instead of TCP for improved performance
+	quicPort := os.Getenv("LIBP2P_PORT")
+	if quicPort == "" {
+		quicPort = "9002" // Default QUIC port
+	}
+	remoteAddr := "/ip4/" + os.Getenv("HOST_IP") + "/udp/" + quicPort + "/quic/p2p/" + ha.ID().String()
 	// Create a new PubSub service using the GossipSub router.
 	ps, err := pubsub.NewGossipSub(ctx, ha)
 	if err != nil {
@@ -69,7 +83,7 @@ func Init() {
 	// Setup global peer discovery over DiscoveryServiceTag.
 	go Discover(ctx, ha, dht, DiscoveryServiceTag)
 
-	//Topic 1
+	// Topic 1
 	topicString := "status" // Change "UniversalPeer" to whatever you want!
 	topic, err := ps.Join(DiscoveryServiceTag + "/" + topicString)
 	if err != nil {
@@ -88,7 +102,7 @@ func Init() {
 			panic(err)
 		}
 	}()
-	//Subscribe to the topic.
+	// Subscribe to the topic.
 	sub, err := topic.Subscribe()
 	if err != nil {
 		panic(err)
@@ -109,7 +123,7 @@ func Init() {
 		}
 	}()
 
-	//Topic 2
+	// Topic 2
 	ClientTopicString := "client" // Change "UniversalPeer" to whatever you want!
 	ClientTopic, err := ps.Join(DiscoveryServiceTag + "/" + ClientTopicString)
 	if err != nil {
@@ -134,7 +148,7 @@ func Init() {
 			panic(err)
 		}
 	}()
-	//Subscribe to the topic.
+	// Subscribe to the topic.
 	ClientSub, err := ClientTopic.Subscribe()
 	if err != nil {
 		panic(err)
@@ -154,6 +168,8 @@ func Init() {
 		}
 	}()
 
+	// Log QUIC-specific statistics periodically
+	go logQUICStatistics()
 }
 
 type status struct {
@@ -171,4 +187,58 @@ func sendStatusMsg(msg string, topic *pubsub.Topic, ctx context.Context) {
 	if err := topic.Publish(ctx, msgBytes); err != nil {
 		panic(err)
 	}
+}
+
+// setupConnectionEventListeners sets up event listeners for enhanced QUIC management
+func setupConnectionEventListeners(host host.Host) {
+	host.Network().Notify(&network.NotifyBundle{
+		ConnectedF: func(n network.Network, conn network.Conn) {
+			logrus.WithFields(logrus.Fields{
+				"peerID":    conn.RemotePeer(),
+				"transport": getConnectionTransport(conn),
+				"multiaddr": conn.RemoteMultiaddr(),
+			}).Info("New connection established")
+
+			// Track QUIC connections specifically
+			if isQUICConnection(conn) {
+				logrus.WithField("peerID", conn.RemotePeer()).Debug("QUIC connection established")
+			}
+		},
+		DisconnectedF: func(n network.Network, conn network.Conn) {
+			logrus.WithFields(logrus.Fields{
+				"peerID":    conn.RemotePeer(),
+				"transport": getConnectionTransport(conn),
+			}).Debug("Connection closed")
+		},
+	})
+}
+
+// isQUICConnection checks if a connection is using QUIC transport
+func isQUICConnection(conn network.Conn) bool {
+	return isQUICAddress(conn.RemoteMultiaddr())
+}
+
+// logQUICStatistics logs QUIC performance statistics periodically
+func logQUICStatistics() {
+	ticker := time.NewTicker(5 * time.Minute)
+	defer ticker.Stop()
+
+	for range ticker.C {
+		if quicManager != nil {
+			metrics := quicManager.GetMetrics()
+			logrus.WithFields(logrus.Fields{
+				"totalConnections":      metrics.TotalConnections,
+				"activeConnections":     metrics.ActiveConnections,
+				"failedConnections":     metrics.FailedConnections,
+				"totalStreams":          metrics.TotalStreams,
+				"bytesTransferred":      metrics.BytesTransferred,
+				"avgConnectionDuration": metrics.ConnectionDuration,
+			}).Info("QUIC performance statistics")
+		}
+	}
+}
+
+// GetQUICManagerInstance returns the global QUIC manager instance
+func GetQUICManagerInstance() *QUICManager {
+	return quicManager
 }
