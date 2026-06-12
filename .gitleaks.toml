@@ -1,0 +1,12 @@
+# gitleaks config — Erebrus node
+# Uses the default gitleaks ruleset; this file only adds allowlists.
+[extend]
+useDefault = true
+
+[allowlist]
+description = "templates and docs with placeholder values"
+paths = [
+  '''\.env\.example$''',
+  '''docs/.*''',
+  '''\.sample-env$''',
+]

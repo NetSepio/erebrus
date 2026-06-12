@@ -1,0 +1,162 @@
+openapi: 3.0.3
+info:
+  title: Erebrus Node API v2
+  version: 2.0.0
+  description: |
+    REST API served by every Erebrus VPN node. The only intended caller is the
+    Erebrus gateway (and node-local tooling); end users never talk to a node
+    directly. All /api/v2 routes require a gateway-issued, node-scoped PASETO
+    bearer token except /api/v2/status and /metrics.
+
+    FROZEN (v2.0): additive changes only. See ../../../erebrus-gateway/docs/v2/ws-protocol.md
+    for the WebSocket control plane.
+servers:
+  - url: http://{host}:9080
+    variables:
+      host:
+        default: localhost
+security:
+  - paseto: []
+paths:
+  /api/v2/status:
+    get:
+      summary: Public node status (unauthenticated)
+      security: []
+      responses:
+        "200":
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  version: { type: string, example: "2.0.0" }
+                  region: { type: string, example: "SG" }
+                  status: { type: string, enum: [online, draining] }
+                  peer_id: { type: string }
+                  did: { type: string, example: "did:erebrus:12D3KooW..." }
+                  capabilities:
+                    $ref: "#/components/schemas/Capabilities"
+                  protocols:
+                    type: array
+                    items: { type: string, enum: [wireguard, vless_reality, hysteria2] }
+          description: Node identity and advertised protocols. No secrets, no peer data.
+  /metrics:
+    get:
+      summary: Prometheus metrics (unauthenticated, bind/firewall to taste)
+      security: []
+      responses:
+        "200": { description: Prometheus text exposition format }
+  /api/v2/peers:
+    get:
+      summary: List provisioned peers (ids and metadata only, no credentials)
+      responses:
+        "200":
+          description: Peer list
+          content:
+            application/json:
+              schema:
+                type: array
+                items: { $ref: "#/components/schemas/PeerInfo" }
+  /api/v2/peers/{id}:
+    parameters:
+      - { name: id, in: path, required: true, schema: { type: string, format: uuid }, description: Gateway-issued VPN client UUID }
+    put:
+      summary: Create or update a peer (idempotent upsert)
+      description: |
+        Provisions the peer across ALL protocols atomically: allocates a
+        WireGuard IP, generates VLESS UUID and Hysteria2 password, applies the
+        WireGuard peer via wgctrl, and rebuilds sing-box inbounds. Repeating
+        the call with the same id and public key returns the same bundle
+        (gateway retries are safe). Returns 409 while the node is draining.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [name, wg_public_key]
+              properties:
+                name: { type: string, maxLength: 64 }
+                wallet: { type: string, description: Owner wallet address (informational) }
+                wg_public_key: { type: string, description: Client-generated Curve25519 public key, base64 }
+                wg_preshared_key: { type: string, description: Optional client-generated PSK, base64 }
+                expires_at: { type: integer, format: int64, description: Unix seconds; 0 = no expiry }
+      responses:
+        "200": { description: Peer upserted, content: { application/json: { schema: { $ref: "#/components/schemas/CredentialBundle" } } } }
+        "400": { description: Invalid key or body }
+        "409": { description: Node is draining or subnet exhausted }
+    delete:
+      summary: Remove a peer from all protocols
+      responses:
+        "204": { description: Peer removed (idempotent — also returned if absent) }
+  /api/v2/peers/{id}/credentials:
+    parameters:
+      - { name: id, in: path, required: true, schema: { type: string, format: uuid } }
+    get:
+      summary: Re-fetch the credential bundle for an existing peer
+      description: |
+        Same response as PUT. Used by the gateway's authenticated config
+        re-fetch (replaces the v1 Walrus blob flow). The WireGuard client_conf
+        contains a placeholder for the private key, which only the end client
+        ever held.
+      responses:
+        "200": { description: Bundle, content: { application/json: { schema: { $ref: "#/components/schemas/CredentialBundle" } } } }
+        "404": { description: Unknown peer }
+  /api/v2/apps:
+    get:
+      summary: List hosted apps (Phase 5; 404 unless ENABLE_APP_HOSTING)
+      responses:
+        "200": { description: App list — schema frozen in Phase 5 addendum }
+components:
+  securitySchemes:
+    paseto:
+      type: http
+      scheme: bearer
+      description: Node-scoped PASETO issued by the gateway at node registration.
+  schemas:
+    Capabilities:
+      type: object
+      properties:
+        app_hosting: { type: boolean }
+        wildcard_domain: { type: string, example: "*.node-sg-1.erebrus.network" }
+    PeerInfo:
+      type: object
+      properties:
+        id: { type: string, format: uuid }
+        name: { type: string }
+        wg_allowed_ip: { type: string, example: "10.0.0.7/32" }
+        enabled: { type: boolean }
+        created_at: { type: integer, format: int64 }
+        expires_at: { type: integer, format: int64 }
+    CredentialBundle:
+      type: object
+      description: Everything a client needs for every protocol, in one response.
+      properties:
+        id: { type: string, format: uuid }
+        wireguard:
+          type: object
+          properties:
+            client_conf:
+              type: string
+              description: |
+                Complete wg-quick [Interface]/[Peer] file with the literal
+                placeholder REPLACE_WITH_PRIVATE_KEY for the client's private
+                key (the node never sees it).
+            server_public_key: { type: string }
+            endpoint: { type: string, example: "203.0.113.10:51820" }
+            address: { type: string, example: "10.0.0.7/32" }
+            dns: { type: string, example: "10.0.0.1" }
+        vless_uri:
+          type: string
+          description: vless:// share URI (REALITY, flow=xtls-rprx-vision)
+          example: "vless://c0a4f1de-...@203.0.113.10:8443?security=reality&pbk=...&sid=...&sni=www.microsoft.com&flow=xtls-rprx-vision&type=tcp#erebrus-sg"
+        hysteria2_uri:
+          type: string
+          example: "hysteria2://pw@203.0.113.10:4443/?insecure=1&sni=node#erebrus-sg"
+        singbox_profile:
+          type: object
+          description: |
+            Complete sing-box client config fragment: outbounds for wg
+            (endpoint), vless and hysteria2, WITHOUT selector/urltest groups —
+            the gateway injects the "auto"/"stealth" groups before handing the
+            profile to end clients.
