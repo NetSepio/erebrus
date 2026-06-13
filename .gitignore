@@ -26,10 +26,10 @@
 *.sln
 *.sw?
 
-#executable binary
+#executable binary (root build output only — must not match the cmd/erebrus pkg)
 
-erebrus
-erebrus-linux-x64
+/erebrus
+/erebrus-linux-x64
 
 
 # bin folder
