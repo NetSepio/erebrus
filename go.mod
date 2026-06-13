@@ -12,7 +12,6 @@ require (
 	github.com/prometheus/client_golang v1.23.2
 	github.com/sagernet/sing v0.6.10
 	github.com/sagernet/sing-box v1.11.15
-	github.com/showwin/speedtest-go v1.7.10
 	github.com/tyler-smith/go-bip32 v1.0.0
 	github.com/tyler-smith/go-bip39 v1.1.0
 	golang.org/x/crypto v0.51.0

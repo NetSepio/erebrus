@@ -32,16 +32,16 @@ type Config struct {
 	NodeAPIToken string
 
 	// wireguard
-	WGConfDir       string
-	WGInterface     string // e.g. "wg0"
-	WGEndpointHost  string
-	WGEndpointPort  string
-	WGIPv4Subnet    string // e.g. "10.0.0.1/16"
-	WGDNS           string
-	WGPostUp        string
-	WGPostDown      string
-	WGPreUp         string
-	WGPreDown       string
+	WGConfDir      string
+	WGInterface    string // e.g. "wg0"
+	WGEndpointHost string
+	WGEndpointPort string
+	WGIPv4Subnet   string // e.g. "10.0.0.1/16"
+	WGDNS          string
+	WGPostUp       string
+	WGPostDown     string
+	WGPreUp        string
+	WGPreDown      string
 
 	// stealth protocols — sing-box carriers for when WireGuard's UDP is
 	// throttled or DPI-blocked. VLESS+REALITY presents as ordinary TLS to a
@@ -69,27 +69,27 @@ type Config struct {
 // Load reads configuration from the environment, applying sane defaults.
 func Load() *Config {
 	c := &Config{
-		RunType:               env("RUNTYPE", "release"),
-		BindAddr:              env("SERVER", "0.0.0.0"),
-		HTTPPort:              env("HTTP_PORT", "9080"),
-		NodeName:              env("NODE_NAME", hostnameOr("erebrus-node")),
-		Region:                env("REGION", "unknown"),
-		Version:               Version,
-		Mnemonic:              os.Getenv("MNEMONIC"),
-		GatewayURL:            env("GATEWAY_URL", ""),
-		GatewayPeerMultiaddr:  env("GATEWAY_PEER_MULTIADDR", ""),
-		P2PListenPort:         env("P2P_LISTEN_PORT", "9002"),
-		NodeAPIToken:          os.Getenv("NODE_API_TOKEN"),
-		WGConfDir:             env("WG_CONF_DIR", "/etc/wireguard"),
-		WGInterface:           normalizeInterface(env("WG_INTERFACE_NAME", "wg0")),
-		WGEndpointHost:        os.Getenv("WG_ENDPOINT_HOST"),
-		WGEndpointPort:        env("WG_ENDPOINT_PORT", "51820"),
-		WGIPv4Subnet:          env("WG_IPv4_SUBNET", "10.0.0.1/16"),
-		WGDNS:                 env("WG_DNS", "1.1.1.1"),
-		WGPostUp:              os.Getenv("WG_POST_UP"),
-		WGPostDown:            os.Getenv("WG_POST_DOWN"),
-		WGPreUp:               os.Getenv("WG_PRE_UP"),
-		WGPreDown:             os.Getenv("WG_PRE_DOWN"),
+		RunType:                env("RUNTYPE", "release"),
+		BindAddr:               env("SERVER", "0.0.0.0"),
+		HTTPPort:               env("HTTP_PORT", "9080"),
+		NodeName:               env("NODE_NAME", hostnameOr("erebrus-node")),
+		Region:                 env("REGION", "unknown"),
+		Version:                Version,
+		Mnemonic:               os.Getenv("MNEMONIC"),
+		GatewayURL:             env("GATEWAY_URL", ""),
+		GatewayPeerMultiaddr:   env("GATEWAY_PEER_MULTIADDR", ""),
+		P2PListenPort:          env("P2P_LISTEN_PORT", "9002"),
+		NodeAPIToken:           os.Getenv("NODE_API_TOKEN"),
+		WGConfDir:              env("WG_CONF_DIR", "/etc/wireguard"),
+		WGInterface:            normalizeInterface(env("WG_INTERFACE_NAME", "wg0")),
+		WGEndpointHost:         os.Getenv("WG_ENDPOINT_HOST"),
+		WGEndpointPort:         env("WG_ENDPOINT_PORT", "51820"),
+		WGIPv4Subnet:           env("WG_IPv4_SUBNET", "10.0.0.1/16"),
+		WGDNS:                  env("WG_DNS", "1.1.1.1"),
+		WGPostUp:               os.Getenv("WG_POST_UP"),
+		WGPostDown:             os.Getenv("WG_POST_DOWN"),
+		WGPreUp:                os.Getenv("WG_PRE_UP"),
+		WGPreDown:              os.Getenv("WG_PRE_DOWN"),
 		EnableStealth:          boolEnv("ENABLE_STEALTH", true),
 		VLESSPort:              env("VLESS_PORT", "8443"),
 		Hysteria2Port:          env("HYSTERIA2_PORT", "4443"),
@@ -97,10 +97,10 @@ func Load() *Config {
 		RealityHandshakeServer: env("REALITY_HANDSHAKE_SERVER", ""),
 		Hysteria2ObfsPassword:  os.Getenv("HYSTERIA2_OBFS_PASSWORD"),
 		EnableTUIC:             boolEnv("ENABLE_TUIC", false),
-		StateDir:              env("STATE_DIR", "/var/lib/erebrus"),
-		EnableAppHosting:      boolEnv("ENABLE_APP_HOSTING", false),
-		AppWildcardDomain:     os.Getenv("APP_WILDCARD_DOMAIN"),
-		ChainRegistration:     env("CHAIN_REGISTRATION", "off"),
+		StateDir:               env("STATE_DIR", "/var/lib/erebrus"),
+		EnableAppHosting:       boolEnv("ENABLE_APP_HOSTING", false),
+		AppWildcardDomain:      os.Getenv("APP_WILDCARD_DOMAIN"),
+		ChainRegistration:      env("CHAIN_REGISTRATION", "off"),
 	}
 	return c
 }

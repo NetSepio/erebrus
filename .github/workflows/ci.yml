@@ -14,14 +14,16 @@ jobs:
         with:
           go-version-file: go.mod
           cache: true
-      - run: go vet ./...
-      - run: go build ./...
-      - run: go test ./...
-      # advisory until the v2 re-layout lands (Phase 1), then make blocking
+      # with_reality_server enables the sing-box REALITY server (stealth carrier);
+      # required or the stealth start-test fails. Keep in sync with Makefile/Dockerfile.
+      - run: go vet -tags with_reality_server ./...
+      - run: go build -tags with_reality_server ./...
+      - run: go test -tags with_reality_server ./...
       - uses: golangci/golangci-lint-action@v6
         continue-on-error: true
         with:
           version: latest
+          args: --build-tags with_reality_server
 
   gitleaks:
     runs-on: ubuntu-latest

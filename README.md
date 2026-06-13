@@ -43,6 +43,10 @@ make build      # go build -tags with_reality_server -o erebrus ./cmd/erebrus
 make test
 ```
 
-## API & docs
+## Docs
 
-REST surface is under `/api/v2` (status, peers CRUD, credentials). Node status is public at `GET /api/v2/status`.
+- [docs/NODE.md](docs/NODE.md) — running, configuring, and managing a node (ports, env reference, troubleshooting).
+- [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) — package layout and the stealth carrier topology.
+- [docs/node-api.openapi.yaml](docs/node-api.openapi.yaml) — the `/api/v2` REST contract.
+
+The REST surface lives under `/api/v2` (status, peers CRUD, credentials); node status is public at `GET /api/v2/status`.

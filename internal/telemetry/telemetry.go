@@ -23,10 +23,10 @@ func InitLogger(debug bool) {
 
 // Metrics holds the node's Prometheus collectors.
 type Metrics struct {
-	WGPeers          prometheus.Gauge
-	ProxySessions    prometheus.Gauge
-	SingboxRebuilds  prometheus.Counter
-	PeerProvisioned  prometheus.Counter
+	WGPeers           prometheus.Gauge
+	ProxySessions     prometheus.Gauge
+	SingboxRebuilds   prometheus.Counter
+	PeerProvisioned   prometheus.Counter
 	PeerDeprovisioned prometheus.Counter
 }
 
