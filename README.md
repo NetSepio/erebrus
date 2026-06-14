@@ -43,10 +43,17 @@ make build      # go build -tags with_reality_server -o erebrus ./cmd/erebrus
 make test
 ```
 
+## Dashboard
+
+Every node serves a local dashboard at `http://<node>:9080/` — intro, live stats
+(connected users, bandwidth, throughput, uptime), and the API reference. It reads
+only public, coarse aggregates (`/api/v2/status`, `/api/v2/stats`).
+
 ## Docs
 
 - [docs/NODE.md](docs/NODE.md) — running, configuring, and managing a node (ports, env reference, troubleshooting).
 - [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) — package layout and the stealth carrier topology.
+- [docs/SECURITY-AUDIT.md](docs/SECURITY-AUDIT.md) — data-capture inventory, threat model, and operator hardening.
 - [docs/node-api.openapi.yaml](docs/node-api.openapi.yaml) — the `/api/v2` REST contract.
 
-The REST surface lives under `/api/v2` (status, peers CRUD, credentials); node status is public at `GET /api/v2/status`.
+The REST surface lives under `/api/v2` (status, stats, peers CRUD, credentials); node status is public at `GET /api/v2/status`.

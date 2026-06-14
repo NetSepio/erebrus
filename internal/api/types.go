@@ -39,6 +39,20 @@ type PeerInfo struct {
 	ExpiresAt   int64  `json:"expires_at"`
 }
 
+// NodeStats is the coarse, public operational snapshot powering the local
+// dashboard. It deliberately exposes only aggregates — never per-client data.
+type NodeStats struct {
+	Status         string   `json:"status"`
+	Version        string   `json:"version"`
+	Region         string   `json:"region"`
+	Protocols      []string `json:"protocols"`
+	TotalPeers     int      `json:"total_peers"`     // provisioned in the store
+	ConnectedPeers int      `json:"connected_peers"` // handshake in the last 3m
+	RxBytes        int64    `json:"rx_bytes"`        // cumulative since interface up
+	TxBytes        int64    `json:"tx_bytes"`
+	UptimeSec      int64    `json:"uptime_sec"`
+}
+
 // StatusResponse is the public node status.
 type StatusResponse struct {
 	Version      string         `json:"version"`

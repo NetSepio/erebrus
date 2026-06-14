@@ -10,6 +10,7 @@ import (
 	"embed"
 	"errors"
 	"fmt"
+	"os"
 	"sort"
 	"time"
 
@@ -58,7 +59,17 @@ func Open(path string) (*Store, error) {
 		_ = db.Close()
 		return nil, err
 	}
+	// The DB holds private key material (WG server key, REALITY key, per-peer
+	// PSKs). Restrict it to the owner; default SQLite creation is 0644.
+	restrictPerms(path)
 	return s, nil
+}
+
+// restrictPerms tightens the DB file (and its WAL/SHM sidecars) to 0600.
+func restrictPerms(path string) {
+	for _, p := range []string{path, path + "-wal", path + "-shm"} {
+		_ = os.Chmod(p, 0o600)
+	}
 }
 
 // Close closes the database.

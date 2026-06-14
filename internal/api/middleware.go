@@ -1,6 +1,7 @@
 package api
 
 import (
+	"crypto/subtle"
 	"log/slog"
 	"net/http"
 	"strings"
@@ -11,23 +12,32 @@ import (
 
 var warnOnce sync.Once
 
-// bearerAuth guards the node API. Phase 1 uses a static token configured via
-// NODE_API_TOKEN. If unset (local dev), requests are allowed with a one-time
-// warning. Phase 2 replaces this with verification of gateway-issued,
-// node-scoped PASETO tokens.
+// bearerAuth guards the node's peer-management API with the static
+// NODE_API_TOKEN. It fails CLOSED: if the token is unset, the API is allowed
+// only in debug mode (local dev). In release mode an unset token disables the
+// authenticated routes entirely rather than exposing them. Comparison is
+// constant-time to avoid leaking the token via response timing.
 func (s *Server) bearerAuth() gin.HandlerFunc {
 	token := s.cfg.NodeAPIToken
+	debug := s.cfg.RunType == "debug"
 	return func(c *gin.Context) {
 		if token == "" {
+			if debug {
+				warnOnce.Do(func() {
+					slog.Warn("NODE_API_TOKEN not set — peer API is UNAUTHENTICATED (debug only)")
+				})
+				c.Next()
+				return
+			}
 			warnOnce.Do(func() {
-				slog.Warn("NODE_API_TOKEN not set — node API is UNAUTHENTICATED (dev only)")
+				slog.Error("NODE_API_TOKEN not set in release mode — peer API is DISABLED until configured")
 			})
-			c.Next()
+			c.AbortWithStatusJSON(http.StatusServiceUnavailable,
+				gin.H{"error": "node API disabled: NODE_API_TOKEN not configured"})
 			return
 		}
-		auth := c.GetHeader("Authorization")
-		got := strings.TrimPrefix(auth, "Bearer ")
-		if got == "" || got != token {
+		got := strings.TrimPrefix(c.GetHeader("Authorization"), "Bearer ")
+		if subtle.ConstantTimeCompare([]byte(got), []byte(token)) != 1 {
 			c.AbortWithStatusJSON(http.StatusUnauthorized, gin.H{"error": "unauthorized"})
 			return
 		}

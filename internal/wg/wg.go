@@ -71,6 +71,16 @@ func (m *Manager) Endpoint() string {
 // Subnet returns the configured IPv4 subnet (server host CIDR).
 func (m *Manager) Subnet() string { return m.cfg.WGIPv4Subnet }
 
+// Stats returns a live device snapshot (transfer counters, active peers).
+// Returns a zero value when the interface is not up (e.g. dev without NET_ADMIN).
+func (m *Manager) Stats() DeviceStats {
+	st, err := m.ctrl.Stats(m.cfg.WGInterface)
+	if err != nil {
+		return DeviceStats{}
+	}
+	return st
+}
+
 // Apply re-renders the interface config from the current peer set and syncs the
 // live peer list. Call after any peer add/update/remove.
 func (m *Manager) Apply(ctx context.Context) error {

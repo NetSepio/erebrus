@@ -40,6 +40,33 @@ paths:
                     type: array
                     items: { type: string, enum: [wireguard, vless_reality, hysteria2] }
           description: Node identity and advertised protocols. No secrets, no peer data.
+  /api/v2/stats:
+    get:
+      summary: Coarse public stats for the local dashboard (unauthenticated)
+      security: []
+      responses:
+        "200":
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  status: { type: string, enum: [online, draining] }
+                  version: { type: string }
+                  region: { type: string }
+                  protocols: { type: array, items: { type: string } }
+                  total_peers: { type: integer, description: Provisioned peers in the store }
+                  connected_peers: { type: integer, description: WireGuard handshake in the last 3 minutes }
+                  rx_bytes: { type: integer, format: int64 }
+                  tx_bytes: { type: integer, format: int64 }
+                  uptime_sec: { type: integer, format: int64 }
+          description: Aggregates only — never per-client rows.
+  /healthz:
+    get:
+      summary: Liveness probe (unauthenticated)
+      security: []
+      responses:
+        "200": { description: '{ "status": "ok" }' }
   /metrics:
     get:
       summary: Prometheus metrics (unauthenticated, bind/firewall to taste)

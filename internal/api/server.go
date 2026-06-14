@@ -6,12 +6,18 @@ package api
 
 import (
 	"context"
+	_ "embed"
 	"net/http"
 
 	"github.com/NetSepio/erebrus/internal/config"
 	"github.com/gin-gonic/gin"
 	"github.com/prometheus/client_golang/prometheus/promhttp"
 )
+
+// indexHTML is the local dashboard served at "/".
+//
+//go:embed web/index.html
+var indexHTML []byte
 
 // Provisioner turns a peer request into a stored peer and a credential bundle.
 // Implemented by node.Service; abstracted so handlers stay transport-only.
@@ -20,6 +26,7 @@ type Provisioner interface {
 	DeletePeer(ctx context.Context, id string) error
 	Credentials(ctx context.Context, id string) (*CredentialBundle, error)
 	ListPeers(ctx context.Context) ([]PeerInfo, error)
+	Stats(ctx context.Context) (*NodeStats, error)
 }
 
 // Identity supplies the node's stable identifiers for the status endpoint.
@@ -52,10 +59,15 @@ func (s *Server) Router() *gin.Engine {
 	r := gin.New()
 	r.Use(gin.Recovery())
 
+	// Local dashboard (intro, docs, live stats).
+	r.GET("/", func(c *gin.Context) { c.Data(http.StatusOK, "text/html; charset=utf-8", indexHTML) })
+
 	r.GET("/metrics", gin.WrapH(promhttp.Handler()))
+	r.GET("/healthz", func(c *gin.Context) { c.JSON(http.StatusOK, gin.H{"status": "ok"}) })
 
 	v2 := r.Group("/api/v2")
 	v2.GET("/status", s.handleStatus)
+	v2.GET("/stats", s.handleStats) // coarse public aggregates for the dashboard
 
 	authed := v2.Group("")
 	authed.Use(s.bearerAuth())
@@ -86,4 +98,13 @@ func (s *Server) handleStatus(c *gin.Context) {
 		},
 		Protocols: protocols,
 	})
+}
+
+func (s *Server) handleStats(c *gin.Context) {
+	stats, err := s.prov.Stats(c.Request.Context())
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to read stats"})
+		return
+	}
+	c.JSON(http.StatusOK, stats)
 }

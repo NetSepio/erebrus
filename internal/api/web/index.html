@@ -1,0 +1,120 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>Erebrus Node</title>
+<style>
+  :root{
+    --bg:#0A0B0F; --elev:#111319; --surface:#161922; --hi:#1E2230; --stroke:#262B3A;
+    --txt:#F4F6FB; --txt2:#A6AEC2; --muted:#6B7488;
+    --indigo:#6D5DFB; --cyan:#00D4FF; --mint:#00E5A0; --violet:#9B6DFF; --amber:#FFC453; --danger:#FF5C7A;
+  }
+  *{box-sizing:border-box}
+  body{margin:0;background:var(--bg);color:var(--txt);font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Helvetica,Arial,sans-serif;line-height:1.5}
+  a{color:var(--cyan);text-decoration:none}
+  .wrap{max-width:920px;margin:0 auto;padding:28px 20px 64px}
+  .brand{font-size:26px;font-weight:800;letter-spacing:-0.5px;background:linear-gradient(120deg,var(--indigo),var(--cyan));-webkit-background-clip:text;background-clip:text;color:transparent}
+  .tag{color:var(--txt2);margin-top:4px;font-size:14px}
+  .dot{display:inline-block;width:9px;height:9px;border-radius:50%;background:var(--muted);margin-right:7px;vertical-align:middle}
+  .dot.on{background:var(--mint);box-shadow:0 0 10px var(--mint)}
+  .pill{display:inline-block;font-size:11px;font-weight:700;padding:3px 9px;border-radius:999px;margin-right:6px}
+  .pill.wg{color:var(--cyan);background:rgba(0,212,255,.12);border:1px solid rgba(0,212,255,.4)}
+  .pill.st{color:var(--violet);background:rgba(155,109,255,.12);border:1px solid rgba(155,109,255,.4)}
+  .grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:14px;margin:20px 0}
+  .card{background:linear-gradient(180deg,rgba(255,255,255,.05),rgba(255,255,255,.02));border:1px solid var(--stroke);border-radius:18px;padding:18px}
+  .label{font-size:11px;letter-spacing:1.2px;color:var(--muted);text-transform:uppercase}
+  .stat{font-size:28px;font-weight:800;letter-spacing:-0.5px;margin-top:6px}
+  .stat small{font-size:14px;font-weight:600;color:var(--txt2)}
+  h2{font-size:14px;letter-spacing:1.4px;color:var(--muted);text-transform:uppercase;margin:34px 0 12px;font-weight:700}
+  .row{display:flex;align-items:center;justify-content:space-between;gap:12px;padding:12px 0;border-bottom:1px solid var(--stroke)}
+  .row:last-child{border-bottom:0}
+  code{background:var(--hi);border:1px solid var(--stroke);border-radius:6px;padding:2px 7px;font-size:12.5px;color:var(--txt)}
+  .meth{font-weight:800;font-size:12px;margin-right:8px}
+  .get{color:var(--mint)} .put{color:var(--amber)} .del{color:var(--danger)}
+  .lock{color:var(--muted);font-size:11px}
+  .foot{color:var(--muted);font-size:12.5px;margin-top:36px;text-align:center}
+  .err{color:var(--danger);font-size:13px}
+</style>
+</head>
+<body>
+<div class="wrap">
+  <div class="brand">Erebrus</div>
+  <div class="tag">Decentralized VPN node · <span id="did">…</span></div>
+
+  <div class="grid">
+    <div class="card"><div class="label">Status</div><div class="stat"><span class="dot" id="sdot"></span><span id="status">…</span></div></div>
+    <div class="card"><div class="label">Connected</div><div class="stat" id="conn">…<small> users</small></div></div>
+    <div class="card"><div class="label">Download (now)</div><div class="stat" id="dl">…<small> /s</small></div></div>
+    <div class="card"><div class="label">Upload (now)</div><div class="stat" id="ul">…<small> /s</small></div></div>
+    <div class="card"><div class="label">Total transfer</div><div class="stat" id="total">…</div></div>
+    <div class="card"><div class="label">Uptime</div><div class="stat" id="uptime">…</div></div>
+  </div>
+
+  <div id="protos"></div>
+  <div id="msg" class="err"></div>
+
+  <h2>About this node</h2>
+  <p style="color:var(--txt2)">This is an Erebrus DePIN VPN node. It serves a WireGuard fast path plus
+  DPI-resistant <b>stealth carriers</b> (VLESS+REALITY over TLS, Hysteria2 over QUIC) so the same tunnel keeps
+  working on networks that throttle or block WireGuard. The node keeps <b>no traffic logs</b>; this page shows
+  only coarse aggregates. Region: <span id="region">…</span> · Version: <span id="version">…</span>.</p>
+
+  <h2>Public API</h2>
+  <div class="row"><div><span class="meth get">GET</span><code>/api/v2/status</code></div><div style="color:var(--txt2);font-size:13px">Identity, region, protocols, capabilities</div></div>
+  <div class="row"><div><span class="meth get">GET</span><code>/api/v2/stats</code></div><div style="color:var(--txt2);font-size:13px">Connected users, bandwidth, uptime</div></div>
+  <div class="row"><div><span class="meth get">GET</span><code>/metrics</code></div><div style="color:var(--txt2);font-size:13px">Prometheus metrics</div></div>
+  <div class="row"><div><span class="meth get">GET</span><code>/healthz</code></div><div style="color:var(--txt2);font-size:13px">Liveness</div></div>
+
+  <h2>Authenticated API <span class="lock">· Bearer NODE_API_TOKEN</span></h2>
+  <div class="row"><div><span class="meth get">GET</span><code>/api/v2/peers</code></div><div class="lock">list peers</div></div>
+  <div class="row"><div><span class="meth put">PUT</span><code>/api/v2/peers/:id</code></div><div class="lock">provision a client</div></div>
+  <div class="row"><div><span class="meth del">DEL</span><code>/api/v2/peers/:id</code></div><div class="lock">remove a client</div></div>
+  <div class="row"><div><span class="meth get">GET</span><code>/api/v2/peers/:id/credentials</code></div><div class="lock">fetch credential bundle</div></div>
+
+  <div class="foot">Erebrus · <a href="https://github.com/NetSepio/erebrus">github.com/NetSepio/erebrus</a> · <a href="https://erebrus.io">erebrus.io</a></div>
+</div>
+
+<script>
+  const $ = (id) => document.getElementById(id);
+  function human(b){ b=Number(b)||0; const u=['B','KB','MB','GB','TB']; let i=0; while(b>=1000&&i<u.length-1){b/=1000;i++;} return b.toFixed(i?1:0)+' '+u[i]; }
+  function dur(s){ s=Number(s)||0; const d=Math.floor(s/86400),h=Math.floor(s%86400/3600),m=Math.floor(s%3600/60); if(d)return d+'d '+h+'h'; if(h)return h+'h '+m+'m'; return m+'m'; }
+
+  let prev = null;
+  async function tick(){
+    try{
+      const [st, stats] = await Promise.all([
+        fetch('/api/v2/status').then(r=>r.json()),
+        fetch('/api/v2/stats').then(r=>r.json()),
+      ]);
+      $('msg').textContent='';
+      $('did').textContent = st.did || st.peer_id || '';
+      $('region').textContent = st.region || stats.region || 'unknown';
+      $('version').textContent = st.version || stats.version || '';
+      const online = (stats.status||'online')!=='offline';
+      $('sdot').className = 'dot'+(online?' on':'');
+      $('status').textContent = (stats.status||'online');
+      $('conn').innerHTML = (stats.connected_peers??0)+'<small> users</small>';
+      $('total').textContent = human((stats.rx_bytes||0)+(stats.tx_bytes||0));
+      $('uptime').textContent = dur(stats.uptime_sec);
+
+      const now = Date.now();
+      if(prev){
+        const dt = (now - prev.t)/1000;
+        const dl = Math.max(0,(stats.tx_bytes - prev.tx))/dt; // tx to peers = their download
+        const ul = Math.max(0,(stats.rx_bytes - prev.rx))/dt;
+        $('dl').innerHTML = human(dl)+'<small> /s</small>';
+        $('ul').innerHTML = human(ul)+'<small> /s</small>';
+      }
+      prev = {t:now, rx:stats.rx_bytes||0, tx:stats.tx_bytes||0};
+
+      const p = (st.protocols||[]);
+      $('protos').innerHTML = p.map(x => x==='wireguard'
+        ? '<span class="pill wg">WireGuard</span>'
+        : '<span class="pill st">'+x.replace('-',' ')+'</span>').join('');
+    }catch(e){ $('msg').textContent = 'Node unreachable — '+e; }
+  }
+  tick(); setInterval(tick, 2000);
+</script>
+</body>
+</html>

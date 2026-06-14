@@ -8,6 +8,7 @@ import (
 	"context"
 	"crypto/rand"
 	"encoding/base64"
+	"time"
 
 	"github.com/NetSepio/erebrus/internal/api"
 	"github.com/NetSepio/erebrus/internal/config"
@@ -20,17 +21,43 @@ import (
 
 // Service provisions peers across all protocols and renders credential bundles.
 type Service struct {
-	cfg     *config.Config
-	st      *store.Store
-	wg      *wg.Manager
-	stealth *stealth.Manager
-	metrics *telemetry.Metrics
+	cfg       *config.Config
+	st        *store.Store
+	wg        *wg.Manager
+	stealth   *stealth.Manager
+	metrics   *telemetry.Metrics
+	startedAt time.Time
 }
 
 // New constructs the node service. stealthMgr may be nil when the stealth
 // carriers are not in use.
 func New(cfg *config.Config, st *store.Store, wgm *wg.Manager, stealthMgr *stealth.Manager, m *telemetry.Metrics) *Service {
-	return &Service{cfg: cfg, st: st, wg: wgm, stealth: stealthMgr, metrics: m}
+	return &Service{cfg: cfg, st: st, wg: wgm, stealth: stealthMgr, metrics: m, startedAt: time.Now()}
+}
+
+// Stats returns coarse public aggregates for the local dashboard. It exposes
+// only totals — never per-client rows.
+func (s *Service) Stats(ctx context.Context) (*api.NodeStats, error) {
+	peers, err := s.st.ListPeers(ctx)
+	if err != nil {
+		return nil, err
+	}
+	live := s.wg.Stats()
+	protocols := []string{"wireguard"}
+	if s.cfg.EnableStealth {
+		protocols = append(protocols, "vless-reality", "hysteria2")
+	}
+	return &api.NodeStats{
+		Status:         "online",
+		Version:        s.cfg.Version,
+		Region:         s.cfg.Region,
+		Protocols:      protocols,
+		TotalPeers:     len(peers),
+		ConnectedPeers: live.Connected,
+		RxBytes:        live.RxBytes,
+		TxBytes:        live.TxBytes,
+		UptimeSec:      int64(time.Since(s.startedAt).Seconds()),
+	}, nil
 }
 
 // UpsertPeer creates or updates a peer and returns its credential bundle. The

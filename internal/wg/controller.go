@@ -5,11 +5,19 @@ import (
 	"net"
 	"os/exec"
 	"strings"
+	"time"
 
 	"github.com/NetSepio/erebrus/internal/store"
 	"golang.zx2c4.com/wireguard/wgctrl"
 	"golang.zx2c4.com/wireguard/wgctrl/wgtypes"
 )
+
+// DeviceStats is a coarse, live snapshot of the WireGuard interface.
+type DeviceStats struct {
+	RxBytes   int64 // cumulative bytes received from peers
+	TxBytes   int64 // cumulative bytes sent to peers
+	Connected int   // peers with a handshake in the last 3 minutes
+}
 
 // Controller abstracts the host's WireGuard plumbing so the Manager can be
 // unit-tested with a fake. The real implementation uses wg-quick for the
@@ -20,6 +28,8 @@ type Controller interface {
 	BringUp(iface, confPath string) error
 	// SyncPeers replaces the live peer set on iface to match peers.
 	SyncPeers(iface string, peers []*store.Peer) error
+	// Stats reads live transfer counters and active-peer count from the device.
+	Stats(iface string) (DeviceStats, error)
 }
 
 // realController talks to the kernel via wg-quick and wgctrl.
@@ -77,4 +87,26 @@ func (r *realController) SyncPeers(iface string, peers []*store.Peer) error {
 		ReplacePeers: true,
 		Peers:        cfgs,
 	})
+}
+
+func (r *realController) Stats(iface string) (DeviceStats, error) {
+	cl, err := wgctrl.New()
+	if err != nil {
+		return DeviceStats{}, err
+	}
+	defer cl.Close()
+	d, err := cl.Device(iface)
+	if err != nil {
+		return DeviceStats{}, err
+	}
+	var st DeviceStats
+	cutoff := time.Now().Add(-3 * time.Minute)
+	for _, p := range d.Peers {
+		st.RxBytes += p.ReceiveBytes
+		st.TxBytes += p.TransmitBytes
+		if !p.LastHandshakeTime.IsZero() && p.LastHandshakeTime.After(cutoff) {
+			st.Connected++
+		}
+	}
+	return st, nil
 }
