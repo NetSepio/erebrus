@@ -27,12 +27,45 @@ type Service struct {
 	stealth   *stealth.Manager
 	metrics   *telemetry.Metrics
 	startedAt time.Time
+	apiStatus func(string)
 }
 
 // New constructs the node service. stealthMgr may be nil when the stealth
 // carriers are not in use.
 func New(cfg *config.Config, st *store.Store, wgm *wg.Manager, stealthMgr *stealth.Manager, m *telemetry.Metrics) *Service {
 	return &Service{cfg: cfg, st: st, wg: wgm, stealth: stealthMgr, metrics: m, startedAt: time.Now()}
+}
+
+// SetAPIStatusHook mirrors drain/online state to the HTTP /api/v2/status field.
+func (s *Service) SetAPIStatusHook(fn func(string)) { s.apiStatus = fn }
+
+// ResyncPeers deletes local peers not present in the authoritative peer_ids list
+// from the gateway. Returns peer ids the gateway listed that are missing locally.
+func (s *Service) ResyncPeers(ctx context.Context, keep []string) ([]string, error) {
+	want := map[string]struct{}{}
+	for _, id := range keep {
+		want[id] = struct{}{}
+	}
+	peers, err := s.st.ListPeers(ctx)
+	if err != nil {
+		return nil, err
+	}
+	have := map[string]struct{}{}
+	for _, p := range peers {
+		have[p.ID] = struct{}{}
+		if _, ok := want[p.ID]; !ok {
+			if err := s.DeletePeer(ctx, p.ID); err != nil {
+				return nil, err
+			}
+		}
+	}
+	var missing []string
+	for id := range want {
+		if _, ok := have[id]; !ok {
+			missing = append(missing, id)
+		}
+	}
+	return missing, nil
 }
 
 // Stats returns coarse public aggregates for the local dashboard. It exposes

@@ -81,6 +81,15 @@ func (m *Manager) Stats() DeviceStats {
 	return st
 }
 
+// PeerTransfers returns per-peer transfer counters keyed by WG public key.
+func (m *Manager) PeerTransfers() []PeerTransfer {
+	pt, err := m.ctrl.PeerTransfers(m.cfg.WGInterface)
+	if err != nil {
+		return nil
+	}
+	return pt
+}
+
 // Apply re-renders the interface config from the current peer set and syncs the
 // live peer list. Call after any peer add/update/remove.
 func (m *Manager) Apply(ctx context.Context) error {

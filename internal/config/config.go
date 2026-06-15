@@ -26,6 +26,12 @@ type Config struct {
 	GatewayURL           string
 	GatewayPeerMultiaddr string
 	P2PListenPort        string
+	NodeID               string // gateway-assigned; persisted in SQLite when registered
+	NodeToken            string // gateway-issued PASETO for WS control plane
+	WalletChain          string // sol | evm — signs gateway registration challenge
+	AuthEULA             string // must match gateway AUTH_EULA for registration
+	APIPublicURL         string // URL gateway uses for peer provisioning (api_base_url)
+	GatewayAutoRegister  bool
 
 	// auth (Phase 1: static bearer token for node API; Phase 2 swaps to
 	// gateway-issued PASETO verification)
@@ -79,6 +85,12 @@ func Load() *Config {
 		GatewayURL:             env("GATEWAY_URL", ""),
 		GatewayPeerMultiaddr:   env("GATEWAY_PEER_MULTIADDR", ""),
 		P2PListenPort:          env("P2P_LISTEN_PORT", "9002"),
+		NodeID:                 os.Getenv("NODE_ID"),
+		NodeToken:              os.Getenv("NODE_TOKEN"),
+		WalletChain:            env("WALLET_CHAIN", "sol"),
+		AuthEULA:               env("AUTH_EULA", "I accept the Erebrus Terms of Service https://erebrus.network/terms."),
+		APIPublicURL:           os.Getenv("API_PUBLIC_URL"),
+		GatewayAutoRegister:    boolEnv("GATEWAY_AUTO_REGISTER", true),
 		NodeAPIToken:           os.Getenv("NODE_API_TOKEN"),
 		WGConfDir:              env("WG_CONF_DIR", "/etc/wireguard"),
 		WGInterface:            normalizeInterface(env("WG_INTERFACE_NAME", "wg0")),
@@ -122,6 +134,21 @@ func (c *Config) Validate() error {
 
 // DBPath is the SQLite file path.
 func (c *Config) DBPath() string { return c.StateDir + "/erebrus.db" }
+
+// PublicAPIBaseURL returns the URL the gateway should use for peer provisioning.
+func (c *Config) PublicAPIBaseURL() string {
+	if c.APIPublicURL != "" {
+		return strings.TrimRight(c.APIPublicURL, "/")
+	}
+	host := c.WGEndpointHost
+	if host == "" {
+		host = "127.0.0.1"
+	}
+	return fmt.Sprintf("http://%s:%s", host, c.HTTPPort)
+}
+
+// GatewayEnabled reports whether the node should connect to the gateway control plane.
+func (c *Config) GatewayEnabled() bool { return strings.TrimSpace(c.GatewayURL) != "" }
 
 // WGEndpointPortInt parses the endpoint port.
 func (c *Config) WGEndpointPortInt() int {

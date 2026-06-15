@@ -49,6 +49,14 @@ func NewServer(cfg *config.Config, prov Provisioner, id Identity) *Server {
 	return &Server{cfg: cfg, prov: prov, id: id, status: "online"}
 }
 
+// SetStatus updates the public status field (online | draining).
+func (s *Server) SetStatus(status string) {
+	if status == "" {
+		status = "online"
+	}
+	s.status = status
+}
+
 // Router returns the configured Gin engine.
 func (s *Server) Router() *gin.Engine {
 	if s.cfg.RunType == "debug" {

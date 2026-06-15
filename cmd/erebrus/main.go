@@ -16,6 +16,7 @@ import (
 
 	"github.com/NetSepio/erebrus/internal/api"
 	"github.com/NetSepio/erebrus/internal/config"
+	"github.com/NetSepio/erebrus/internal/gatewayclient"
 	"github.com/NetSepio/erebrus/internal/node"
 	"github.com/NetSepio/erebrus/internal/p2p"
 	"github.com/NetSepio/erebrus/internal/registrar"
@@ -135,6 +136,52 @@ func run(cfg *config.Config) error {
 	// Core service + HTTP API.
 	svc := node.New(cfg, st, wgm, stealthMgr, metrics)
 	apiServer := api.NewServer(cfg, svc, api.Identity{PeerID: peerID, DID: did})
+	svc.SetAPIStatusHook(apiServer.SetStatus)
+
+	// Gateway control plane (WebSocket + PASETO). Best-effort when configured.
+	if cfg.GatewayEnabled() {
+		nodeID, nodeToken, err := gatewayclient.LoadCredentials(ctx, st)
+		if err != nil {
+			slog.Warn("load gateway credentials failed", "err", err)
+		}
+		if nodeID == "" {
+			nodeID = cfg.NodeID
+		}
+		if nodeToken == "" {
+			nodeToken = cfg.NodeToken
+		}
+		if (nodeID == "" || nodeToken == "") && cfg.GatewayAutoRegister {
+			reg, err := gatewayclient.Register(ctx, gatewayclient.RegistrationInput{
+				GatewayURL:  cfg.GatewayURL,
+				AuthEULA:    cfg.AuthEULA,
+				WalletChain: cfg.WalletChain,
+				Mnemonic:    cfg.Mnemonic,
+				PeerID:      peerID,
+				DID:         did,
+				Name:        cfg.NodeName,
+				Region:      cfg.Region,
+				APIBaseURL:  cfg.PublicAPIBaseURL(),
+				APIToken:    cfg.NodeAPIToken,
+			})
+			if err != nil {
+				slog.Warn("gateway registration failed", "err", err)
+			} else {
+				nodeID, nodeToken = reg.NodeID, reg.NodeToken
+				if err := gatewayclient.SaveCredentials(ctx, st, nodeID, nodeToken); err != nil {
+					slog.Warn("persist gateway credentials failed", "err", err)
+				} else {
+					slog.Info("gateway registered", "node_id", nodeID)
+				}
+			}
+		}
+		if nodeID != "" && nodeToken != "" {
+			bridge := node.NewGatewayBridge(svc, peerID, did, nodeID)
+			gw := gatewayclient.New(cfg.GatewayURL, nodeID, nodeToken, bridge, bridge, bridge.Status)
+			go gw.Run(ctx)
+		} else {
+			slog.Warn("gateway URL set but node credentials missing — WS control plane disabled")
+		}
+	}
 
 	srv := &http.Server{
 		Addr:              fmt.Sprintf("%s:%s", cfg.BindAddr, cfg.HTTPPort),

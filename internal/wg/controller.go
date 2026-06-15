@@ -19,6 +19,14 @@ type DeviceStats struct {
 	Connected int   // peers with a handshake in the last 3 minutes
 }
 
+// PeerTransfer is live transfer counters for one WireGuard peer.
+type PeerTransfer struct {
+	WGPublicKey   string
+	RxBytes       int64
+	TxBytes       int64
+	LastHandshake int64 // unix seconds; 0 if never
+}
+
 // Controller abstracts the host's WireGuard plumbing so the Manager can be
 // unit-tested with a fake. The real implementation uses wg-quick for the
 // interface lifecycle (addresses + PostUp/Down rules) and wgctrl for live
@@ -30,6 +38,8 @@ type Controller interface {
 	SyncPeers(iface string, peers []*store.Peer) error
 	// Stats reads live transfer counters and active-peer count from the device.
 	Stats(iface string) (DeviceStats, error)
+	// PeerTransfers returns per-peer transfer counters keyed by WG public key.
+	PeerTransfers(iface string) ([]PeerTransfer, error)
 }
 
 // realController talks to the kernel via wg-quick and wgctrl.
@@ -109,4 +119,29 @@ func (r *realController) Stats(iface string) (DeviceStats, error) {
 		}
 	}
 	return st, nil
+}
+
+func (r *realController) PeerTransfers(iface string) ([]PeerTransfer, error) {
+	cl, err := wgctrl.New()
+	if err != nil {
+		return nil, err
+	}
+	defer cl.Close()
+	d, err := cl.Device(iface)
+	if err != nil {
+		return nil, err
+	}
+	out := make([]PeerTransfer, 0, len(d.Peers))
+	for _, p := range d.Peers {
+		pt := PeerTransfer{
+			WGPublicKey: p.PublicKey.String(),
+			RxBytes:     p.ReceiveBytes,
+			TxBytes:     p.TransmitBytes,
+		}
+		if !p.LastHandshakeTime.IsZero() {
+			pt.LastHandshake = p.LastHandshakeTime.Unix()
+		}
+		out = append(out, pt)
+	}
+	return out, nil
 }

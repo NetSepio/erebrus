@@ -97,6 +97,26 @@ func (m *Manager) Start(ctx context.Context) error {
 	return nil
 }
 
+// RotateReality regenerates the REALITY short-id, restarts sing-box, and returns
+// the new short-id. The keypair is kept per ws-protocol rotate_reality semantics.
+func (m *Manager) RotateReality(ctx context.Context) (string, error) {
+	if m.st == nil || m.secrets == nil {
+		return "", fmt.Errorf("stealth: not initialized")
+	}
+	shortID := randHex(4)
+	if err := m.st.SetSetting(ctx, keyRealityShortID, shortID); err != nil {
+		return "", err
+	}
+	m.secrets.RealityShortID = shortID
+	if m.running {
+		_ = m.Close()
+		if err := m.Start(ctx); err != nil {
+			return "", err
+		}
+	}
+	return shortID, nil
+}
+
 // Close stops the embedded sing-box instance. Idempotent.
 func (m *Manager) Close() error {
 	m.mu.Lock()
