@@ -44,6 +44,16 @@ func main() {
 		case "version", "--version", "-v":
 			fmt.Println(config.Version)
 			return
+		case "rotate":
+			if len(os.Args) < 3 || os.Args[2] != "carriers" {
+				fmt.Fprintln(os.Stderr, "usage: erebrus rotate carriers [--grace-period 24h] [--peer <peer-id>]")
+				os.Exit(2)
+			}
+			if err := runRotateCarriers(os.Args[2:]); err != nil {
+				fmt.Fprintln(os.Stderr, "rotate:", err)
+				os.Exit(1)
+			}
+			return
 		}
 	}
 

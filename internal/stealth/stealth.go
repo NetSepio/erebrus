@@ -22,6 +22,7 @@ import (
 	"sync"
 
 	"github.com/NetSepio/erebrus/internal/config"
+	"github.com/google/uuid"
 	box "github.com/sagernet/sing-box"
 	C "github.com/sagernet/sing-box/constant"
 	"github.com/sagernet/sing-box/option"
@@ -94,6 +95,41 @@ func (m *Manager) Start(ctx context.Context) error {
 	m.instance = instance
 	m.running = true
 	m.mu.Unlock()
+	return nil
+}
+
+// RotateAllSecrets regenerates VLESS UUID, REALITY short-id, and Hysteria2
+// password, then restarts sing-box if it was running.
+func (m *Manager) RotateAllSecrets(ctx context.Context) error {
+	if m.st == nil {
+		return fmt.Errorf("stealth: not initialized")
+	}
+	if m.secrets == nil {
+		if err := m.Init(ctx); err != nil {
+			return err
+		}
+	}
+	if err := m.st.SetSetting(ctx, keyVLESSUUID, uuid.NewString()); err != nil {
+		return err
+	}
+	if err := m.st.SetSetting(ctx, keyRealityShortID, randHex(4)); err != nil {
+		return err
+	}
+	if err := m.st.SetSetting(ctx, keyHysteria2Pass, randToken(24)); err != nil {
+		return err
+	}
+	secrets, err := loadOrCreateSecrets(ctx, m.st)
+	if err != nil {
+		return err
+	}
+	m.secrets = secrets
+	wasRunning := m.running
+	if wasRunning {
+		_ = m.Close()
+	}
+	if wasRunning && m.cfg.EnableStealth {
+		return m.Start(ctx)
+	}
 	return nil
 }
 

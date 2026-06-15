@@ -1,14 +1,26 @@
 package api
 
+const BundleVersion = 2
+
+// TransportEntry describes one carrier in a v2 credential bundle.
+type TransportEntry struct {
+	Kind string `json:"kind"`
+	URI  string `json:"uri,omitempty"`
+}
+
 // CredentialBundle is the unified response for peer provisioning and re-fetch.
-// In Phase 1 only the WireGuard section is populated; Phase 2 fills the VLESS,
-// Hysteria2 and sing-box profile fields.
 type CredentialBundle struct {
-	ID             string          `json:"id"`
-	WireGuard      WireGuardBundle `json:"wireguard"`
-	VLESSURI       string          `json:"vless_uri,omitempty"`
-	Hysteria2URI   string          `json:"hysteria2_uri,omitempty"`
-	SingboxProfile any             `json:"singbox_profile,omitempty"`
+	BundleVersion  int               `json:"bundle_version"`
+	NodeID         string            `json:"node_id,omitempty"`
+	ID             string            `json:"id"`
+	IssuedAt       int64             `json:"issued_at"`
+	ExpiresAt      int64             `json:"expires_at,omitempty"`
+	WireGuard      WireGuardBundle   `json:"wireguard"`
+	Transports     []TransportEntry  `json:"transports,omitempty"`
+	VLESSURI       string            `json:"vless_uri,omitempty"`
+	Hysteria2URI   string            `json:"hysteria2_uri,omitempty"`
+	SingboxProfile any               `json:"singbox_profile,omitempty"`
+	ServiceDiscovery map[string]any  `json:"service_discovery,omitempty"`
 }
 
 // WireGuardBundle holds everything a client needs for the WireGuard fast path.

@@ -173,7 +173,11 @@ func (s *Service) buildBundle(p *store.Peer) (*api.CredentialBundle, error) {
 		return nil, err
 	}
 	bundle := &api.CredentialBundle{
-		ID: p.ID,
+		BundleVersion: api.BundleVersion,
+		NodeID:        s.cfg.NodeID,
+		ID:            p.ID,
+		IssuedAt:      time.Now().Unix(),
+		ExpiresAt:     p.ExpiresAt,
 		WireGuard: api.WireGuardBundle{
 			ClientConf:      conf,
 			ServerPublicKey: s.wg.ServerPublicKey(),
@@ -193,6 +197,11 @@ func (s *Service) buildBundle(p *store.Peer) (*api.CredentialBundle, error) {
 		bundle.VLESSURI = ps.VLESSURI
 		bundle.Hysteria2URI = ps.Hysteria2URI
 		bundle.SingboxProfile = ps.SingboxProfile
+		bundle.Transports = []api.TransportEntry{
+			{Kind: "direct_wireguard_udp", URI: s.wg.Endpoint()},
+			{Kind: "vless_reality_tcp", URI: ps.VLESSURI},
+			{Kind: "hysteria2_quic_udp", URI: ps.Hysteria2URI},
+		}
 	}
 	return bundle, nil
 }
