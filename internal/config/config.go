@@ -13,11 +13,17 @@ import (
 type Config struct {
 	// app
 	RunType  string // debug | release
-	BindAddr string // SERVER
+	BindAddr string // SERVER / API_BIND_ADDR
 	HTTPPort string
 	NodeName string
 	Region   string
 	Version  string
+
+	// runtime model (v2.1+)
+	Mode            ModeSettings
+	UnsafePublicAPI bool
+	PublicDomain    string
+	WildcardDomain  string
 
 	// identity
 	Mnemonic string
@@ -74,10 +80,17 @@ type Config struct {
 
 // Load reads configuration from the environment, applying sane defaults.
 func Load() *Config {
+	bindAddr := env("API_BIND_ADDR", "")
+	if bindAddr == "" {
+		bindAddr = env("SERVER", "0.0.0.0")
+	}
 	c := &Config{
 		RunType:                env("RUNTYPE", "release"),
-		BindAddr:               env("SERVER", "0.0.0.0"),
+		BindAddr:               bindAddr,
 		HTTPPort:               env("HTTP_PORT", "9080"),
+		UnsafePublicAPI:        boolEnv("UNSAFE_PUBLIC_API", false),
+		PublicDomain:           os.Getenv("PUBLIC_DOMAIN"),
+		WildcardDomain:         env("WILDCARD_DOMAIN", os.Getenv("APP_WILDCARD_DOMAIN")),
 		NodeName:               env("NODE_NAME", hostnameOr("erebrus-node")),
 		Region:                 env("REGION", "unknown"),
 		Version:                Version,
@@ -114,11 +127,23 @@ func Load() *Config {
 		AppWildcardDomain:      os.Getenv("APP_WILDCARD_DOMAIN"),
 		ChainRegistration:      env("CHAIN_REGISTRATION", "off"),
 	}
+	if mode, err := ParseModeSettings(os.Getenv("EREBRUS_MODE"), os.Getenv("EREBRUS_NETWORK_PROFILE")); err == nil {
+		c.Mode = mode
+	}
+	if c.BindAddr == "0.0.0.0" && c.UnsafePublicAPI {
+		c.Mode.Warnings = append(c.Mode.Warnings,
+			"WARNING: Erebrus management API is publicly exposed. Use this only behind TLS, firewall, or a trusted gateway.")
+	}
 	return c
 }
 
-// Validate returns an error if required fields are missing.
+// Validate returns an error if required fields are missing or invalid.
 func (c *Config) Validate() error {
+	mode, err := ParseModeSettings(os.Getenv("EREBRUS_MODE"), os.Getenv("EREBRUS_NETWORK_PROFILE"))
+	if err != nil {
+		return err
+	}
+	c.Mode = mode
 	var missing []string
 	if c.Mnemonic == "" {
 		missing = append(missing, "MNEMONIC")
@@ -128,6 +153,10 @@ func (c *Config) Validate() error {
 	}
 	if len(missing) > 0 {
 		return fmt.Errorf("missing required config: %s", strings.Join(missing, ", "))
+	}
+	if c.Mode.IsGateway() && c.PublicDomain == "" && c.EnableAppHosting {
+		c.Mode.Warnings = append(c.Mode.Warnings,
+			"WARNING: Gateway Mode with ENABLE_APP_HOSTING but no PUBLIC_DOMAIN set; public edge routing may be incomplete.")
 	}
 	return nil
 }

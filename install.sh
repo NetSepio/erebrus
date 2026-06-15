@@ -339,6 +339,20 @@ gather_config() {
   ask GATEWAY_URL "Gateway URL" "$GATEWAY_URL"
   [[ -n "$NODE_API_TOKEN" ]] || NODE_API_TOKEN="$(rand_token)"
 
+  # Map legacy install modes to the v2.1 runtime model written into the env file.
+  case "$MODE" in
+    docker)
+      EREBRUS_MODE=private
+      EREBRUS_NETWORK_PROFILE=bridge
+      warn "Install --mode docker is deprecated. Prefer: erebrus init --mode private --network-profile bridge"
+      ;;
+    host)
+      EREBRUS_MODE=gateway
+      EREBRUS_NETWORK_PROFILE=host-network
+      warn "Install --mode host is deprecated. Prefer: erebrus init --mode gateway --network-profile host-network"
+      ;;
+  esac
+
   if [[ "$MODE" == "host" ]]; then
     if confirm "Enable App-Hosting (expose VPN-connected apps to the internet)?" n; then
       ENABLE_APP_HOSTING="true"
@@ -376,6 +390,8 @@ write_env_file() {
   run tee "$f" >/dev/null <<EOF
 # Erebrus v2 node — generated $(date '+%F %T')
 RUNTYPE=release
+EREBRUS_MODE=${EREBRUS_MODE:-private}
+EREBRUS_NETWORK_PROFILE=${EREBRUS_NETWORK_PROFILE:-bridge}
 SERVER=0.0.0.0
 HTTP_PORT=${HTTP_PORT}
 NODE_NAME=${NODE_NAME}

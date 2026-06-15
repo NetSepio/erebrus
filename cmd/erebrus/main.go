@@ -57,6 +57,14 @@ func main() {
 		slog.Error("invalid configuration", "err", err)
 		os.Exit(1)
 	}
+	for _, w := range cfg.Mode.Warnings {
+		slog.Warn(w)
+	}
+	slog.Info("runtime mode",
+		"mode", cfg.Mode.RuntimeMode,
+		"network_profile", cfg.Mode.NetworkProfile,
+		"api_bind", fmt.Sprintf("%s:%s", cfg.BindAddr, cfg.HTTPPort),
+	)
 
 	if err := run(cfg); err != nil {
 		slog.Error("node exited with error", "err", err)
