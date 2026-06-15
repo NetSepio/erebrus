@@ -47,6 +47,12 @@ func main() {
 		case "version", "--version", "-v":
 			fmt.Println(config.Version)
 			return
+		case "templates":
+			if err := runTemplatesCLI(os.Args[2:]); err != nil {
+				fmt.Fprintln(os.Stderr, "templates:", err)
+				os.Exit(1)
+			}
+			return
 		case "serve":
 			if err := runServeCLI(os.Args[2:]); err != nil {
 				fmt.Fprintln(os.Stderr, "serve:", err)
