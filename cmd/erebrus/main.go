@@ -44,6 +44,18 @@ func main() {
 		case "version", "--version", "-v":
 			fmt.Println(config.Version)
 			return
+		case "serve":
+			if err := runServeCLI(os.Args[2:]); err != nil {
+				fmt.Fprintln(os.Stderr, "serve:", err)
+				os.Exit(1)
+			}
+			return
+		case "services":
+			if err := runServicesCLI(os.Args[2:]); err != nil {
+				fmt.Fprintln(os.Stderr, "services:", err)
+				os.Exit(1)
+			}
+			return
 		case "rotate":
 			if len(os.Args) < 3 || os.Args[2] != "carriers" {
 				fmt.Fprintln(os.Stderr, "usage: erebrus rotate carriers [--grace-period 24h] [--peer <peer-id>]")
