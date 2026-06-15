@@ -47,7 +47,9 @@ type Config struct {
 	WGConfDir      string
 	WGInterface    string // e.g. "wg0"
 	WGEndpointHost string
-	WGEndpointPort string
+	WGEndpointPort string // WG_PORT alias
+	StealthTCPPort string // STEALTH_TCP_PORT — VLESS+REALITY
+	StealthUDPPort string // STEALTH_UDP_PORT — Hysteria2/QUIC
 	WGIPv4Subnet   string // e.g. "10.0.0.1/16"
 	WGDNS          string
 	WGPostUp       string
@@ -108,7 +110,9 @@ func Load() *Config {
 		WGConfDir:              env("WG_CONF_DIR", "/etc/wireguard"),
 		WGInterface:            normalizeInterface(env("WG_INTERFACE_NAME", "wg0")),
 		WGEndpointHost:         os.Getenv("WG_ENDPOINT_HOST"),
-		WGEndpointPort:         env("WG_ENDPOINT_PORT", "51820"),
+		WGEndpointPort:         firstEnv("WG_PORT", "WG_ENDPOINT_PORT", "51820"),
+		StealthTCPPort:         firstEnv("STEALTH_TCP_PORT", "VLESS_PORT", "8443"),
+		StealthUDPPort:         firstEnv("STEALTH_UDP_PORT", "HYSTERIA2_PORT", "4443"),
 		WGIPv4Subnet:           env("WG_IPv4_SUBNET", "10.0.0.1/16"),
 		WGDNS:                  env("WG_DNS", "1.1.1.1"),
 		WGPostUp:               os.Getenv("WG_POST_UP"),
@@ -116,8 +120,8 @@ func Load() *Config {
 		WGPreUp:                os.Getenv("WG_PRE_UP"),
 		WGPreDown:              os.Getenv("WG_PRE_DOWN"),
 		EnableStealth:          boolEnv("ENABLE_STEALTH", true),
-		VLESSPort:              env("VLESS_PORT", "8443"),
-		Hysteria2Port:          env("HYSTERIA2_PORT", "4443"),
+		VLESSPort:              "", // synced from StealthTCPPort below
+		Hysteria2Port:          "", // synced from StealthUDPPort below
 		RealityServerNames:     splitCSV(env("REALITY_SERVER_NAMES", "www.microsoft.com")),
 		RealityHandshakeServer: env("REALITY_HANDSHAKE_SERVER", ""),
 		Hysteria2ObfsPassword:  os.Getenv("HYSTERIA2_OBFS_PASSWORD"),
@@ -130,6 +134,8 @@ func Load() *Config {
 	if mode, err := ParseModeSettings(os.Getenv("EREBRUS_MODE"), os.Getenv("EREBRUS_NETWORK_PROFILE")); err == nil {
 		c.Mode = mode
 	}
+	c.VLESSPort = c.StealthTCPPort
+	c.Hysteria2Port = c.StealthUDPPort
 	if c.BindAddr == "0.0.0.0" && c.UnsafePublicAPI {
 		c.Mode.Warnings = append(c.Mode.Warnings,
 			"WARNING: Erebrus management API is publicly exposed. Use this only behind TLS, firewall, or a trusted gateway.")
@@ -157,6 +163,10 @@ func (c *Config) Validate() error {
 	if c.Mode.IsGateway() && c.PublicDomain == "" && c.EnableAppHosting {
 		c.Mode.Warnings = append(c.Mode.Warnings,
 			"WARNING: Gateway Mode with ENABLE_APP_HOSTING but no PUBLIC_DOMAIN set; public edge routing may be incomplete.")
+	}
+	if c.Mode.IsGateway() && (c.StealthTCPPort != "443" || c.StealthUDPPort != "443") {
+		c.Mode.Warnings = append(c.Mode.Warnings,
+			"WARNING: Gateway Mode production should expose stealth on 443/tcp and 443/udp (STEALTH_TCP_PORT/STEALTH_UDP_PORT) for best reachability.")
 	}
 	return nil
 }
@@ -206,6 +216,20 @@ func (c *Config) RealityHandshakeTarget() string {
 		return c.RealityHandshakeServer
 	}
 	return c.RealitySNI() + ":443"
+}
+
+func firstEnv(keys ...string) string {
+	if len(keys) == 0 {
+		return ""
+	}
+	def := keys[len(keys)-1]
+	keys = keys[:len(keys)-1]
+	for _, k := range keys {
+		if v := os.Getenv(k); v != "" {
+			return v
+		}
+	}
+	return def
 }
 
 func env(key, def string) string {

@@ -23,6 +23,7 @@ import (
 	"github.com/NetSepio/erebrus/internal/stealth"
 	"github.com/NetSepio/erebrus/internal/store"
 	"github.com/NetSepio/erebrus/internal/telemetry"
+	"github.com/NetSepio/erebrus/internal/transport/probe"
 	"github.com/NetSepio/erebrus/internal/wg"
 	"github.com/joho/godotenv"
 )
@@ -75,6 +76,15 @@ func main() {
 func run(cfg *config.Config) error {
 	ctx, stop := signal.NotifyContext(context.Background(), syscall.SIGINT, syscall.SIGTERM)
 	defer stop()
+
+	if best, ok := probe.Select(ctx, &probe.LocalProber{
+		StealthEnabled: cfg.EnableStealth,
+		WGPort:         cfg.WGEndpointPortInt(),
+		VLESSPort:      cfg.VLESSPortInt(),
+		Hysteria2Port:  cfg.Hysteria2PortInt(),
+	}, cfg.EnableStealth); ok {
+		slog.Info("transport ladder", "preferred", best.Kind, "score", best.Score)
+	}
 
 	if err := os.MkdirAll(cfg.StateDir, 0o700); err != nil {
 		return fmt.Errorf("create state dir: %w", err)
