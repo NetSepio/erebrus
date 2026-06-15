@@ -17,6 +17,7 @@ import (
 	"github.com/NetSepio/erebrus/internal/api"
 	"github.com/NetSepio/erebrus/internal/config"
 	dnspkg "github.com/NetSepio/erebrus/internal/dns"
+	"github.com/NetSepio/erebrus/internal/edge"
 	"github.com/NetSepio/erebrus/internal/gatewayclient"
 	"github.com/NetSepio/erebrus/internal/node"
 	"github.com/NetSepio/erebrus/internal/p2p"
@@ -200,6 +201,27 @@ func run(cfg *config.Config) error {
 	svc := node.New(cfg, st, wgm, stealthMgr, metrics)
 	apiServer := api.NewServer(cfg, svc, api.Identity{PeerID: peerID, DID: did})
 	svc.SetAPIStatusHook(apiServer.SetStatus)
+
+	// Public edge proxy (Gateway Mode only, opt-in).
+	if cfg.Mode.IsGateway() && cfg.PublicGatewayEnabled {
+		edgeProxy := &edge.Proxy{Reg: svcReg, WildcardDomain: cfg.WildcardDomain}
+		edgeSrv := &http.Server{
+			Addr:              ":9081",
+			Handler:           edgeProxy.Handler(),
+			ReadHeaderTimeout: 10 * time.Second,
+		}
+		go func() {
+			slog.Info("public edge proxy listening", "addr", edgeSrv.Addr)
+			if err := edgeSrv.ListenAndServe(); err != nil && err != http.ErrServerClosed {
+				slog.Warn("edge proxy error", "err", err)
+			}
+		}()
+		defer func() {
+			shut, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+			defer cancel()
+			_ = edgeSrv.Shutdown(shut)
+		}()
+	}
 
 	// Gateway control plane (WebSocket + PASETO). Best-effort when configured.
 	if cfg.GatewayEnabled() {

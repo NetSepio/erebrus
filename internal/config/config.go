@@ -22,8 +22,12 @@ type Config struct {
 	// runtime model (v2.1+)
 	Mode            ModeSettings
 	UnsafePublicAPI bool
-	PublicDomain    string
-	WildcardDomain  string
+	PublicDomain         string
+	WildcardDomain       string
+	PublicGatewayEnabled bool
+	PublicHTTPPort       string
+	PublicHTTPSPort      string
+	AutoTLS              bool
 
 	// identity
 	Mnemonic string
@@ -98,8 +102,12 @@ func Load() *Config {
 		BindAddr:               bindAddr,
 		HTTPPort:               env("HTTP_PORT", "9080"),
 		UnsafePublicAPI:        boolEnv("UNSAFE_PUBLIC_API", false),
-		PublicDomain:           os.Getenv("PUBLIC_DOMAIN"),
-		WildcardDomain:         env("WILDCARD_DOMAIN", os.Getenv("APP_WILDCARD_DOMAIN")),
+		PublicDomain:           firstEnv("EREBRUS_DOMAIN", "PUBLIC_DOMAIN", ""),
+		WildcardDomain:         env("WILDCARD_DOMAIN", os.Getenv("EREBRUS_WILDCARD_DOMAIN")),
+		PublicGatewayEnabled:   boolEnv("PUBLIC_GATEWAY_ENABLED", boolEnv("EREBRUS_PUBLIC_GATEWAY", false)),
+		PublicHTTPPort:         env("PUBLIC_HTTP_PORT", "80"),
+		PublicHTTPSPort:        env("PUBLIC_HTTPS_PORT", "443"),
+		AutoTLS:                boolEnv("AUTO_TLS", true),
 		NodeName:               env("NODE_NAME", hostnameOr("erebrus-node")),
 		Region:                 env("REGION", "unknown"),
 		Version:                Version,
