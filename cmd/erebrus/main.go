@@ -204,7 +204,7 @@ func run(cfg *config.Config) error {
 
 	// Public edge proxy (Gateway Mode only, opt-in).
 	if cfg.Mode.IsGateway() && cfg.PublicGatewayEnabled {
-		edgeProxy := &edge.Proxy{Reg: svcReg, WildcardDomain: cfg.WildcardDomain}
+		edgeProxy := &edge.Proxy{Reg: svcReg, St: st, WildcardDomain: cfg.WildcardDomain}
 		edgeSrv := &http.Server{
 			Addr:              ":9081",
 			Handler:           edgeProxy.Handler(),

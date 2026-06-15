@@ -14,6 +14,9 @@ import (
 // Proxy routes public HTTP requests to registered services by hostname.
 type Proxy struct {
 	Reg            *services.Registry
+	St             interface {
+		GetServiceByDomain(ctx context.Context, domain string) (string, error)
+	}
 	WildcardDomain string
 }
 
@@ -44,6 +47,11 @@ func (p *Proxy) lookup(ctx context.Context, host string) (*services.Service, err
 	for _, s := range items {
 		if s.Public && strings.EqualFold(s.PublicHost, host) {
 			return &s, nil
+		}
+	}
+	if p.St != nil {
+		if id, err := p.St.GetServiceByDomain(ctx, host); err == nil && id != "" {
+			return p.Reg.Get(ctx, id)
 		}
 	}
 	if p.WildcardDomain != "" {
