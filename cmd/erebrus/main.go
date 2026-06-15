@@ -16,10 +16,12 @@ import (
 
 	"github.com/NetSepio/erebrus/internal/api"
 	"github.com/NetSepio/erebrus/internal/config"
+	dnspkg "github.com/NetSepio/erebrus/internal/dns"
 	"github.com/NetSepio/erebrus/internal/gatewayclient"
 	"github.com/NetSepio/erebrus/internal/node"
 	"github.com/NetSepio/erebrus/internal/p2p"
 	"github.com/NetSepio/erebrus/internal/registrar"
+	"github.com/NetSepio/erebrus/internal/services"
 	"github.com/NetSepio/erebrus/internal/stealth"
 	"github.com/NetSepio/erebrus/internal/store"
 	"github.com/NetSepio/erebrus/internal/telemetry"
@@ -171,6 +173,27 @@ func run(cfg *config.Config) error {
 		Version: cfg.Version,
 	}); err != nil {
 		slog.Warn("registrar register failed", "err", err)
+	}
+
+	// Private DNS (optional).
+	svcReg := &services.Registry{St: st}
+	if cfg.PrivateDNSEnabled {
+		dnsCfg := dnspkg.Config{
+			Enabled:    true,
+			Domain:     cfg.PrivateDNSDomain,
+			ListenAddr: dnspkg.DefaultListenAddr(cfg.WGIPv4Subnet, cfg.PrivateDNSAddr),
+			Upstream:   cfg.UpstreamDNS,
+			QueryLogs:  cfg.DNSQueryLogs,
+		}
+		if err := dnsCfg.Validate(); err != nil {
+			slog.Warn("private DNS disabled", "err", err)
+		} else {
+			go func() {
+				if err := dnspkg.New(dnsCfg, svcReg).Start(ctx); err != nil {
+					slog.Warn("private DNS stopped", "err", err)
+				}
+			}()
+		}
 	}
 
 	// Core service + HTTP API.

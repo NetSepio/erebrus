@@ -78,6 +78,13 @@ type Config struct {
 
 	// registrar
 	ChainRegistration string // off | solana
+
+	// private DNS (Phase 2)
+	PrivateDNSEnabled bool
+	PrivateDNSDomain  string
+	PrivateDNSAddr    string
+	UpstreamDNS       string
+	DNSQueryLogs      bool
 }
 
 // Load reads configuration from the environment, applying sane defaults.
@@ -130,6 +137,11 @@ func Load() *Config {
 		EnableAppHosting:       boolEnv("ENABLE_APP_HOSTING", false),
 		AppWildcardDomain:      os.Getenv("APP_WILDCARD_DOMAIN"),
 		ChainRegistration:      env("CHAIN_REGISTRATION", "off"),
+		PrivateDNSEnabled:      boolEnv("PRIVATE_DNS_ENABLED", false),
+		PrivateDNSDomain:       env("PRIVATE_DNS_DOMAIN", "ere"),
+		PrivateDNSAddr:         os.Getenv("PRIVATE_DNS_ADDR"),
+		UpstreamDNS:            env("UPSTREAM_DNS", "1.1.1.1"),
+		DNSQueryLogs:           boolEnv("DNS_QUERY_LOGS", false),
 	}
 	if mode, err := ParseModeSettings(os.Getenv("EREBRUS_MODE"), os.Getenv("EREBRUS_NETWORK_PROFILE")); err == nil {
 		c.Mode = mode
