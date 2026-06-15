@@ -9,11 +9,11 @@ import "sort"
 type Kind string
 
 const (
-	KindDirectWG      Kind = "direct_wireguard_udp"
-	KindHysteria2     Kind = "hysteria2_quic_udp"
-	KindVLESSReality  Kind = "vless_reality_tcp"
-	KindWebSocketTLS  Kind = "websocket_tls_tcp"
-	KindHTTPSConnect  Kind = "https_connect_tcp"
+	KindDirectWG     Kind = "direct_wireguard_udp"
+	KindHysteria2    Kind = "hysteria2_quic_udp"
+	KindVLESSReality Kind = "vless_reality_tcp"
+	KindWebSocketTLS Kind = "websocket_tls_tcp"
+	KindHTTPSConnect Kind = "https_connect_tcp"
 )
 
 // DefaultLadder is the preferred transport order for v2.1.

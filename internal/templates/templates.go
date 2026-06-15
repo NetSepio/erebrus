@@ -10,13 +10,13 @@ import (
 
 // Template describes a built-in service preset.
 type Template struct {
-	Name              string   `json:"name"`
-	Type              string   `json:"type"`
-	Ports             []int    `json:"ports"`
-	Protocol          string   `json:"protocol"`
-	DefaultVisibility string   `json:"default_visibility"`
-	DefaultAuth       string   `json:"default_auth"`
-	Description       string   `json:"description"`
+	Name              string `json:"name"`
+	Type              string `json:"type"`
+	Ports             []int  `json:"ports"`
+	Protocol          string `json:"protocol"`
+	DefaultVisibility string `json:"default_visibility"`
+	DefaultAuth       string `json:"default_auth"`
+	Description       string `json:"description"`
 }
 
 // Catalog returns built-in templates.

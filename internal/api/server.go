@@ -100,12 +100,12 @@ func (s *Server) handleStatus(c *gin.Context) {
 		PeerID:  s.id.PeerID,
 		DID:     s.id.DID,
 		Capabilities: map[string]any{
-			"runtime_mode":     s.cfg.Mode.RuntimeMode,
+			"runtime_mode":    s.cfg.Mode.RuntimeMode,
 			"network_profile": s.cfg.Mode.NetworkProfile,
-			"app_hosting":      s.cfg.EnableAppHosting,
-			"wildcard_domain":  s.cfg.AppWildcardDomain,
-			"public_domain":    s.cfg.PublicDomain,
-			"stealth":          s.cfg.EnableStealth,
+			"app_hosting":     s.cfg.EnableAppHosting,
+			"wildcard_domain": s.cfg.AppWildcardDomain,
+			"public_domain":   s.cfg.PublicDomain,
+			"stealth":         s.cfg.EnableStealth,
 		},
 		Protocols: protocols,
 	})

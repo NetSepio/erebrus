@@ -113,14 +113,14 @@ func Register(ctx context.Context, in RegistrationInput) (*RegistrationResult, e
 
 	// Step 2: signed registration
 	step2, _ := json.Marshal(map[string]string{
-		"flow_id":        challenge.FlowID,
-		"signature":      signature,
-		"public_key":     pubKey,
-		"peer_id":        in.PeerID,
-		"did":            in.DID,
-		"name":           in.Name,
-		"region":         in.Region,
-		"api_base_url":   in.APIBaseURL,
+		"flow_id":      challenge.FlowID,
+		"signature":    signature,
+		"public_key":   pubKey,
+		"peer_id":      in.PeerID,
+		"did":          in.DID,
+		"name":         in.Name,
+		"region":       in.Region,
+		"api_base_url": in.APIBaseURL,
 		"api_token":    in.APIToken,
 	})
 	raw, status, err = postJSON(ctx, client, base+"/api/v2/nodes/register", step2)

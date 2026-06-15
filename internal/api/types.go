@@ -10,17 +10,17 @@ type TransportEntry struct {
 
 // CredentialBundle is the unified response for peer provisioning and re-fetch.
 type CredentialBundle struct {
-	BundleVersion  int               `json:"bundle_version"`
-	NodeID         string            `json:"node_id,omitempty"`
-	ID             string            `json:"id"`
-	IssuedAt       int64             `json:"issued_at"`
-	ExpiresAt      int64             `json:"expires_at,omitempty"`
-	WireGuard      WireGuardBundle   `json:"wireguard"`
-	Transports     []TransportEntry  `json:"transports,omitempty"`
-	VLESSURI       string            `json:"vless_uri,omitempty"`
-	Hysteria2URI   string            `json:"hysteria2_uri,omitempty"`
-	SingboxProfile any               `json:"singbox_profile,omitempty"`
-	ServiceDiscovery map[string]any  `json:"service_discovery,omitempty"`
+	BundleVersion    int              `json:"bundle_version"`
+	NodeID           string           `json:"node_id,omitempty"`
+	ID               string           `json:"id"`
+	IssuedAt         int64            `json:"issued_at"`
+	ExpiresAt        int64            `json:"expires_at,omitempty"`
+	WireGuard        WireGuardBundle  `json:"wireguard"`
+	Transports       []TransportEntry `json:"transports,omitempty"`
+	VLESSURI         string           `json:"vless_uri,omitempty"`
+	Hysteria2URI     string           `json:"hysteria2_uri,omitempty"`
+	SingboxProfile   any              `json:"singbox_profile,omitempty"`
+	ServiceDiscovery map[string]any   `json:"service_discovery,omitempty"`
 }
 
 // WireGuardBundle holds everything a client needs for the WireGuard fast path.

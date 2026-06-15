@@ -45,10 +45,10 @@ type Client struct {
 	cmds   CommandHandler
 	status func() string
 
-	mu              sync.Mutex
-	heartbeatSec    int
-	lastUsage       map[string]peerCounters
-	onReconnect     func()
+	mu           sync.Mutex
+	heartbeatSec int
+	lastUsage    map[string]peerCounters
+	onReconnect  func()
 }
 
 type peerCounters struct {

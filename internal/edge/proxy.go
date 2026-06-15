@@ -13,8 +13,8 @@ import (
 
 // Proxy routes public HTTP requests to registered services by hostname.
 type Proxy struct {
-	Reg            *services.Registry
-	St             interface {
+	Reg *services.Registry
+	St  interface {
 		GetServiceByDomain(ctx context.Context, domain string) (string, error)
 	}
 	WildcardDomain string

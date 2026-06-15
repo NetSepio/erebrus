@@ -10,7 +10,6 @@ import (
 	"github.com/NetSepio/erebrus/internal/config"
 	"github.com/NetSepio/erebrus/internal/stealth"
 	"github.com/NetSepio/erebrus/internal/store"
-	"github.com/NetSepio/erebrus/internal/wg"
 )
 
 func runRotateCarriers(args []string) error {
@@ -43,27 +42,26 @@ func runRotateCarriers(args []string) error {
 		}
 	}
 
+	// Carrier rotation is a local DB operation: it only needs the state store
+	// and the stealth secrets (node_settings). It must NOT run full node
+	// validation (WG_ENDPOINT_HOST/MNEMONIC) or bind the carrier ports — doing
+	// so would clash with an already-running node.
 	cfg := config.Load()
-	if err := cfg.Validate(); err != nil {
-		return err
-	}
 	st, err := store.Open(cfg.DBPath())
 	if err != nil {
 		return err
 	}
 	defer st.Close()
 
-	wgm := wg.New(cfg, st, wg.NewController())
-	_ = wgm.Init(context.Background())
 	stealthMgr := stealth.New(cfg, st)
-	if err := stealthMgr.Init(context.Background()); err != nil {
+	if err := stealthMgr.Init(context.Background()); err != nil { // loads/creates secrets, no listeners
 		return err
-	}
-	if cfg.EnableStealth {
-		_ = stealthMgr.Start(context.Background())
-		defer stealthMgr.Close()
 	}
 
 	rot := &carriers.Rotator{St: st, Stealth: stealthMgr}
-	return rot.Rotate(context.Background(), carriers.Options{GracePeriod: grace, PeerID: peerID})
+	if err := rot.Rotate(context.Background(), carriers.Options{GracePeriod: grace, PeerID: peerID}); err != nil {
+		return err
+	}
+	fmt.Println("carrier secrets rotated. Restart the node to serve the new credentials; old ones remain valid for the grace period.")
+	return nil
 }

@@ -20,8 +20,8 @@ type Config struct {
 	Version  string
 
 	// runtime model (v2.1+)
-	Mode            ModeSettings
-	UnsafePublicAPI bool
+	Mode                 ModeSettings
+	UnsafePublicAPI      bool
 	PublicDomain         string
 	WildcardDomain       string
 	PublicGatewayEnabled bool
@@ -156,11 +156,26 @@ func Load() *Config {
 	}
 	c.VLESSPort = c.StealthTCPPort
 	c.Hysteria2Port = c.StealthUDPPort
-	if c.BindAddr == "0.0.0.0" && c.UnsafePublicAPI {
-		c.Mode.Warnings = append(c.Mode.Warnings,
-			"WARNING: Erebrus management API is publicly exposed. Use this only behind TLS, firewall, or a trusted gateway.")
+	// The management peer API shares the HTTP listener. When it is bound to a
+	// non-loopback address it is reachable off-host (token-gated, fail-closed),
+	// so always surface that as a conscious decision — not just under the
+	// UNSAFE_PUBLIC_API flag.
+	if !isLoopbackAddr(c.BindAddr) {
+		c.Mode.Warnings = append(c.Mode.Warnings, fmt.Sprintf(
+			"WARNING: management API bound to %s:%s — the token-gated peer API is reachable off-host. "+
+				"Firewall this port to the gateway/trusted sources, or set API_BIND_ADDR=127.0.0.1.",
+			c.BindAddr, c.HTTPPort))
 	}
 	return c
+}
+
+// isLoopbackAddr reports whether the bind address is loopback-only.
+func isLoopbackAddr(addr string) bool {
+	switch addr {
+	case "127.0.0.1", "::1", "localhost":
+		return true
+	}
+	return strings.HasPrefix(addr, "127.")
 }
 
 // Validate returns an error if required fields are missing or invalid.

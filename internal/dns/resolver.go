@@ -15,18 +15,18 @@ import (
 
 // Config drives the private resolver.
 type Config struct {
-	Enabled      bool
-	Domain       string // e.g. "ere"
-	ListenAddr   string // e.g. "10.66.0.1:53"
-	Upstream     string // e.g. "1.1.1.1:53"
-	QueryLogs    bool
+	Enabled    bool
+	Domain     string // e.g. "ere"
+	ListenAddr string // e.g. "10.66.0.1:53"
+	Upstream   string // e.g. "1.1.1.1:53"
+	QueryLogs  bool
 }
 
 // Server resolves <name>.<domain> from the registry and forwards other queries.
 type Server struct {
-	cfg  Config
-	reg  *services.Registry
-	srv  *dns.Server
+	cfg Config
+	reg *services.Registry
+	srv *dns.Server
 }
 
 // New constructs a DNS server (call Start to listen).
