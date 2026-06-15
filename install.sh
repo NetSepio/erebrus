@@ -28,8 +28,8 @@ BUILD_TAGS="with_reality_server"
 # Ports
 HTTP_PORT="${HTTP_PORT:-9080}"        # tcp  REST API
 WG_PORT="${WG_ENDPOINT_PORT:-51820}"  # udp  WireGuard
-VLESS_PORT="${VLESS_PORT:-8443}"      # tcp  VLESS+REALITY carrier
-HY2_PORT="${HYSTERIA2_PORT:-4443}"    # udp  Hysteria2 carrier
+STEALTH_TCP_PORT="${STEALTH_TCP_PORT:-8443}"  # tcp  VLESS+REALITY (gateway prod: 443)
+STEALTH_UDP_PORT="${STEALTH_UDP_PORT:-4443}"  # udp  Hysteria2 (gateway prod: 443)
 # (host + app-hosting also needs 80/tcp + 443/tcp for Caddy)
 
 # Minimum acceptable throughput for an exit node (Mbps)
@@ -188,8 +188,8 @@ check_static_ip() {
     ok "Public IP is bound directly to a local interface (not behind NAT)."
   else
     warn "Public IP $PUBLIC_IP is NOT on a local interface — host appears to be behind NAT."
-    warn "Inbound traffic will only reach this node if that IP is STATIC and ports"
-    warn "$HTTP_PORT/tcp, $WG_PORT/udp, $VLESS_PORT/tcp, $HY2_PORT/udp are forwarded here."
+  warn "Inbound traffic will only reach this node if that IP is STATIC and ports"
+  warn "$HTTP_PORT/tcp, $WG_PORT/udp, $STEALTH_TCP_PORT/tcp, $STEALTH_UDP_PORT/udp are forwarded here."
     confirm "Continue anyway?" n || die "aborted: a static, routable public IP is required"
   fi
   warn "Note: the installer cannot prove the IP is permanent — make sure it is STATIC,"
@@ -297,8 +297,8 @@ run_preflight() {
   check_bandwidth
   info "Checking inbound port reachability…"
   check_inbound_tcp "$HTTP_PORT" "REST API"
-  check_inbound_tcp "$VLESS_PORT" "VLESS+REALITY carrier"
-  warn "UDP ports $WG_PORT (WireGuard) and $HY2_PORT (Hysteria2) can't be probed reliably —"
+  check_inbound_tcp "$STEALTH_TCP_PORT" "VLESS+REALITY carrier"
+  warn "UDP ports $WG_PORT (WireGuard) and $STEALTH_UDP_PORT (Hysteria2) can't be probed reliably —"
   warn "make sure they're open; the installer will add firewall rules where it can."
 }
 
@@ -327,6 +327,8 @@ NODE_API_TOKEN="${NODE_API_TOKEN:-}"; GATEWAY_URL="${GATEWAY_URL:-https://gatewa
 ENABLE_STEALTH="${ENABLE_STEALTH:-true}"; REALITY_SERVER_NAMES="${REALITY_SERVER_NAMES:-www.microsoft.com}"
 HYSTERIA2_OBFS_PASSWORD="${HYSTERIA2_OBFS_PASSWORD:-}"
 ENABLE_APP_HOSTING="${ENABLE_APP_HOSTING:-false}"; APP_WILDCARD_DOMAIN="${APP_WILDCARD_DOMAIN:-}"
+PUBLIC_DOMAIN="${PUBLIC_DOMAIN:-}"; WILDCARD_DOMAIN="${WILDCARD_DOMAIN:-}"
+PUBLIC_GATEWAY_ENABLED="${PUBLIC_GATEWAY_ENABLED:-false}"
 EREBRUS_BIN=""  # path/way to invoke binary for genmnemonic
 
 rand_token() { head -c 24 /dev/urandom | base64 | tr -d '/+=' | head -c 32; }
@@ -339,28 +341,34 @@ gather_config() {
   ask GATEWAY_URL "Gateway URL" "$GATEWAY_URL"
   [[ -n "$NODE_API_TOKEN" ]] || NODE_API_TOKEN="$(rand_token)"
 
-  # Map legacy install modes to the v2.1 runtime model written into the env file.
+  # Map legacy install UX to the v2.1 runtime model written into the env file.
   case "$MODE" in
     docker)
       EREBRUS_MODE=private
       EREBRUS_NETWORK_PROFILE=bridge
-      warn "Install --mode docker is deprecated. Prefer: erebrus init --mode private --network-profile bridge"
+      warn "Install --mode docker maps to EREBRUS_MODE=private EREBRUS_NETWORK_PROFILE=bridge"
       ;;
     host)
       EREBRUS_MODE=gateway
       EREBRUS_NETWORK_PROFILE=host-network
-      warn "Install --mode host is deprecated. Prefer: erebrus init --mode gateway --network-profile host-network"
+      STEALTH_TCP_PORT=443
+      STEALTH_UDP_PORT=443
+      warn "Install --mode host maps to EREBRUS_MODE=gateway EREBRUS_NETWORK_PROFILE=host-network"
+      warn "Stealth carriers set to 443/tcp and 443/udp for production reachability."
       ;;
   esac
 
   if [[ "$MODE" == "host" ]]; then
     if confirm "Enable App-Hosting (expose VPN-connected apps to the internet)?" n; then
       ENABLE_APP_HOSTING="true"
+      PUBLIC_GATEWAY_ENABLED="true"
       echo "  App-Hosting needs a WILDCARD DNS record you control, e.g.:"
       echo -e "      ${C_BOLD}*.apps.example.com  A  ${WG_ENDPOINT_HOST}${C_RESET}"
       echo "  The gateway then mints per-app CNAMEs under it and routes traffic in."
       ask APP_WILDCARD_DOMAIN "Wildcard base domain (e.g. apps.example.com)" "$APP_WILDCARD_DOMAIN"
       [[ -n "$APP_WILDCARD_DOMAIN" ]] || die "App-Hosting requires a wildcard domain"
+      PUBLIC_DOMAIN="$APP_WILDCARD_DOMAIN"
+      WILDCARD_DOMAIN="*.${APP_WILDCARD_DOMAIN}"
     fi
   fi
 }
@@ -389,6 +397,7 @@ write_env_file() {
   run mkdir -p "$(dirname "$f")"
   run tee "$f" >/dev/null <<EOF
 # Erebrus v2 node — generated $(date '+%F %T')
+# See .env.example in the repo for field documentation.
 RUNTYPE=release
 EREBRUS_MODE=${EREBRUS_MODE:-private}
 EREBRUS_NETWORK_PROFILE=${EREBRUS_NETWORK_PROFILE:-bridge}
@@ -399,6 +408,8 @@ REGION=${REGION}
 MNEMONIC=${MNEMONIC}
 NODE_API_TOKEN=${NODE_API_TOKEN}
 GATEWAY_URL=${GATEWAY_URL}
+GATEWAY_AUTO_REGISTER=true
+WALLET_CHAIN=sol
 
 # WireGuard
 WG_CONF_DIR=/etc/wireguard
@@ -412,17 +423,21 @@ WG_POST_DOWN=iptables -D FORWARD -i %i -j ACCEPT; iptables -D FORWARD -o %i -j A
 
 # Stealth carriers (sing-box)
 ENABLE_STEALTH=${ENABLE_STEALTH}
-VLESS_PORT=${VLESS_PORT}
-HYSTERIA2_PORT=${HY2_PORT}
+STEALTH_TCP_PORT=${STEALTH_TCP_PORT}
+STEALTH_UDP_PORT=${STEALTH_UDP_PORT}
 REALITY_SERVER_NAMES=${REALITY_SERVER_NAMES}
 HYSTERIA2_OBFS_PASSWORD=${HYSTERIA2_OBFS_PASSWORD}
 
-# App hosting
+# Public edge / app hosting
 ENABLE_APP_HOSTING=${ENABLE_APP_HOSTING}
 APP_WILDCARD_DOMAIN=${APP_WILDCARD_DOMAIN}
+PUBLIC_DOMAIN=${PUBLIC_DOMAIN}
+WILDCARD_DOMAIN=${WILDCARD_DOMAIN}
+PUBLIC_GATEWAY_ENABLED=${PUBLIC_GATEWAY_ENABLED}
 
 # State
 STATE_DIR=${STATE_DIR}
+CHAIN_REGISTRATION=off
 EOF
   run chmod 600 "$f"
   ok "Wrote config: $f"
@@ -439,23 +454,23 @@ open_firewall() {
   if command -v ufw >/dev/null 2>&1 && run ufw status >/dev/null 2>&1; then
     info "Opening ports via ufw…"
     run ufw allow "${HTTP_PORT}/tcp"  >>"$LOG_FILE" 2>&1 || true
-    run ufw allow "${VLESS_PORT}/tcp" >>"$LOG_FILE" 2>&1 || true
+    run ufw allow "${STEALTH_TCP_PORT}/tcp" >>"$LOG_FILE" 2>&1 || true
     run ufw allow "${WG_PORT}/udp"    >>"$LOG_FILE" 2>&1 || true
-    run ufw allow "${HY2_PORT}/udp"   >>"$LOG_FILE" 2>&1 || true
+    run ufw allow "${STEALTH_UDP_PORT}/udp"   >>"$LOG_FILE" 2>&1 || true
     for p in "${extra_tcp[@]}"; do run ufw allow "${p}/tcp" >>"$LOG_FILE" 2>&1 || true; done
     ok "ufw rules added."
   elif command -v firewall-cmd >/dev/null 2>&1; then
     info "Opening ports via firewalld…"
     run firewall-cmd --permanent --add-port="${HTTP_PORT}/tcp"  >>"$LOG_FILE" 2>&1 || true
-    run firewall-cmd --permanent --add-port="${VLESS_PORT}/tcp" >>"$LOG_FILE" 2>&1 || true
+    run firewall-cmd --permanent --add-port="${STEALTH_TCP_PORT}/tcp" >>"$LOG_FILE" 2>&1 || true
     run firewall-cmd --permanent --add-port="${WG_PORT}/udp"    >>"$LOG_FILE" 2>&1 || true
-    run firewall-cmd --permanent --add-port="${HY2_PORT}/udp"   >>"$LOG_FILE" 2>&1 || true
+    run firewall-cmd --permanent --add-port="${STEALTH_UDP_PORT}/udp"   >>"$LOG_FILE" 2>&1 || true
     for p in "${extra_tcp[@]}"; do run firewall-cmd --permanent --add-port="${p}/tcp" >>"$LOG_FILE" 2>&1 || true; done
     run firewall-cmd --reload >>"$LOG_FILE" 2>&1 || true
     ok "firewalld rules added."
   else
     warn "No ufw/firewalld detected. Ensure these are open in your cloud security group:"
-    warn "  ${HTTP_PORT}/tcp, ${VLESS_PORT}/tcp, ${WG_PORT}/udp, ${HY2_PORT}/udp ${extra_tcp:+(+ 80/tcp 443/tcp)}"
+    warn "  ${HTTP_PORT}/tcp, ${STEALTH_TCP_PORT}/tcp, ${WG_PORT}/udp, ${STEALTH_UDP_PORT}/udp ${extra_tcp:+(+ 80/tcp 443/tcp)}"
   fi
 }
 
@@ -605,7 +620,7 @@ validate_and_summary() {
   echo -e "${C_BOLD}${C_G}Erebrus node installed (${MODE} mode).${C_RESET}"
   echo "  REST API : http://${WG_ENDPOINT_HOST}:${HTTP_PORT}/api/v2/status"
   echo "  WireGuard: ${WG_ENDPOINT_HOST}:${WG_PORT}/udp"
-  echo "  Stealth  : VLESS+REALITY :${VLESS_PORT}/tcp · Hysteria2 :${HY2_PORT}/udp"
+  echo "  Stealth  : VLESS+REALITY :${STEALTH_TCP_PORT}/tcp · Hysteria2 :${STEALTH_UDP_PORT}/udp"
   echo "  API token: ${NODE_API_TOKEN}"
   if [[ "$MODE" == "docker" ]]; then
     echo "  Manage   : cd $INSTALL_DIR && docker compose [logs -f|restart|down]"

@@ -12,38 +12,62 @@ services:
       - net.ipv4.ip_forward=1
       - net.ipv6.conf.all.disable_ipv6=0
     environment:
+      # Docker injects env from --env-file; LOAD_CONFIG_FILE skips godotenv inside the binary.
       LOAD_CONFIG_FILE: "TRUE"
-      RUNTYPE: "release"
-      SERVER: "0.0.0.0"
-      HTTP_PORT: "9080"
+      RUNTYPE: "${RUNTYPE:-release}"
+      EREBRUS_MODE: "${EREBRUS_MODE:-private}"
+      EREBRUS_NETWORK_PROFILE: "${EREBRUS_NETWORK_PROFILE:-bridge}"
+      SERVER: "${SERVER:-0.0.0.0}"
+      HTTP_PORT: "${HTTP_PORT:-9080}"
       NODE_NAME: "${NODE_NAME:-erebrus-node}"
       REGION: "${REGION:-unknown}"
-      # Required: BIP-39 mnemonic (node identity/DID) and public endpoint host.
       MNEMONIC: "${MNEMONIC}"
       WG_ENDPOINT_HOST: "${WG_ENDPOINT_HOST}"
-      NODE_API_TOKEN: "${NODE_API_TOKEN}"
+      NODE_API_TOKEN: "${NODE_API_TOKEN:-}"
       GATEWAY_URL: "${GATEWAY_URL:-}"
-      # WireGuard fast path
-      WG_CONF_DIR: "/etc/wireguard"
-      WG_INTERFACE_NAME: "wg0"
-      WG_ENDPOINT_PORT: "51820"
-      WG_IPv4_SUBNET: "10.0.0.1/16"
-      WG_DNS: "1.1.1.1"
-      WG_POST_UP: "iptables -A FORWARD -i %i -j ACCEPT; iptables -A FORWARD -o %i -j ACCEPT; iptables -t nat -A POSTROUTING -o eth0 -j MASQUERADE"
-      WG_POST_DOWN: "iptables -D FORWARD -i %i -j ACCEPT; iptables -D FORWARD -o %i -j ACCEPT; iptables -t nat -D POSTROUTING -o eth0 -j MASQUERADE"
-      # Stealth carriers (sing-box): VLESS+REALITY and Hysteria2
-      ENABLE_STEALTH: "true"
-      VLESS_PORT: "8443"
-      HYSTERIA2_PORT: "4443"
-      REALITY_SERVER_NAMES: "www.microsoft.com"
+      GATEWAY_AUTO_REGISTER: "${GATEWAY_AUTO_REGISTER:-true}"
+      WALLET_CHAIN: "${WALLET_CHAIN:-sol}"
+      AUTH_EULA: "${AUTH_EULA:-I accept the Erebrus Terms of Service https://erebrus.network/terms.}"
+      API_PUBLIC_URL: "${API_PUBLIC_URL:-}"
+      NODE_ID: "${NODE_ID:-}"
+      NODE_TOKEN: "${NODE_TOKEN:-}"
+      GATEWAY_PEER_MULTIADDR: "${GATEWAY_PEER_MULTIADDR:-}"
+      # WireGuard
+      WG_CONF_DIR: "${WG_CONF_DIR:-/etc/wireguard}"
+      WG_INTERFACE_NAME: "${WG_INTERFACE_NAME:-wg0}"
+      WG_ENDPOINT_PORT: "${WG_ENDPOINT_PORT:-51820}"
+      WG_IPv4_SUBNET: "${WG_IPv4_SUBNET:-10.0.0.1/16}"
+      WG_DNS: "${WG_DNS:-1.1.1.1}"
+      WG_POST_UP: "${WG_POST_UP:-iptables -A FORWARD -i %i -j ACCEPT; iptables -A FORWARD -o %i -j ACCEPT; iptables -t nat -A POSTROUTING -o eth0 -j MASQUERADE}"
+      WG_POST_DOWN: "${WG_POST_DOWN:-iptables -D FORWARD -i %i -j ACCEPT; iptables -D FORWARD -o %i -j ACCEPT; iptables -t nat -D POSTROUTING -o eth0 -j MASQUERADE}"
+      # Stealth carriers (sing-box)
+      ENABLE_STEALTH: "${ENABLE_STEALTH:-true}"
+      STEALTH_TCP_PORT: "${STEALTH_TCP_PORT:-8443}"
+      STEALTH_UDP_PORT: "${STEALTH_UDP_PORT:-4443}"
+      REALITY_SERVER_NAMES: "${REALITY_SERVER_NAMES:-www.microsoft.com}"
+      REALITY_HANDSHAKE_SERVER: "${REALITY_HANDSHAKE_SERVER:-}"
       HYSTERIA2_OBFS_PASSWORD: "${HYSTERIA2_OBFS_PASSWORD:-}"
-      # Node-local state (SQLite + generated secrets)
-      STATE_DIR: "/var/lib/erebrus"
+      ENABLE_TUIC: "${ENABLE_TUIC:-false}"
+      # Public edge / app hosting
+      ENABLE_APP_HOSTING: "${ENABLE_APP_HOSTING:-false}"
+      APP_WILDCARD_DOMAIN: "${APP_WILDCARD_DOMAIN:-}"
+      PUBLIC_DOMAIN: "${PUBLIC_DOMAIN:-}"
+      WILDCARD_DOMAIN: "${WILDCARD_DOMAIN:-}"
+      PUBLIC_GATEWAY_ENABLED: "${PUBLIC_GATEWAY_ENABLED:-false}"
+      # Private DNS
+      PRIVATE_DNS_ENABLED: "${PRIVATE_DNS_ENABLED:-false}"
+      PRIVATE_DNS_DOMAIN: "${PRIVATE_DNS_DOMAIN:-ere}"
+      PRIVATE_DNS_ADDR: "${PRIVATE_DNS_ADDR:-}"
+      UPSTREAM_DNS: "${UPSTREAM_DNS:-1.1.1.1}"
+      DNS_QUERY_LOGS: "${DNS_QUERY_LOGS:-false}"
+      # State + registrar
+      STATE_DIR: "${STATE_DIR:-/var/lib/erebrus}"
+      CHAIN_REGISTRATION: "${CHAIN_REGISTRATION:-off}"
     ports:
-      - "9080:9080/tcp"      # HTTP API
-      - "51820:51820/udp"    # WireGuard
-      - "8443:8443/tcp"      # VLESS + REALITY carrier
-      - "4443:4443/udp"      # Hysteria2 carrier
+      - "${HTTP_PORT:-9080}:${HTTP_PORT:-9080}/tcp"
+      - "${WG_ENDPOINT_PORT:-51820}:${WG_ENDPOINT_PORT:-51820}/udp"
+      - "${STEALTH_TCP_PORT:-8443}:${STEALTH_TCP_PORT:-8443}/tcp"
+      - "${STEALTH_UDP_PORT:-4443}:${STEALTH_UDP_PORT:-4443}/udp"
     volumes:
       - erebrus-state:/var/lib/erebrus
       - erebrus-wireguard:/etc/wireguard
