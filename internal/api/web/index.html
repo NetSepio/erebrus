@@ -124,7 +124,6 @@
 <div class="wrap">
   <section class="hero">
     <h1 id="node-title">Erebrus Node</h1>
-    <p class="meta" id="node-meta">Display name for this machine on the network.</p>
     <p>VPN exit node for the Erebrus network. Shows live stats only — no traffic logs are kept.</p>
     <p class="hint" id="access-hint"></p>
     <div class="badges">
@@ -236,7 +235,6 @@
 
       const name = st.node_name || 'Erebrus Node';
       $('node-title').textContent = name;
-      $('node-meta').textContent = 'Node name · set in NODE_NAME when you installed (often erebrus- plus your server hostname)';
       document.title = name + ' · Erebrus';
 
       const id = st.identity || {};
@@ -271,8 +269,17 @@
       $('access').textContent = accessName;
       $('access-hint').textContent = caps.access_hint || '';
 
-      const regionCode = st.region || stats.region || '';
-      $('region').textContent = caps.region_label || regionCode || 'Not set';
+      const regionCode = (st.region || stats.region || '').trim();
+      const regionName = caps.region_label || '';
+      if (regionCode && regionName && regionName !== regionCode && !regionName.endsWith('(country code)')) {
+        $('region').textContent = regionName + ' (' + regionCode.toUpperCase() + ')';
+      } else if (regionName) {
+        $('region').textContent = regionName;
+      } else if (regionCode) {
+        $('region').textContent = regionCode.toUpperCase();
+      } else {
+        $('region').textContent = 'Not set';
+      }
 
       $('version').textContent = st.version || stats.version || '—';
 
