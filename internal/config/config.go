@@ -195,13 +195,13 @@ func (c *Config) Validate() error {
 	if len(missing) > 0 {
 		return fmt.Errorf("missing required config: %s", strings.Join(missing, ", "))
 	}
-	if c.Mode.IsGateway() && c.PublicDomain == "" && c.EnableAppHosting {
+	if c.Mode.IsPublic() && c.PublicDomain == "" && c.EnableAppHosting {
 		c.Mode.Warnings = append(c.Mode.Warnings,
-			"WARNING: Gateway Mode with ENABLE_APP_HOSTING but no PUBLIC_DOMAIN set; public edge routing may be incomplete.")
+			"WARNING: Public access mode with ENABLE_APP_HOSTING but no PUBLIC_DOMAIN set; public edge routing may be incomplete.")
 	}
-	if c.Mode.IsGateway() && (c.StealthTCPPort != "443" || c.StealthUDPPort != "443") {
+	if c.Mode.IsPublic() && (c.StealthTCPPort != "443" || c.StealthUDPPort != "443") {
 		c.Mode.Warnings = append(c.Mode.Warnings,
-			"WARNING: Gateway Mode production should expose stealth on 443/tcp and 443/udp (STEALTH_TCP_PORT/STEALTH_UDP_PORT) for best reachability.")
+			"WARNING: Public access mode production should expose stealth on 443/tcp and 443/udp (STEALTH_TCP_PORT/STEALTH_UDP_PORT) for best reachability.")
 	}
 	return nil
 }

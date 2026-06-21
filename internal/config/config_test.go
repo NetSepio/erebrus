@@ -15,13 +15,36 @@ func TestParseModeDefaults(t *testing.T) {
 	}
 }
 
-func TestParseModeExplicit(t *testing.T) {
+func TestParseModeShared(t *testing.T) {
+	m, err := ParseModeSettings("shared", "bridge")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !m.IsShared() || m.NetworkProfile != NetworkBridge {
+		t.Fatalf("got mode=%s profile=%s", m.RuntimeMode, m.NetworkProfile)
+	}
+}
+
+func TestParseModePublicExplicit(t *testing.T) {
+	m, err := ParseModeSettings("public", "host-network")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !m.IsPublic() || m.NetworkProfile != NetworkHostNetwork {
+		t.Fatalf("got mode=%s profile=%s", m.RuntimeMode, m.NetworkProfile)
+	}
+}
+
+func TestLegacyGatewayAlias(t *testing.T) {
 	m, err := ParseModeSettings("gateway", "host-network")
 	if err != nil {
 		t.Fatal(err)
 	}
-	if !m.IsGateway() || m.NetworkProfile != NetworkHostNetwork {
+	if !m.IsPublic() || m.NetworkProfile != NetworkHostNetwork {
 		t.Fatalf("got mode=%s profile=%s", m.RuntimeMode, m.NetworkProfile)
+	}
+	if len(m.Warnings) == 0 || !strings.Contains(m.Warnings[0], "deprecated") {
+		t.Fatalf("expected deprecation warning, got %v", m.Warnings)
 	}
 }
 
@@ -43,7 +66,7 @@ func TestLegacyHostAlias(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if m.RuntimeMode != ModeGateway || m.NetworkProfile != NetworkHostNetwork {
+	if m.RuntimeMode != ModePublic || m.NetworkProfile != NetworkHostNetwork {
 		t.Fatalf("got mode=%s profile=%s", m.RuntimeMode, m.NetworkProfile)
 	}
 	if len(m.Warnings) == 0 || !strings.Contains(m.Warnings[0], "deprecated") {
@@ -51,8 +74,8 @@ func TestLegacyHostAlias(t *testing.T) {
 	}
 }
 
-func TestGatewayBridgeWarning(t *testing.T) {
-	m, err := ParseModeSettings("gateway", "bridge")
+func TestPublicBridgeWarning(t *testing.T) {
+	m, err := ParseModeSettings("public", "bridge")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -64,7 +87,7 @@ func TestGatewayBridgeWarning(t *testing.T) {
 		}
 	}
 	if !found {
-		t.Fatalf("expected gateway+bridge warning, got %v", m.Warnings)
+		t.Fatalf("expected public+bridge warning, got %v", m.Warnings)
 	}
 }
 

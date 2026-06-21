@@ -99,6 +99,7 @@ func (g *GatewayBridge) BuildHello(nodeID string) gatewayclient.Hello {
 			IP:     cfg.WGEndpointHost,
 		},
 		Capabilities: gatewayclient.Capabilities{
+			AccessMode:     string(cfg.Mode.RuntimeMode),
 			AppHosting:     cfg.EnableAppHosting,
 			WildcardDomain: cfg.AppWildcardDomain,
 		},

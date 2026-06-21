@@ -65,13 +65,23 @@ type NodeStats struct {
 	UptimeSec      int64    `json:"uptime_sec"`
 }
 
+// IdentityStatus summarizes the node's cryptographic identity (never includes secrets).
+type IdentityStatus struct {
+	Configured bool   `json:"configured"`
+	PeerID     string `json:"peer_id"`
+	DID        string `json:"did"`
+}
+
 // StatusResponse is the public node status.
 type StatusResponse struct {
 	Version      string         `json:"version"`
 	Region       string         `json:"region"`
 	Status       string         `json:"status"`
-	PeerID       string         `json:"peer_id"`
-	DID          string         `json:"did"`
+	AccessMode   string         `json:"access_mode"`
+	PeerID       string         `json:"peer_id"` // deprecated: use identity.peer_id
+	DID          string         `json:"did"`     // deprecated: use identity.did
+	Identity     IdentityStatus `json:"identity"`
 	Capabilities map[string]any `json:"capabilities"`
 	Protocols    []string       `json:"protocols"`
+	Readiness    any            `json:"readiness"`
 }

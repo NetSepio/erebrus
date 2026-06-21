@@ -25,8 +25,8 @@ func runServicePublish(reg *services.Registry, ctx context.Context, args []strin
 	if err != nil {
 		return err
 	}
-	if !cfg.Mode.IsGateway() {
-		return fmt.Errorf("public publish requires gateway mode")
+	if !cfg.Mode.IsPublic() {
+		return fmt.Errorf("public publish requires public access mode")
 	}
 	domain := cfg.PublicDomain
 	if domain == "" {

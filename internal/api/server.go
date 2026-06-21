@@ -10,6 +10,7 @@ import (
 	"net/http"
 
 	"github.com/NetSepio/erebrus/internal/config"
+	"github.com/NetSepio/erebrus/internal/readiness"
 	"github.com/gin-gonic/gin"
 	"github.com/prometheus/client_golang/prometheus/promhttp"
 )
@@ -41,12 +42,18 @@ type Server struct {
 	prov Provisioner
 	id   Identity
 	// status reflects drain state ("online" | "draining"); Phase 2 toggles it.
-	status string
+	status      string
+	readinessFn func() readiness.Input
 }
 
 // NewServer builds the API server.
 func NewServer(cfg *config.Config, prov Provisioner, id Identity) *Server {
 	return &Server{cfg: cfg, prov: prov, id: id, status: "online"}
+}
+
+// SetReadinessProvider supplies live signals for readiness evaluation.
+func (s *Server) SetReadinessProvider(fn func() readiness.Input) {
+	s.readinessFn = fn
 }
 
 // SetStatus updates the public status field (online | draining).
@@ -93,21 +100,39 @@ func (s *Server) handleStatus(c *gin.Context) {
 	if s.cfg.EnableStealth {
 		protocols = append(protocols, "vless-reality", "hysteria2")
 	}
+	in := readiness.Input{Cfg: s.cfg, IdentityConfigured: s.id.PeerID != ""}
+	if s.readinessFn != nil {
+		in = s.readinessFn()
+		in.Cfg = s.cfg
+		if in.IdentityConfigured == false && s.id.PeerID != "" {
+			in.IdentityConfigured = true
+		}
+	}
+	rep := readiness.Evaluate(in)
 	c.JSON(http.StatusOK, StatusResponse{
-		Version: s.cfg.Version,
-		Region:  s.cfg.Region,
-		Status:  s.status,
-		PeerID:  s.id.PeerID,
-		DID:     s.id.DID,
+		Version:    s.cfg.Version,
+		Region:     s.cfg.Region,
+		Status:     s.status,
+		AccessMode: string(s.cfg.Mode.RuntimeMode),
+		PeerID:     s.id.PeerID,
+		DID:        s.id.DID,
+		Identity: IdentityStatus{
+			Configured: in.IdentityConfigured && s.cfg.Mnemonic != "",
+			PeerID:     s.id.PeerID,
+			DID:        s.id.DID,
+		},
 		Capabilities: map[string]any{
-			"runtime_mode":    s.cfg.Mode.RuntimeMode,
+			"access_mode":     s.cfg.Mode.RuntimeMode,
+			"access_label":    readiness.AccessModeLabel(s.cfg.Mode.RuntimeMode),
 			"network_profile": s.cfg.Mode.NetworkProfile,
 			"app_hosting":     s.cfg.EnableAppHosting,
 			"wildcard_domain": s.cfg.AppWildcardDomain,
 			"public_domain":   s.cfg.PublicDomain,
 			"stealth":         s.cfg.EnableStealth,
+			"public_api_url":  readiness.PublicAPIURL(s.cfg),
 		},
 		Protocols: protocols,
+		Readiness: rep,
 	})
 }
 

@@ -21,6 +21,7 @@ import (
 	"github.com/NetSepio/erebrus/internal/gatewayclient"
 	"github.com/NetSepio/erebrus/internal/node"
 	"github.com/NetSepio/erebrus/internal/p2p"
+	"github.com/NetSepio/erebrus/internal/readiness"
 	"github.com/NetSepio/erebrus/internal/registrar"
 	"github.com/NetSepio/erebrus/internal/services"
 	"github.com/NetSepio/erebrus/internal/stealth"
@@ -72,6 +73,24 @@ func main() {
 			}
 			if err := runRotateCarriers(os.Args[2:]); err != nil {
 				fmt.Fprintln(os.Stderr, "rotate:", err)
+				os.Exit(1)
+			}
+			return
+		case "status":
+			if err := runStatusCLI(os.Args[2:]); err != nil {
+				fmt.Fprintln(os.Stderr, "status:", err)
+				os.Exit(1)
+			}
+			return
+		case "init":
+			if err := runInitCLI(os.Args[2:]); err != nil {
+				fmt.Fprintln(os.Stderr, "init:", err)
+				os.Exit(1)
+			}
+			return
+		case "doctor":
+			if err := runDoctorCLI(os.Args[2:]); err != nil {
+				fmt.Fprintln(os.Stderr, "doctor:", err)
 				os.Exit(1)
 			}
 			return
@@ -140,9 +159,11 @@ func run(cfg *config.Config) error {
 
 	// WireGuard.
 	wgm := wg.New(cfg, st, wg.NewController())
-	if err := wgm.Init(ctx); err != nil {
+	wgErr := wgm.Init(ctx)
+	wgOK := wgErr == nil
+	if !wgOK {
 		// Non-fatal: the conf is written; the interface may need NET_ADMIN.
-		slog.Warn("wireguard interface init incomplete", "err", err)
+		slog.Warn("wireguard interface init incomplete", "err", wgErr)
 	}
 
 	// Stealth carriers (sing-box VLESS+REALITY / Hysteria2). Init always runs so
@@ -150,11 +171,13 @@ func run(cfg *config.Config) error {
 	// disabled. A start failure (e.g. port in use) is non-fatal — WireGuard
 	// still serves the fast path.
 	stealthMgr := stealth.New(cfg, st)
+	stealthOK := false
 	if err := stealthMgr.Init(ctx); err != nil {
 		slog.Warn("stealth init failed; carriers unavailable", "err", err)
 	} else if err := stealthMgr.Start(ctx); err != nil {
 		slog.Warn("stealth carriers failed to start", "err", err)
 	} else {
+		stealthOK = cfg.EnableStealth
 		if cfg.EnableStealth {
 			slog.Info("stealth carriers listening", "vless_port", cfg.VLESSPort, "hysteria2_port", cfg.Hysteria2Port)
 		}
@@ -209,7 +232,7 @@ func run(cfg *config.Config) error {
 	svc.SetAPIStatusHook(apiServer.SetStatus)
 
 	// Public edge proxy (Gateway Mode only, opt-in).
-	if cfg.Mode.IsGateway() && cfg.PublicGatewayEnabled {
+	if cfg.Mode.IsPublic() && cfg.PublicGatewayEnabled {
 		edgeProxy := &edge.Proxy{Reg: svcReg, St: st, WildcardDomain: cfg.WildcardDomain}
 		edgeSrv := &http.Server{
 			Addr:              ":9081",
@@ -230,6 +253,7 @@ func run(cfg *config.Config) error {
 	}
 
 	// Gateway control plane (WebSocket + PASETO). Best-effort when configured.
+	var gwClient *gatewayclient.Client
 	if cfg.GatewayEnabled() {
 		nodeID, nodeToken, err := gatewayclient.LoadCredentials(ctx, st)
 		if err != nil {
@@ -267,12 +291,33 @@ func run(cfg *config.Config) error {
 		}
 		if nodeID != "" && nodeToken != "" {
 			bridge := node.NewGatewayBridge(svc, peerID, did, nodeID)
-			gw := gatewayclient.New(cfg.GatewayURL, nodeID, nodeToken, bridge, bridge, bridge.Status)
-			go gw.Run(ctx)
+			gwClient = gatewayclient.New(cfg.GatewayURL, nodeID, nodeToken, bridge, bridge, bridge.Status)
+			go gwClient.Run(ctx)
 		} else {
 			slog.Warn("gateway URL set but node credentials missing — WS control plane disabled")
 		}
 	}
+
+	apiServer.SetReadinessProvider(func() readiness.Input {
+		gwReg := false
+		gwConn := false
+		if cfg.GatewayEnabled() {
+			if id, tok, err := gatewayclient.LoadCredentials(ctx, st); err == nil && id != "" && tok != "" {
+				gwReg = true
+			}
+			if gwClient != nil {
+				gwConn = gwClient.Connected()
+			}
+		}
+		return readiness.Input{
+			Cfg:                cfg,
+			IdentityConfigured: true,
+			GatewayRegistered:  gwReg,
+			GatewayConnected:   gwConn,
+			WireGuardOK:        wgOK,
+			StealthListening:   stealthOK,
+		}
+	})
 
 	srv := &http.Server{
 		Addr:              fmt.Sprintf("%s:%s", cfg.BindAddr, cfg.HTTPPort),

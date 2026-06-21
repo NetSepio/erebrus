@@ -5,13 +5,18 @@ import (
 	"strings"
 )
 
-// RuntimeMode is the node's product mode (not its deployment method).
+// RuntimeMode is the node's access policy: who can discover and use the VPN.
+// It is not the deployment method (see NetworkProfile).
 type RuntimeMode string
 
 const (
-	ModePrivate RuntimeMode = "private"
-	ModeGateway RuntimeMode = "gateway"
+	ModePrivate RuntimeMode = "private" // host + own devices only
+	ModeShared  RuntimeMode = "shared"  // wallet allowlist on gateway (friends)
+	ModePublic  RuntimeMode = "public"  // open directory; host earnings (future)
 )
+
+// legacyModeGateway is the deprecated v2.0 name for public access mode.
+const legacyModeGateway = "gateway"
 
 // NetworkProfile describes how the node is deployed on the network.
 type NetworkProfile string
@@ -28,7 +33,7 @@ const (
 	legacyModeHost   = "host"
 )
 
-// ModeSettings holds parsed runtime mode and network profile.
+// ModeSettings holds parsed access mode and network profile.
 type ModeSettings struct {
 	RuntimeMode    RuntimeMode
 	NetworkProfile NetworkProfile
@@ -36,7 +41,7 @@ type ModeSettings struct {
 }
 
 // ParseModeSettings reads EREBRUS_MODE and EREBRUS_NETWORK_PROFILE, applying
-// defaults and legacy docker/host alias mapping.
+// defaults and legacy aliases.
 func ParseModeSettings(modeRaw, profileRaw string) (ModeSettings, error) {
 	modeRaw = strings.ToLower(strings.TrimSpace(modeRaw))
 	profileRaw = strings.ToLower(strings.TrimSpace(profileRaw))
@@ -49,15 +54,21 @@ func ParseModeSettings(modeRaw, profileRaw string) (ModeSettings, error) {
 	case "", legacyModeDocker:
 		mode = ModePrivate
 		if modeRaw == legacyModeDocker {
-			warnings = append(warnings, deprecationLegacyMode(legacyModeDocker, string(ModePrivate), string(NetworkBridge)))
+			warnings = append(warnings, deprecationLegacyInstallMode(legacyModeDocker, string(ModePrivate), string(NetworkBridge)))
 		}
 	case legacyModeHost:
-		mode = ModeGateway
-		warnings = append(warnings, deprecationLegacyMode(legacyModeHost, string(ModeGateway), string(NetworkHostNetwork)))
-	case string(ModePrivate), string(ModeGateway):
+		mode = ModePublic
+		profile = NetworkHostNetwork
+		warnings = append(warnings, deprecationLegacyInstallMode(legacyModeHost, string(ModePublic), string(NetworkHostNetwork)))
+	case legacyModeGateway:
+		mode = ModePublic
+		warnings = append(warnings, fmt.Sprintf(
+			"WARNING: EREBRUS_MODE=%q is deprecated. Use EREBRUS_MODE=%s (public access — open to entitled users).",
+			legacyModeGateway, ModePublic))
+	case string(ModePrivate), string(ModeShared), string(ModePublic):
 		mode = RuntimeMode(modeRaw)
 	default:
-		return ModeSettings{}, fmt.Errorf("EREBRUS_MODE must be private or gateway (got %q)", modeRaw)
+		return ModeSettings{}, fmt.Errorf("EREBRUS_MODE must be private, shared, or public (got %q)", modeRaw)
 	}
 
 	switch profileRaw {
@@ -73,9 +84,9 @@ func ParseModeSettings(modeRaw, profileRaw string) (ModeSettings, error) {
 		return ModeSettings{}, fmt.Errorf("EREBRUS_NETWORK_PROFILE must be bridge, host-network, or native (got %q)", profileRaw)
 	}
 
-	if mode == ModeGateway && profile == NetworkBridge {
+	if mode == ModePublic && profile == NetworkBridge {
 		warnings = append(warnings,
-			"WARNING: Gateway Mode with bridge networking may work, but host-network is recommended for production gateway nodes because WireGuard routing, 443 binding, reverse proxying, and debugging are simpler.")
+			"WARNING: Public access mode with bridge networking may work, but host-network is recommended for production nodes because WireGuard routing, 443 binding, reverse proxying, and debugging are simpler.")
 	}
 	if profile == NetworkNative {
 		warnings = append(warnings,
@@ -85,15 +96,20 @@ func ParseModeSettings(modeRaw, profileRaw string) (ModeSettings, error) {
 	return ModeSettings{RuntimeMode: mode, NetworkProfile: profile, Warnings: warnings}, nil
 }
 
-func deprecationLegacyMode(legacy, mode, profile string) string {
+func deprecationLegacyInstallMode(legacy, mode, profile string) string {
 	return fmt.Sprintf(
-		"WARNING: legacy %q mode is deprecated. Use EREBRUS_MODE=%s with EREBRUS_NETWORK_PROFILE=%s.",
-		legacy, mode, profile,
-	)
+		"WARNING: legacy install %q is deprecated. Use EREBRUS_MODE=%s with EREBRUS_NETWORK_PROFILE=%s.",
+		legacy, mode, profile)
 }
 
-// IsGateway reports whether the node runs in Gateway Mode.
-func (m ModeSettings) IsGateway() bool { return m.RuntimeMode == ModeGateway }
-
-// IsPrivate reports whether the node runs in Private Mode.
+// IsPrivate reports whether only the host and their devices may use the node.
 func (m ModeSettings) IsPrivate() bool { return m.RuntimeMode == ModePrivate }
+
+// IsShared reports whether access is limited to a gateway wallet allowlist.
+func (m ModeSettings) IsShared() bool { return m.RuntimeMode == ModeShared }
+
+// IsPublic reports whether the node is open to entitled network users.
+func (m ModeSettings) IsPublic() bool { return m.RuntimeMode == ModePublic }
+
+// IsGateway is deprecated; use IsPublic.
+func (m ModeSettings) IsGateway() bool { return m.IsPublic() }

@@ -349,11 +349,11 @@ gather_config() {
       warn "Install --mode docker maps to EREBRUS_MODE=private EREBRUS_NETWORK_PROFILE=bridge"
       ;;
     host)
-      EREBRUS_MODE=gateway
+      EREBRUS_MODE=public
       EREBRUS_NETWORK_PROFILE=host-network
       STEALTH_TCP_PORT=443
       STEALTH_UDP_PORT=443
-      warn "Install --mode host maps to EREBRUS_MODE=gateway EREBRUS_NETWORK_PROFILE=host-network"
+      warn "Install --mode host maps to EREBRUS_MODE=public EREBRUS_NETWORK_PROFILE=host-network"
       warn "Stealth carriers set to 443/tcp and 443/udp for production reachability."
       ;;
   esac
@@ -389,7 +389,7 @@ ensure_mnemonic() {
   info "Generating node identity mnemonic…"
   MNEMONIC="$(erebrus_cli genmnemonic | tr -d '\r')" || die "failed to generate mnemonic"
   [[ -n "$MNEMONIC" ]] || die "empty mnemonic generated"
-  ok "Mnemonic generated (12 words). It is saved in your env file — BACK IT UP."
+  ok "Node identity generated (12-word recovery phrase). It is saved securely — BACK IT UP."
 }
 
 write_env_file() {
@@ -410,6 +410,7 @@ NODE_API_TOKEN=${NODE_API_TOKEN}
 GATEWAY_URL=${GATEWAY_URL}
 GATEWAY_AUTO_REGISTER=true
 WALLET_CHAIN=sol
+API_PUBLIC_URL=http://${WG_ENDPOINT_HOST}:${HTTP_PORT}
 
 # WireGuard
 WG_CONF_DIR=/etc/wireguard
@@ -608,8 +609,15 @@ validate_and_summary() {
   done
   echo
   if [[ -n "$out" ]]; then
-    ok "Node is up. /api/v2/status:"
+    ok "Node is up. Run: erebrus status (or curl /api/v2/status)"
     echo "$out" | python3 -m json.tool 2>/dev/null || echo "$out"
+    if [[ -n "${GATEWAY_URL:-}" ]]; then
+      if curl -fsS --max-time 6 "${GATEWAY_URL%/}/healthz" >/dev/null 2>&1; then
+        ok "Gateway reachable at ${GATEWAY_URL}"
+      else
+        warn "Gateway not reachable at ${GATEWAY_URL} — control plane may stay offline"
+      fi
+    fi
   else
     warn "Node did not answer on :${HTTP_PORT} yet. Check logs:"
     [[ "$MODE" == "docker" ]] && echo "    cd $INSTALL_DIR && docker compose logs -f" \
@@ -621,7 +629,8 @@ validate_and_summary() {
   echo "  REST API : http://${WG_ENDPOINT_HOST}:${HTTP_PORT}/api/v2/status"
   echo "  WireGuard: ${WG_ENDPOINT_HOST}:${WG_PORT}/udp"
   echo "  Stealth  : VLESS+REALITY :${STEALTH_TCP_PORT}/tcp · Hysteria2 :${STEALTH_UDP_PORT}/udp"
-  echo "  API token: ${NODE_API_TOKEN}"
+  echo "  Node API key: ${NODE_API_TOKEN}"
+  echo "  Verify   : erebrus status"
   if [[ "$MODE" == "docker" ]]; then
     echo "  Manage   : cd $INSTALL_DIR && docker compose [logs -f|restart|down]"
     echo "  Config   : $INSTALL_DIR/.env"
@@ -635,7 +644,7 @@ validate_and_summary() {
     echo -e "    ${C_BOLD}*.${APP_WILDCARD_DOMAIN}  A  ${WG_ENDPOINT_HOST}${C_RESET}"
   fi
   echo
-  echo -e "${C_Y}Back up your mnemonic — it is your node identity and cannot be recovered.${C_RESET}"
+  echo -e "${C_Y}Back up your node identity (12-word phrase) — it cannot be recovered.${C_RESET}"
 }
 
 # ---------------------------------------------------------------------------

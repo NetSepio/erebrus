@@ -9,6 +9,7 @@ import (
 	"net/http"
 	"strings"
 	"sync"
+	"sync/atomic"
 	"time"
 
 	"github.com/gorilla/websocket"
@@ -49,6 +50,7 @@ type Client struct {
 	heartbeatSec int
 	lastUsage    map[string]peerCounters
 	onReconnect  func()
+	connected    atomic.Bool
 }
 
 type peerCounters struct {
@@ -80,6 +82,9 @@ func (c *Client) SetLogger(log *slog.Logger) {
 
 // SetOnReconnect is called after each successful reconnect (e.g. to re-send hello).
 func (c *Client) SetOnReconnect(fn func()) { c.onReconnect = fn }
+
+// Connected reports whether the gateway WebSocket session is active.
+func (c *Client) Connected() bool { return c.connected.Load() }
 
 // Run dials the gateway and maintains the connection until ctx is cancelled.
 func (c *Client) Run(ctx context.Context) {
@@ -121,6 +126,8 @@ func (c *Client) session(ctx context.Context) error {
 	defer ws.Close()
 
 	c.log.Info("gateway connected", "url", wsURL)
+	c.connected.Store(true)
+	defer c.connected.Store(false)
 
 	if err := c.sendHello(ws); err != nil {
 		return err
