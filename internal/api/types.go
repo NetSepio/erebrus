@@ -65,6 +65,18 @@ type NodeStats struct {
 	UptimeSec      int64    `json:"uptime_sec"`
 }
 
+// WireGuardEndpointStatus is the node's WireGuard listen endpoint (server key + port).
+type WireGuardEndpointStatus struct {
+	Port      int    `json:"port"`
+	PublicKey string `json:"public_key"`
+	Endpoint  string `json:"endpoint"` // host:port clients dial
+}
+
+// EndpointsStatus mirrors the gateway discovery projection for this node.
+type EndpointsStatus struct {
+	WireGuard WireGuardEndpointStatus `json:"wireguard"`
+}
+
 // IdentityStatus summarizes the node's cryptographic identity (never includes secrets).
 type IdentityStatus struct {
 	Configured    bool   `json:"configured"`
@@ -84,8 +96,9 @@ type StatusResponse struct {
 	AccessMode   string         `json:"access_mode"`
 	PeerID       string         `json:"peer_id"` // deprecated: use identity.peer_id
 	DID          string         `json:"did"`     // deprecated: use identity.did
-	Identity     IdentityStatus `json:"identity"`
-	Capabilities map[string]any `json:"capabilities"`
+	Identity     IdentityStatus  `json:"identity"`
+	Endpoints    EndpointsStatus `json:"endpoints"`
+	Capabilities map[string]any  `json:"capabilities"`
 	Protocols    []string       `json:"protocols"`
 	Readiness    any            `json:"readiness"`
 }

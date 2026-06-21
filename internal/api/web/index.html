@@ -155,8 +155,18 @@
         <div class="v wallet" id="wallet">…</div>
         <button type="button" class="copy" data-copy="wallet">Copy</button>
       </div>
+      <div class="id-row" id="wg-row" style="display:none">
+        <div class="k">WireGuard public key</div>
+        <div class="v" id="wg-pub">…</div>
+        <button type="button" class="copy" data-copy="wg-pub">Copy</button>
+      </div>
+      <div class="id-row" id="wg-ep-row" style="display:none">
+        <div class="k">WireGuard endpoint</div>
+        <div class="v" id="wg-ep">…</div>
+        <button type="button" class="copy" data-copy="wg-ep">Copy</button>
+      </div>
     </div>
-    <p style="margin:14px 0 0;font-size:12px;color:var(--muted)">Peer ID and wallet are derived from the node's recovery phrase. The wallet signs gateway registration on <span id="chain-name">Solana</span>.</p>
+    <p style="margin:14px 0 0;font-size:12px;color:var(--muted)">libp2p Peer ID and <span id="chain-name">Solana</span> wallet come from the recovery phrase. The WireGuard public key is the server's tunnel identity (stored locally, not derived from the mnemonic).</p>
   </div>
 
   <h2>Readiness</h2>
@@ -225,6 +235,20 @@
         const label = id.wallet_chain_label || 'Solana';
         $('wallet-label').textContent = label + ' wallet';
         $('chain-name').textContent = label;
+      }
+
+      const wg = (st.endpoints && st.endpoints.wireguard) || {};
+      if (wg.public_key) {
+        $('wg-row').style.display = '';
+        $('wg-pub').textContent = wg.public_key;
+      } else {
+        $('wg-row').style.display = 'none';
+      }
+      if (wg.endpoint) {
+        $('wg-ep-row').style.display = '';
+        $('wg-ep').textContent = wg.endpoint;
+      } else {
+        $('wg-ep-row').style.display = 'none';
       }
 
       const access = st.access_mode || 'private';

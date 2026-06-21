@@ -8,6 +8,7 @@ import (
 	"context"
 	_ "embed"
 	"net/http"
+	"strconv"
 
 	"github.com/NetSepio/erebrus/internal/config"
 	"github.com/NetSepio/erebrus/internal/readiness"
@@ -43,8 +44,9 @@ type Server struct {
 	prov Provisioner
 	id   Identity
 	// status reflects drain state ("online" | "draining"); Phase 2 toggles it.
-	status      string
-	readinessFn func() readiness.Input
+	status           string
+	readinessFn      func() readiness.Input
+	wireGuardPublicKey func() string
 }
 
 // NewServer builds the API server.
@@ -55,6 +57,11 @@ func NewServer(cfg *config.Config, prov Provisioner, id Identity) *Server {
 // SetReadinessProvider supplies live signals for readiness evaluation.
 func (s *Server) SetReadinessProvider(fn func() readiness.Input) {
 	s.readinessFn = fn
+}
+
+// SetWireGuardPublicKeyProvider supplies the node's WireGuard server public key.
+func (s *Server) SetWireGuardPublicKeyProvider(fn func() string) {
+	s.wireGuardPublicKey = fn
 }
 
 // SetStatus updates the public status field (online | draining).
@@ -126,6 +133,15 @@ func (s *Server) handleStatus(c *gin.Context) {
 			idStatus.WalletAddress = addr
 		}
 	}
+	wgPort, _ := strconv.Atoi(s.cfg.WGEndpointPort)
+	if wgPort == 0 {
+		wgPort = 51820
+	}
+	wgPub := ""
+	if s.wireGuardPublicKey != nil {
+		wgPub = s.wireGuardPublicKey()
+	}
+	wgHost := s.cfg.WGEndpointHost
 	c.JSON(http.StatusOK, StatusResponse{
 		Version:    s.cfg.Version,
 		NodeName:   s.cfg.NodeName,
@@ -135,6 +151,13 @@ func (s *Server) handleStatus(c *gin.Context) {
 		PeerID:     s.id.PeerID,
 		DID:        s.id.DID,
 		Identity:   idStatus,
+		Endpoints: EndpointsStatus{
+			WireGuard: WireGuardEndpointStatus{
+				Port:      wgPort,
+				PublicKey: wgPub,
+				Endpoint:  wgHost + ":" + strconv.Itoa(wgPort),
+			},
+		},
 		Capabilities: map[string]any{
 			"access_mode":     s.cfg.Mode.RuntimeMode,
 			"access_label":    readiness.AccessModeLabel(s.cfg.Mode.RuntimeMode),

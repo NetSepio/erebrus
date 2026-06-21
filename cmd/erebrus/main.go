@@ -230,6 +230,7 @@ func run(cfg *config.Config) error {
 	// Core service + HTTP API.
 	svc := node.New(cfg, st, wgm, stealthMgr, metrics)
 	apiServer := api.NewServer(cfg, svc, api.Identity{PeerID: peerID, DID: did})
+	apiServer.SetWireGuardPublicKeyProvider(wgm.ServerPublicKey)
 	svc.SetAPIStatusHook(apiServer.SetStatus)
 
 	// Public edge proxy (Gateway Mode only, opt-in).

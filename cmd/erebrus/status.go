@@ -71,6 +71,12 @@ func runStatusCLI(args []string) error {
 			WalletLabel   string `json:"wallet_chain_label"`
 			WalletAddress string `json:"wallet_address"`
 		} `json:"identity"`
+		Endpoints struct {
+			WireGuard struct {
+				PublicKey string `json:"public_key"`
+				Endpoint  string `json:"endpoint"`
+			} `json:"wireguard"`
+		} `json:"endpoints"`
 		Readiness readiness.Report `json:"readiness"`
 		Capabilities map[string]any `json:"capabilities"`
 	}
@@ -90,6 +96,12 @@ func runStatusCLI(args []string) error {
 			label = out.Identity.WalletChain
 		}
 		fmt.Printf("Wallet (%s): %s\n", label, out.Identity.WalletAddress)
+	}
+	if out.Endpoints.WireGuard.PublicKey != "" {
+		fmt.Printf("WireGuard public key: %s\n", out.Endpoints.WireGuard.PublicKey)
+		if out.Endpoints.WireGuard.Endpoint != "" {
+			fmt.Printf("WireGuard endpoint: %s\n", out.Endpoints.WireGuard.Endpoint)
+		}
 	}
 	fmt.Printf("Readiness: %s\n", readiness.SummaryLine(out.Readiness))
 	for _, c := range out.Readiness.Checks {
