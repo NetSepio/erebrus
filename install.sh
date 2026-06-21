@@ -2,12 +2,13 @@
 #
 # Erebrus v2 node installer  —  curl -fsSL https://erebrus.io/install.sh | bash
 #
-# Two install modes:
-#   docker  (default) — zero-hassle: WireGuard + sing-box stealth carriers in a
-#                       container. Best for "just run a VPN node".
-#   host              — bare metal via systemd. Adds the App-Hosting capability
-#                       (expose a VPN-connected app to the internet) which needs
-#                       a wildcard DNS record so the gateway can mint CNAMEs.
+# Deploy mode (how the node runs):
+#   container (default) — Docker compose; WireGuard + stealth carriers in a container.
+#   host                — bare metal via systemd; supports App-Hosting + wildcard DNS.
+#
+# Access mode (who can use the node — independent of deploy):
+#   private (default) | shared | public
+#   All nodes register with the gateway using their access type.
 #
 # Linux only (x86_64 / arm64). A node needs a STATIC, internet-routable public
 # IP, real bandwidth, and open ports — the installer verifies all three.
@@ -37,7 +38,8 @@ MIN_DOWN_MBPS="${MIN_DOWN_MBPS:-50}"
 MIN_UP_MBPS="${MIN_UP_MBPS:-20}"
 
 # Behaviour toggles
-MODE="${EREBRUS_MODE:-}"
+DEPLOY="${EREBRUS_DEPLOY:-}"
+ACCESS="${EREBRUS_ACCESS:-}"
 ASSUME_YES="${ASSUME_YES:-false}"
 SKIP_CHECKS="${SKIP_CHECKS:-false}"
 
@@ -94,9 +96,10 @@ EOF
 # ---------------------------------------------------------------------------
 while [[ $# -gt 0 ]]; do
   case "$1" in
-    --mode) MODE="${2:-}"; shift 2 ;;
-    --docker) MODE="docker"; shift ;;
-    --host) MODE="host"; shift ;;
+    --mode|--deploy) DEPLOY="${2:-}"; shift 2 ;;
+    --access) ACCESS="${2:-}"; shift 2 ;;
+    --docker|--container) DEPLOY="container"; shift ;;
+    --host) DEPLOY="host"; shift ;;
     -y|--yes) ASSUME_YES=true; shift ;;
     --skip-checks) SKIP_CHECKS=true; shift ;;
     --branch) BRANCH="${2:-}"; shift 2 ;;
@@ -105,16 +108,20 @@ while [[ $# -gt 0 ]]; do
 Erebrus v2 node installer
 
 Usage: install.sh [options]
-  --mode docker|host   Install mode (docker = easy; host = bare metal + app hosting)
-  --docker | --host    Shorthand for --mode
-  -y, --yes            Non-interactive; accept defaults (pair with env vars)
-  --skip-checks        Skip static-IP / bandwidth / port preflight
-  --branch <name>      Source branch to build from (default: v2)
-  -h, --help           This help
+  --mode container|host     Deploy mode (container = Docker; host = bare metal)
+  --deploy container|host   Alias for --mode
+  --access private|shared|public   Who can use this node (default: private)
+  --container | --docker    Shorthand for --mode container
+  --host                    Shorthand for --mode host
+  -y, --yes                 Non-interactive; accept defaults (pair with env vars)
+  --skip-checks             Skip static-IP / bandwidth / port preflight
+  --branch <name>           Source branch to build from (default: v2)
+  -h, --help                This help
 
-Key env overrides: MNEMONIC, WG_ENDPOINT_HOST, NODE_NAME, REGION, GATEWAY_URL,
-  NODE_API_TOKEN, ENABLE_STEALTH, REALITY_SERVER_NAMES, HYSTERIA2_OBFS_PASSWORD,
-  ENABLE_APP_HOSTING, APP_WILDCARD_DOMAIN, INSTALL_DIR, MIN_DOWN_MBPS, MIN_UP_MBPS
+Key env overrides: EREBRUS_ACCESS, EREBRUS_DEPLOY, MNEMONIC, WG_ENDPOINT_HOST,
+  NODE_NAME, REGION, GATEWAY_URL, NODE_API_TOKEN, ENABLE_STEALTH,
+  REALITY_SERVER_NAMES, HYSTERIA2_OBFS_PASSWORD, ENABLE_APP_HOSTING,
+  APP_WILDCARD_DOMAIN, INSTALL_DIR, MIN_DOWN_MBPS, MIN_UP_MBPS
 Linux only (x86_64/arm64). Needs a static public IP, bandwidth, and open ports.
 USAGE
       exit 0 ;;
@@ -305,20 +312,56 @@ run_preflight() {
 # ---------------------------------------------------------------------------
 # Mode selection + configuration
 # ---------------------------------------------------------------------------
-choose_mode() {
-  [[ -n "$MODE" ]] && { ok "Install mode: $MODE"; return; }
+normalize_deploy() {
+  case "$1" in
+    docker|container) echo "container" ;;
+    host) echo "host" ;;
+    *) echo "$1" ;;
+  esac
+}
+
+choose_deploy() {
+  DEPLOY="$(normalize_deploy "$DEPLOY")"
+  [[ -n "$DEPLOY" ]] && { ok "Deploy mode: $DEPLOY"; return; }
   echo
-  echo -e "${C_BOLD}Choose an install mode:${C_RESET}"
-  echo "  1) docker  — easy, zero-hassle (VPN + stealth). Recommended."
-  echo "  2) host    — bare-metal systemd. Adds App-Hosting (expose apps to the"
-  echo "               internet) which requires a wildcard DNS record."
+  echo -e "${C_BOLD}Choose deploy mode:${C_RESET}"
+  echo "  1) container — Docker compose (VPN + stealth). Recommended."
+  echo "  2) host      — bare-metal systemd. Adds App-Hosting (wildcard DNS)."
   local c; ask c "Selection [1/2]" "1"
   case "$c" in
-    1|docker) MODE="docker" ;;
-    2|host)   MODE="host" ;;
+    1|docker|container) DEPLOY="container" ;;
+    2|host) DEPLOY="host" ;;
     *) die "invalid selection: $c" ;;
   esac
-  ok "Install mode: $MODE"
+  ok "Deploy mode: $DEPLOY"
+}
+
+choose_access() {
+  ACCESS="${ACCESS:-private}"
+  ACCESS="$(echo "$ACCESS" | tr '[:upper:]' '[:lower:]')"
+  [[ -n "$ACCESS" && "$ASSUME_YES" == "true" ]] && { ok "Access mode: $ACCESS"; return; }
+  if [[ -n "$ACCESS" && "$ACCESS" != "private" ]]; then
+    ok "Access mode: $ACCESS"
+    return
+  fi
+  if $ASSUME_YES; then
+    ACCESS="private"
+    ok "Access mode: $ACCESS"
+    return
+  fi
+  echo
+  echo -e "${C_BOLD}Choose access mode:${C_RESET}"
+  echo "  1) private — your devices only (default)"
+  echo "  2) shared  — friends via wallet allowlist on gateway"
+  echo "  3) public  — open to entitled users on the network"
+  local c; ask c "Selection [1/2/3]" "1"
+  case "$c" in
+    1|private) ACCESS="private" ;;
+    2|shared)  ACCESS="shared" ;;
+    3|public)  ACCESS="public" ;;
+    *) die "invalid selection: $c" ;;
+  esac
+  ok "Access mode: $ACCESS"
 }
 
 # config values
@@ -341,24 +384,26 @@ gather_config() {
   ask GATEWAY_URL "Gateway URL" "$GATEWAY_URL"
   [[ -n "$NODE_API_TOKEN" ]] || NODE_API_TOKEN="$(rand_token)"
 
-  # Map legacy install UX to the v2.1 runtime model written into the env file.
-  case "$MODE" in
-    docker)
-      EREBRUS_MODE=private
+  case "$DEPLOY" in
+    container)
+      EREBRUS_MODE=container
       EREBRUS_NETWORK_PROFILE=bridge
-      warn "Install --mode docker maps to EREBRUS_MODE=private EREBRUS_NETWORK_PROFILE=bridge"
       ;;
     host)
-      EREBRUS_MODE=public
+      EREBRUS_MODE=host
       EREBRUS_NETWORK_PROFILE=host-network
-      STEALTH_TCP_PORT=443
-      STEALTH_UDP_PORT=443
-      warn "Install --mode host maps to EREBRUS_MODE=public EREBRUS_NETWORK_PROFILE=host-network"
-      warn "Stealth carriers set to 443/tcp and 443/udp for production reachability."
       ;;
+    *) die "invalid deploy mode: $DEPLOY (use container or host)" ;;
   esac
+  EREBRUS_ACCESS="${ACCESS:-private}"
 
-  if [[ "$MODE" == "host" ]]; then
+  if [[ "$EREBRUS_ACCESS" == "public" ]]; then
+    STEALTH_TCP_PORT=443
+    STEALTH_UDP_PORT=443
+    info "Public access: stealth carriers on 443/tcp and 443/udp for reachability."
+  fi
+
+  if [[ "$DEPLOY" == "host" ]]; then
     if confirm "Enable App-Hosting (expose VPN-connected apps to the internet)?" n; then
       ENABLE_APP_HOSTING="true"
       PUBLIC_GATEWAY_ENABLED="true"
@@ -375,7 +420,7 @@ gather_config() {
 
 # Invoke the node CLI regardless of install mode (built image vs host binary).
 erebrus_cli() {
-  if [[ "$MODE" == "docker" ]]; then
+  if [[ "$DEPLOY" == "container" ]]; then
     run docker run --rm erebrus:v2 "$@"
   else
     /usr/local/bin/erebrus "$@"
@@ -399,7 +444,8 @@ write_env_file() {
 # Erebrus v2 node — generated $(date '+%F %T')
 # See .env.example in the repo for field documentation.
 RUNTYPE=release
-EREBRUS_MODE=${EREBRUS_MODE:-private}
+EREBRUS_ACCESS=${EREBRUS_ACCESS:-private}
+EREBRUS_MODE=${EREBRUS_MODE:-container}
 EREBRUS_NETWORK_PROFILE=${EREBRUS_NETWORK_PROFILE:-bridge}
 SERVER=0.0.0.0
 HTTP_PORT=${HTTP_PORT}
@@ -620,18 +666,18 @@ validate_and_summary() {
     fi
   else
     warn "Node did not answer on :${HTTP_PORT} yet. Check logs:"
-    [[ "$MODE" == "docker" ]] && echo "    cd $INSTALL_DIR && docker compose logs -f" \
-                              || echo "    journalctl -u erebrus -f"
+    [[ "$DEPLOY" == "container" ]] && echo "    cd $INSTALL_DIR && docker compose logs -f" \
+                                    || echo "    journalctl -u erebrus -f"
   fi
 
   echo
-  echo -e "${C_BOLD}${C_G}Erebrus node installed (${MODE} mode).${C_RESET}"
+  echo -e "${C_BOLD}${C_G}Erebrus node installed (deploy=${DEPLOY}, access=${EREBRUS_ACCESS}).${C_RESET}"
   echo "  REST API : http://${WG_ENDPOINT_HOST}:${HTTP_PORT}/api/v2/status"
   echo "  WireGuard: ${WG_ENDPOINT_HOST}:${WG_PORT}/udp"
   echo "  Stealth  : VLESS+REALITY :${STEALTH_TCP_PORT}/tcp · Hysteria2 :${STEALTH_UDP_PORT}/udp"
   echo "  Node API key: ${NODE_API_TOKEN}"
   echo "  Verify   : erebrus status"
-  if [[ "$MODE" == "docker" ]]; then
+  if [[ "$DEPLOY" == "container" ]]; then
     echo "  Manage   : cd $INSTALL_DIR && docker compose [logs -f|restart|down]"
     echo "  Config   : $INSTALL_DIR/.env"
   else
@@ -654,13 +700,14 @@ main() {
   banner
   require_root
   detect_platform
-  choose_mode
+  choose_deploy
+  choose_access
   run_preflight
   gather_config
-  case "$MODE" in
-    docker) install_docker_mode ;;
-    host)   install_host_mode ;;
-    *) die "invalid mode: $MODE" ;;
+  case "$DEPLOY" in
+    container) install_docker_mode ;;
+    host)      install_host_mode ;;
+    *) die "invalid deploy mode: $DEPLOY" ;;
   esac
   validate_and_summary
 }

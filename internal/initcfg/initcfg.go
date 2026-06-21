@@ -81,6 +81,7 @@ func Render(o Options) string {
 	return fmt.Sprintf(`# Erebrus v2 node — generated %s
 # Internal configuration — use "erebrus status" to verify readiness.
 RUNTYPE=release
+EREBRUS_ACCESS=%s
 EREBRUS_MODE=%s
 EREBRUS_NETWORK_PROFILE=%s
 SERVER=0.0.0.0
@@ -119,7 +120,7 @@ STATE_DIR=%s
 CHAIN_REGISTRATION=off
 `,
 		time.Now().Format("2006-01-02 15:04:05"),
-		o.AccessMode, o.NetworkProfile,
+		o.AccessMode, deployModeFor(o), o.NetworkProfile,
 		o.HTTPPort, o.NodeName, o.Region,
 		o.Mnemonic, o.NodeAPIToken, o.GatewayURL,
 		o.PublicAddress, o.HTTPPort,
@@ -140,6 +141,13 @@ func WriteFile(path string, o Options) error {
 		return err
 	}
 	return os.WriteFile(path, []byte(content), 0o600)
+}
+
+func deployModeFor(o Options) config.DeployMode {
+	if o.NetworkProfile == config.NetworkHostNetwork {
+		return config.DeployHost
+	}
+	return config.DeployContainer
 }
 
 // ParseAccessMode normalizes user input.

@@ -151,7 +151,7 @@ func Load() *Config {
 		UpstreamDNS:            env("UPSTREAM_DNS", "1.1.1.1"),
 		DNSQueryLogs:           boolEnv("DNS_QUERY_LOGS", false),
 	}
-	if mode, err := ParseModeSettings(os.Getenv("EREBRUS_MODE"), os.Getenv("EREBRUS_NETWORK_PROFILE")); err == nil {
+	if mode, err := ParseModeSettingsFromEnv(); err == nil {
 		c.Mode = mode
 	}
 	c.VLESSPort = c.StealthTCPPort
@@ -180,7 +180,7 @@ func isLoopbackAddr(addr string) bool {
 
 // Validate returns an error if required fields are missing or invalid.
 func (c *Config) Validate() error {
-	mode, err := ParseModeSettings(os.Getenv("EREBRUS_MODE"), os.Getenv("EREBRUS_NETWORK_PROFILE"))
+	mode, err := ParseModeSettingsFromEnv()
 	if err != nil {
 		return err
 	}

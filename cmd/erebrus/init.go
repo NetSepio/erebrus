@@ -117,7 +117,7 @@ func runInitCLI(args []string) error {
 
 	var netProfile config.NetworkProfile
 	if profile != "" {
-		m, err := config.ParseModeSettings(string(mode), profile)
+		m, err := config.ParseModeSettings(string(mode), "", profile)
 		if err != nil {
 			return err
 		}

@@ -15,7 +15,8 @@ services:
       # Docker injects env from --env-file; LOAD_CONFIG_FILE skips godotenv inside the binary.
       LOAD_CONFIG_FILE: "TRUE"
       RUNTYPE: "${RUNTYPE:-release}"
-      EREBRUS_MODE: "${EREBRUS_MODE:-private}"
+      EREBRUS_ACCESS: "${EREBRUS_ACCESS:-private}"
+      EREBRUS_MODE: "${EREBRUS_MODE:-container}"
       EREBRUS_NETWORK_PROFILE: "${EREBRUS_NETWORK_PROFILE:-bridge}"
       SERVER: "${SERVER:-0.0.0.0}"
       HTTP_PORT: "${HTTP_PORT:-9080}"

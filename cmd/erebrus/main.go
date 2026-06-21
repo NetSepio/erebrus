@@ -111,8 +111,9 @@ func main() {
 	for _, w := range cfg.Mode.Warnings {
 		slog.Warn(w)
 	}
-	slog.Info("runtime mode",
-		"mode", cfg.Mode.RuntimeMode,
+	slog.Info("runtime settings",
+		"access", cfg.Mode.RuntimeMode,
+		"deploy", cfg.Mode.Deploy,
 		"network_profile", cfg.Mode.NetworkProfile,
 		"api_bind", fmt.Sprintf("%s:%s", cfg.BindAddr, cfg.HTTPPort),
 	)

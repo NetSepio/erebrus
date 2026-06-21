@@ -6,76 +6,83 @@ import (
 )
 
 func TestParseModeDefaults(t *testing.T) {
-	m, err := ParseModeSettings("", "")
+	m, err := ParseModeSettings("", "", "")
 	if err != nil {
 		t.Fatal(err)
 	}
-	if m.RuntimeMode != ModePrivate || m.NetworkProfile != NetworkBridge {
-		t.Fatalf("got mode=%s profile=%s", m.RuntimeMode, m.NetworkProfile)
+	if m.RuntimeMode != ModePrivate || m.Deploy != DeployContainer || m.NetworkProfile != NetworkBridge {
+		t.Fatalf("got access=%s deploy=%s profile=%s", m.RuntimeMode, m.Deploy, m.NetworkProfile)
 	}
 }
 
-func TestParseModeShared(t *testing.T) {
-	m, err := ParseModeSettings("shared", "bridge")
+func TestParseAccessShared(t *testing.T) {
+	m, err := ParseModeSettings("shared", "container", "bridge")
 	if err != nil {
 		t.Fatal(err)
 	}
-	if !m.IsShared() || m.NetworkProfile != NetworkBridge {
-		t.Fatalf("got mode=%s profile=%s", m.RuntimeMode, m.NetworkProfile)
+	if !m.IsShared() || m.Deploy != DeployContainer || m.NetworkProfile != NetworkBridge {
+		t.Fatalf("got access=%s deploy=%s profile=%s", m.RuntimeMode, m.Deploy, m.NetworkProfile)
 	}
 }
 
-func TestParseModePublicExplicit(t *testing.T) {
-	m, err := ParseModeSettings("public", "host-network")
+func TestParsePublicHost(t *testing.T) {
+	m, err := ParseModeSettings("public", "host", "host-network")
 	if err != nil {
 		t.Fatal(err)
 	}
-	if !m.IsPublic() || m.NetworkProfile != NetworkHostNetwork {
-		t.Fatalf("got mode=%s profile=%s", m.RuntimeMode, m.NetworkProfile)
+	if !m.IsPublic() || m.Deploy != DeployHost || m.NetworkProfile != NetworkHostNetwork {
+		t.Fatalf("got access=%s deploy=%s profile=%s", m.RuntimeMode, m.Deploy, m.NetworkProfile)
 	}
 }
 
-func TestLegacyGatewayAlias(t *testing.T) {
-	m, err := ParseModeSettings("gateway", "host-network")
+func TestPublicContainer(t *testing.T) {
+	m, err := ParseModeSettings("public", "container", "")
 	if err != nil {
 		t.Fatal(err)
 	}
-	if !m.IsPublic() || m.NetworkProfile != NetworkHostNetwork {
-		t.Fatalf("got mode=%s profile=%s", m.RuntimeMode, m.NetworkProfile)
+	if !m.IsPublic() || m.Deploy != DeployContainer || m.NetworkProfile != NetworkBridge {
+		t.Fatalf("got access=%s deploy=%s profile=%s", m.RuntimeMode, m.Deploy, m.NetworkProfile)
+	}
+}
+
+func TestLegacyAccessInModeEnv(t *testing.T) {
+	m, err := ParseModeSettings("", "gateway", "host-network")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !m.IsPublic() || m.Deploy != DeployContainer {
+		t.Fatalf("got access=%s deploy=%s profile=%s", m.RuntimeMode, m.Deploy, m.NetworkProfile)
 	}
 	if len(m.Warnings) == 0 || !strings.Contains(m.Warnings[0], "deprecated") {
 		t.Fatalf("expected deprecation warning, got %v", m.Warnings)
 	}
 }
 
-func TestLegacyDockerAlias(t *testing.T) {
-	m, err := ParseModeSettings("docker", "")
+func TestLegacyDockerDeployAlias(t *testing.T) {
+	m, err := ParseModeSettings("", "docker", "")
 	if err != nil {
 		t.Fatal(err)
 	}
-	if m.RuntimeMode != ModePrivate || m.NetworkProfile != NetworkBridge {
-		t.Fatalf("got mode=%s profile=%s", m.RuntimeMode, m.NetworkProfile)
+	if m.RuntimeMode != ModePrivate || m.Deploy != DeployContainer || m.NetworkProfile != NetworkBridge {
+		t.Fatalf("got access=%s deploy=%s profile=%s", m.RuntimeMode, m.Deploy, m.NetworkProfile)
 	}
 	if len(m.Warnings) == 0 || !strings.Contains(m.Warnings[0], "deprecated") {
 		t.Fatalf("expected deprecation warning, got %v", m.Warnings)
 	}
 }
 
-func TestLegacyHostAlias(t *testing.T) {
-	m, err := ParseModeSettings("host", "")
+func TestLegacyHostDeployDecoupledFromAccess(t *testing.T) {
+	m, err := ParseModeSettings("", "host", "")
 	if err != nil {
 		t.Fatal(err)
 	}
-	if m.RuntimeMode != ModePublic || m.NetworkProfile != NetworkHostNetwork {
-		t.Fatalf("got mode=%s profile=%s", m.RuntimeMode, m.NetworkProfile)
-	}
-	if len(m.Warnings) == 0 || !strings.Contains(m.Warnings[0], "deprecated") {
-		t.Fatalf("expected deprecation warning, got %v", m.Warnings)
+	if m.RuntimeMode != ModePrivate || m.Deploy != DeployHost || m.NetworkProfile != NetworkHostNetwork {
+		t.Fatalf("got access=%s deploy=%s profile=%s", m.RuntimeMode, m.Deploy, m.NetworkProfile)
 	}
 }
 
 func TestPublicBridgeWarning(t *testing.T) {
-	m, err := ParseModeSettings("public", "bridge")
+	m, err := ParseModeSettings("public", "container", "bridge")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -91,14 +98,20 @@ func TestPublicBridgeWarning(t *testing.T) {
 	}
 }
 
-func TestInvalidMode(t *testing.T) {
-	if _, err := ParseModeSettings("astro", "bridge"); err == nil {
-		t.Fatal("expected error for invalid mode")
+func TestInvalidAccess(t *testing.T) {
+	if _, err := ParseModeSettings("astro", "container", "bridge"); err == nil {
+		t.Fatal("expected error for invalid access")
+	}
+}
+
+func TestInvalidDeploy(t *testing.T) {
+	if _, err := ParseModeSettings("private", "vm", "bridge"); err == nil {
+		t.Fatal("expected error for invalid deploy")
 	}
 }
 
 func TestInvalidProfile(t *testing.T) {
-	if _, err := ParseModeSettings("private", "container"); err == nil {
+	if _, err := ParseModeSettings("private", "container", "container"); err == nil {
 		t.Fatal("expected error for invalid profile")
 	}
 }
