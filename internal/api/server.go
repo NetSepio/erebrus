@@ -11,6 +11,7 @@ import (
 
 	"github.com/NetSepio/erebrus/internal/config"
 	"github.com/NetSepio/erebrus/internal/readiness"
+	"github.com/NetSepio/erebrus/internal/wallet"
 	"github.com/gin-gonic/gin"
 	"github.com/prometheus/client_golang/prometheus/promhttp"
 )
@@ -109,18 +110,31 @@ func (s *Server) handleStatus(c *gin.Context) {
 		}
 	}
 	rep := readiness.Evaluate(in)
+	chain := s.cfg.WalletChain
+	if chain == "" {
+		chain = wallet.ChainSOL
+	}
+	idStatus := IdentityStatus{
+		Configured:  in.IdentityConfigured && s.cfg.Mnemonic != "",
+		PeerID:      s.id.PeerID,
+		DID:         s.id.DID,
+		WalletChain: chain,
+		WalletLabel: wallet.ChainLabel(chain),
+	}
+	if s.cfg.Mnemonic != "" {
+		if addr, err := wallet.AddressFromMnemonic(s.cfg.Mnemonic, chain); err == nil {
+			idStatus.WalletAddress = addr
+		}
+	}
 	c.JSON(http.StatusOK, StatusResponse{
 		Version:    s.cfg.Version,
+		NodeName:   s.cfg.NodeName,
 		Region:     s.cfg.Region,
 		Status:     s.status,
 		AccessMode: string(s.cfg.Mode.RuntimeMode),
 		PeerID:     s.id.PeerID,
 		DID:        s.id.DID,
-		Identity: IdentityStatus{
-			Configured: in.IdentityConfigured && s.cfg.Mnemonic != "",
-			PeerID:     s.id.PeerID,
-			DID:        s.id.DID,
-		},
+		Identity:   idStatus,
 		Capabilities: map[string]any{
 			"access_mode":     s.cfg.Mode.RuntimeMode,
 			"access_label":    readiness.AccessModeLabel(s.cfg.Mode.RuntimeMode),

@@ -67,14 +67,18 @@ type NodeStats struct {
 
 // IdentityStatus summarizes the node's cryptographic identity (never includes secrets).
 type IdentityStatus struct {
-	Configured bool   `json:"configured"`
-	PeerID     string `json:"peer_id"`
-	DID        string `json:"did"`
+	Configured    bool   `json:"configured"`
+	PeerID        string `json:"peer_id"`
+	DID           string `json:"did"`
+	WalletChain   string `json:"wallet_chain,omitempty"`
+	WalletLabel   string `json:"wallet_chain_label,omitempty"`
+	WalletAddress string `json:"wallet_address,omitempty"`
 }
 
 // StatusResponse is the public node status.
 type StatusResponse struct {
 	Version      string         `json:"version"`
+	NodeName     string         `json:"node_name"`
 	Region       string         `json:"region"`
 	Status       string         `json:"status"`
 	AccessMode   string         `json:"access_mode"`

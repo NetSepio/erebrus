@@ -24,6 +24,21 @@ const (
 	ChainSOL = "sol"
 )
 
+// ChainLabel returns a user-facing name for a chain code.
+func ChainLabel(chain string) string {
+	switch strings.ToLower(strings.TrimSpace(chain)) {
+	case ChainSOL, "solana":
+		return "Solana"
+	case ChainEVM, "ethereum":
+		return "EVM"
+	default:
+		if chain == "" {
+			return "Solana"
+		}
+		return chain
+	}
+}
+
 // Identity is a mnemonic-derived wallet used for gateway registration.
 type Identity struct {
 	Chain   string

@@ -63,10 +63,13 @@ func runStatusCLI(args []string) error {
 	}
 
 	var out struct {
-		AccessMode string                `json:"access_mode"`
+		AccessMode string `json:"access_mode"`
 		Identity   struct {
-			PeerID string `json:"peer_id"`
-			DID    string `json:"did"`
+			PeerID        string `json:"peer_id"`
+			DID           string `json:"did"`
+			WalletChain   string `json:"wallet_chain"`
+			WalletLabel   string `json:"wallet_chain_label"`
+			WalletAddress string `json:"wallet_address"`
 		} `json:"identity"`
 		Readiness readiness.Report `json:"readiness"`
 		Capabilities map[string]any `json:"capabilities"`
@@ -79,8 +82,15 @@ func runStatusCLI(args []string) error {
 	if label, ok := out.Capabilities["access_label"].(string); ok {
 		fmt.Printf("  %s\n", label)
 	}
-	fmt.Printf("Identity: %s\n", out.Identity.PeerID)
+	fmt.Printf("Peer ID: %s\n", out.Identity.PeerID)
 	fmt.Printf("DID: %s\n", out.Identity.DID)
+	if out.Identity.WalletAddress != "" {
+		label := out.Identity.WalletLabel
+		if label == "" {
+			label = out.Identity.WalletChain
+		}
+		fmt.Printf("Wallet (%s): %s\n", label, out.Identity.WalletAddress)
+	}
 	fmt.Printf("Readiness: %s\n", readiness.SummaryLine(out.Readiness))
 	for _, c := range out.Readiness.Checks {
 		mark := "ok"

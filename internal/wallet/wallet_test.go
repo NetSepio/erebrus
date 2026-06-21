@@ -17,6 +17,15 @@ func TestSolanaDerivationStable(t *testing.T) {
 	}
 }
 
+func TestChainLabel(t *testing.T) {
+	if ChainLabel(ChainSOL) != "Solana" {
+		t.Fatalf("sol label = %q", ChainLabel(ChainSOL))
+	}
+	if ChainLabel("") != "Solana" {
+		t.Fatalf("empty label = %q", ChainLabel(""))
+	}
+}
+
 func TestSignChallengeSolana(t *testing.T) {
 	mnemonic := "abandon abandon abandon abandon abandon abandon abandon abandon abandon abandon abandon about"
 	msg := "I accept the Erebrus Terms of Service https://erebrus.network/terms. Challenge: test-flow"
