@@ -161,6 +161,8 @@ func (s *Server) handleStatus(c *gin.Context) {
 		Capabilities: map[string]any{
 			"access_mode":     s.cfg.Mode.RuntimeMode,
 			"access_label":    readiness.AccessModeLabel(s.cfg.Mode.RuntimeMode),
+			"access_hint":     readiness.AccessModeHint(s.cfg.Mode.RuntimeMode),
+			"region_label":    readiness.RegionLabel(s.cfg.Region),
 			"network_profile": s.cfg.Mode.NetworkProfile,
 			"app_hosting":     s.cfg.EnableAppHosting,
 			"wildcard_domain": s.cfg.AppWildcardDomain,

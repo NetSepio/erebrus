@@ -84,9 +84,12 @@ func runStatusCLI(args []string) error {
 		return err
 	}
 
-	fmt.Printf("Access mode: %s\n", out.AccessMode)
-	if label, ok := out.Capabilities["access_label"].(string); ok {
-		fmt.Printf("  %s\n", label)
+	fmt.Printf("Access: %s\n", out.AccessMode)
+	if hint, ok := out.Capabilities["access_hint"].(string); ok && hint != "" {
+		fmt.Printf("  %s\n", hint)
+	}
+	if region, ok := out.Capabilities["region_label"].(string); ok && region != "" {
+		fmt.Printf("Region: %s\n", region)
 	}
 	fmt.Printf("Peer ID: %s\n", out.Identity.PeerID)
 	fmt.Printf("DID: %s\n", out.Identity.DID)

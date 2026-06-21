@@ -47,3 +47,18 @@ func TestPreboot(t *testing.T) {
 		t.Fatalf("preboot should pass config checks: %+v", r)
 	}
 }
+
+func TestAccessModeLabel(t *testing.T) {
+	if AccessModeLabel(config.ModePublic) != "Public" {
+		t.Fatalf("public label = %q", AccessModeLabel(config.ModePublic))
+	}
+}
+
+func TestRegionLabel(t *testing.T) {
+	if RegionLabel("NO") != "Norway" {
+		t.Fatalf("NO = %q", RegionLabel("NO"))
+	}
+	if RegionLabel("EU-WEST") != "EU-WEST" {
+		t.Fatalf("custom region = %q", RegionLabel("EU-WEST"))
+	}
+}

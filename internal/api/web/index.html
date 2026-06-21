@@ -41,12 +41,17 @@
   .hero p{margin:0;color:var(--txt2);font-size:15px;max-width:640px}
   .badges{display:flex;flex-wrap:wrap;gap:8px;margin-top:14px}
   .badge{
-    display:inline-flex;align-items:center;gap:6px;font-size:11px;font-weight:700;
-    letter-spacing:.06em;text-transform:uppercase;padding:5px 11px;border-radius:999px;
+    display:inline-flex;align-items:center;gap:8px;font-size:13px;font-weight:600;
+    padding:7px 13px;border-radius:12px;
     border:1px solid var(--stroke);background:rgba(255,255,255,.04);
   }
-  .badge.on{color:var(--mint);border-color:rgba(52,211,153,.35);background:rgba(52,211,153,.08)}
-  .badge.access{color:var(--cyan);border-color:rgba(34,211,238,.35);background:rgba(34,211,238,.08)}
+  .badge-k{font-size:10px;font-weight:800;letter-spacing:.1em;text-transform:uppercase;color:var(--muted)}
+  .badge.on .badge-v{color:var(--mint)}
+  .badge.on{border-color:rgba(52,211,153,.35);background:rgba(52,211,153,.08)}
+  .badge.access .badge-v{color:var(--cyan)}
+  .badge.access{border-color:rgba(34,211,238,.35);background:rgba(34,211,238,.08)}
+  .meta{font-size:13px;color:var(--txt2);margin-top:8px}
+  .hint{font-size:13px;color:var(--txt2);margin-top:10px;max-width:520px}
   .dot{width:7px;height:7px;border-radius:50%;background:var(--muted)}
   .dot.on{background:var(--mint);box-shadow:0 0 8px var(--mint)}
   .grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(140px,1fr));gap:14px;margin:22px 0}
@@ -119,11 +124,13 @@
 <div class="wrap">
   <section class="hero">
     <h1 id="node-title">Erebrus Node</h1>
-    <p>Decentralized VPN exit — WireGuard fast path plus DPI-resistant stealth carriers. This dashboard shows only coarse aggregates; the node keeps no traffic logs.</p>
+    <p class="meta" id="node-meta">Display name for this machine on the network.</p>
+    <p>VPN exit node for the Erebrus network. Shows live stats only — no traffic logs are kept.</p>
+    <p class="hint" id="access-hint"></p>
     <div class="badges">
-      <span class="badge" id="status-badge"><span class="dot" id="sdot"></span><span id="status">…</span></span>
-      <span class="badge access" id="access-badge">…</span>
-      <span class="badge" id="region-badge">…</span>
+      <span class="badge" id="status-badge"><span class="dot" id="sdot"></span><span class="badge-k">Status</span><span class="badge-v" id="status">…</span></span>
+      <span class="badge access" id="access-badge"><span class="badge-k">Access</span><span class="badge-v" id="access">…</span></span>
+      <span class="badge" id="region-badge"><span class="badge-k">Region</span><span class="badge-v" id="region">…</span></span>
     </div>
     <div id="protos" style="margin-top:10px"></div>
   </section>
@@ -196,7 +203,15 @@
   const $ = (id) => document.getElementById(id);
   function human(b){ b=Number(b)||0; const u=['B','KB','MB','GB','TB']; let i=0; while(b>=1000&&i<u.length-1){b/=1000;i++;} return b.toFixed(i?1:0)+' '+u[i]; }
   function dur(s){ s=Number(s)||0; const d=Math.floor(s/86400),h=Math.floor(s%86400/3600),m=Math.floor(s%3600/60); if(d)return d+'d '+h+'h'; if(h)return h+'h '+m+'m'; return m+'m'; }
-  function shortAccess(m){ return ({private:'Private',shared:'Shared',public:'Public'}[m]||m); }
+  function titleCase(s){ return (s||'').charAt(0).toUpperCase()+(s||'').slice(1); }
+  const CHECK_LABELS = {
+    identity:'Node identity',
+    public_address:'Public address',
+    node_api_key:'API key',
+    wireguard:'WireGuard',
+    stealth:'Stealth carriers',
+    control_plane:'Gateway link',
+  };
 
   document.querySelectorAll('.copy').forEach(btn => {
     btn.addEventListener('click', async () => {
@@ -222,6 +237,7 @@
 
       const name = st.node_name || 'Erebrus Node';
       $('node-title').textContent = name;
+      $('node-meta').textContent = 'Node name · set in NODE_NAME when you installed (often erebrus- plus your server hostname)';
       document.title = name + ' · Erebrus';
 
       const id = st.identity || {};
@@ -251,16 +267,21 @@
         $('wg-ep-row').style.display = 'none';
       }
 
+      const caps = st.capabilities || {};
       const access = st.access_mode || 'private';
-      const accessLabel = (st.capabilities && st.capabilities.access_label) || shortAccess(access);
-      $('access-badge').textContent = accessLabel;
+      const accessName = caps.access_label || titleCase(access);
+      $('access').textContent = accessName;
+      $('access-hint').textContent = caps.access_hint || '';
 
-      $('region-badge').textContent = (st.region || stats.region || 'unknown').toUpperCase();
+      const regionCode = st.region || stats.region || '';
+      $('region').textContent = caps.region_label || regionCode || 'Not set';
+
       $('version').textContent = st.version || stats.version || '—';
 
-      const online = (stats.status||st.status||'online')!=='offline';
+      const rawStatus = (stats.status||st.status||'online');
+      const online = rawStatus !== 'offline';
       $('sdot').className = 'dot'+(online?' on':'');
-      $('status').textContent = (stats.status||st.status||'online');
+      $('status').textContent = titleCase(rawStatus);
       $('status-badge').className = 'badge'+(online?' on':'');
 
       $('conn').innerHTML = (stats.connected_peers??0)+'<small> peers</small>';
@@ -283,11 +304,13 @@
         : '<span class="pill st">'+x.replace(/-/g,' ')+'</span>').join('');
 
       const checks = (st.readiness && st.readiness.checks) || [];
-      $('checks').innerHTML = checks.length ? checks.map(c => `
-        <div class="check ${c.ok?'ok':'fail'}">
+      $('checks').innerHTML = checks.length ? checks.map(c => {
+        const label = CHECK_LABELS[c.id] || c.id;
+        return `<div class="check ${c.ok?'ok':'fail'}">
           <span class="mark">${c.ok?'OK':'FAIL'}</span>
-          <div><div>${c.id}${c.optional?' (optional)':''}</div><div class="detail">${c.detail||''}</div></div>
-        </div>`).join('') : '<div class="check ok"><span class="mark">—</span><div>No readiness data</div></div>';
+          <div><div>${label}${c.optional?' · optional':''}</div><div class="detail">${c.detail||''}</div></div>
+        </div>`;
+      }).join('') : '<div class="check ok"><span class="mark">—</span><div>No health checks yet</div></div>';
 
       const warns = (st.readiness && st.readiness.warnings) || [];
       $('warnings').textContent = warns.join(' · ');

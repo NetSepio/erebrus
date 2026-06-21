@@ -3,6 +3,7 @@ package readiness
 
 import (
 	"fmt"
+	"strings"
 
 	"github.com/NetSepio/erebrus/internal/config"
 )
@@ -190,18 +191,49 @@ func Preboot(cfg *config.Config) Report {
 	return Report{OK: ok, Checks: checks, Warnings: append([]string{}, cfg.Mode.Warnings...)}
 }
 
-// AccessModeLabel returns a short user-facing description of the access mode.
+// AccessModeLabel returns the access mode name for display (Private, Shared, Public).
 func AccessModeLabel(mode config.RuntimeMode) string {
 	switch mode {
 	case config.ModePrivate:
-		return "private — your devices only"
+		return "Private"
 	case config.ModeShared:
-		return "shared — invited wallets only"
+		return "Shared"
 	case config.ModePublic:
-		return "public — open to entitled users"
+		return "Public"
 	default:
 		return string(mode)
 	}
+}
+
+// AccessModeHint is a one-line explanation shown in docs or expanded UI.
+func AccessModeHint(mode config.RuntimeMode) string {
+	switch mode {
+	case config.ModePrivate:
+		return "Only your own devices can use this node."
+	case config.ModeShared:
+		return "Only wallets you invite can connect."
+	case config.ModePublic:
+		return "Listed on the network for users to connect."
+	default:
+		return ""
+	}
+}
+
+// RegionLabel turns an ISO 3166-1 alpha-2 code (or custom REGION value) into a
+// friendly label. Custom values like "EU-WEST" pass through unchanged.
+func RegionLabel(code string) string {
+	code = strings.TrimSpace(code)
+	if code == "" || strings.EqualFold(code, "unknown") {
+		return "Not set"
+	}
+	if name, ok := regionNames[strings.ToUpper(code)]; ok {
+		return name
+	}
+	// Custom operator-defined region (not a 2-letter country code).
+	if len(code) > 2 || strings.ContainsAny(code, "-_") {
+		return code
+	}
+	return code + " (country code)"
 }
 
 // PublicAPIURL returns the URL operators should allow for gateway provisioning.
