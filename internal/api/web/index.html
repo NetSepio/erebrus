@@ -173,7 +173,6 @@
         <button type="button" class="copy" data-copy="wg-ep">Copy</button>
       </div>
     </div>
-    <p style="margin:14px 0 0;font-size:12px;color:var(--muted)">libp2p Peer ID and <span id="chain-name">Solana</span> wallet come from the recovery phrase. The WireGuard public key is the server's tunnel identity (stored locally, not derived from the mnemonic).</p>
   </div>
 
   <h2>Readiness</h2>
@@ -250,7 +249,6 @@
         $('wallet').textContent = wallet;
         const label = id.wallet_chain_label || 'Solana';
         $('wallet-label').textContent = label + ' wallet';
-        $('chain-name').textContent = label;
       }
 
       const wg = (st.endpoints && st.endpoints.wireguard) || {};
