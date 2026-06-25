@@ -128,11 +128,13 @@ func parseAccess(raw string) (RuntimeMode, []string, error) {
 	var warnings []string
 	switch raw {
 	case "":
-		return ModePrivate, warnings, nil
+		return ModePublic, warnings, nil
 	case string(ModePrivate):
 		return ModePrivate, warnings, nil
 	case string(ModeShared):
-		return ModeShared, warnings, nil
+		warnings = append(warnings,
+			"WARNING: EREBRUS_ACCESS=shared is deprecated; org membership now controls private node access. Treating as private.")
+		return ModePrivate, warnings, nil
 	case string(ModePublic):
 		return ModePublic, warnings, nil
 	case legacyModeGateway:
@@ -140,7 +142,7 @@ func parseAccess(raw string) (RuntimeMode, []string, error) {
 			"WARNING: access %q is deprecated. Use EREBRUS_ACCESS=%s.", legacyModeGateway, ModePublic))
 		return ModePublic, warnings, nil
 	default:
-		return "", nil, fmt.Errorf("EREBRUS_ACCESS must be private, shared, or public (got %q)", raw)
+		return "", nil, fmt.Errorf("EREBRUS_ACCESS must be private or public (got %q)", raw)
 	}
 }
 
@@ -194,3 +196,11 @@ func (m ModeSettings) IsContainer() bool { return m.Deploy == DeployContainer }
 
 // IsHostDeploy reports bare-metal/systemd deployment.
 func (m ModeSettings) IsHostDeploy() bool { return m.Deploy == DeployHost }
+
+// GatewayAccessMode maps local access policy to gateway public|private.
+func (m ModeSettings) GatewayAccessMode() string {
+	if m.RuntimeMode == ModePublic {
+		return "public"
+	}
+	return "private"
+}

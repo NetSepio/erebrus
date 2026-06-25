@@ -11,6 +11,7 @@ require (
 	github.com/joho/godotenv v1.5.1
 	github.com/libp2p/go-libp2p v0.38.1
 	github.com/libp2p/go-libp2p-kad-dht v0.25.2
+	github.com/miekg/dns v1.1.63
 	github.com/mr-tron/base58 v1.2.0
 	github.com/multiformats/go-multiaddr v0.14.0
 	github.com/prometheus/client_golang v1.23.2
@@ -18,6 +19,7 @@ require (
 	github.com/sagernet/sing-box v1.11.15
 	github.com/tyler-smith/go-bip32 v1.0.0
 	github.com/tyler-smith/go-bip39 v1.1.0
+	github.com/vk-rv/pvx v0.0.0-20210912195928-ac00bc32f6e7
 	golang.org/x/crypto v0.51.0
 	golang.zx2c4.com/wireguard/wgctrl v0.0.0-20241231184526-a9ab2273dd10
 	modernc.org/sqlite v1.52.0
@@ -112,7 +114,6 @@ require (
 	github.com/mdlayher/socket v0.5.1 // indirect
 	github.com/metacubex/tfo-go v0.0.0-20241231083714-66613d49c422 // indirect
 	github.com/mholt/acmez v1.2.0 // indirect
-	github.com/miekg/dns v1.1.63 // indirect
 	github.com/mikioh/tcpinfo v0.0.0-20190314235526-30a79bb1804b // indirect
 	github.com/mikioh/tcpopt v0.0.0-20190314235656-172688c1accc // indirect
 	github.com/minio/sha256-simd v1.0.1 // indirect

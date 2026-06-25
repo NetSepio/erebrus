@@ -88,7 +88,7 @@ func identityDetail(configured, hasMnemonic bool) string {
 }
 
 func apiKeyCheck(cfg *config.Config) Check {
-	if cfg.RunType == "debug" && cfg.NodeAPIToken == "" {
+	if cfg.RunType == "debug" && cfg.EffectiveNodeKey() == "" {
 		return Check{
 			ID:       "node_api_key",
 			OK:       true,
@@ -98,8 +98,8 @@ func apiKeyCheck(cfg *config.Config) Check {
 	}
 	return Check{
 		ID:     "node_api_key",
-		OK:     cfg.NodeAPIToken != "",
-		Detail: apiKeyDetail(cfg.NodeAPIToken != ""),
+		OK:     cfg.EffectiveNodeKey() != "",
+		Detail: apiKeyDetail(cfg.EffectiveNodeKey() != ""),
 	}
 }
 

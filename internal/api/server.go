@@ -93,7 +93,7 @@ func (s *Server) Router() *gin.Engine {
 	v2.GET("/stats", s.handleStats) // coarse public aggregates for the dashboard
 
 	authed := v2.Group("")
-	authed.Use(s.bearerAuth())
+	authed.Use(s.gatewayAuth())
 	{
 		authed.GET("/peers", s.handleListPeers)
 		authed.PUT("/peers/:id", s.handlePutPeer)

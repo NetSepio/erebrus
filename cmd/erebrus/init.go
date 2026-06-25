@@ -15,7 +15,7 @@ import (
 
 func runInitCLI(args []string) error {
 	var (
-		access      = "private"
+		access      = "public"
 		profile     = ""
 		publicAddr  = os.Getenv("WG_ENDPOINT_HOST")
 		gatewayURL  = envOr("GATEWAY_URL", "https://gateway.erebrus.io")
@@ -162,7 +162,7 @@ func printInitHelp() {
 Initialize a bare-metal node (writes internal env file — do not edit by hand).
 
 Options:
-  --access private|shared|public   Who can use this node (default: private)
+  --access private|public          Gateway visibility (default: public)
   --network-profile bridge|host-network|native
   --public-address <ip-or-dns>     Public address clients dial (required)
   --gateway-url <url>              Control plane URL

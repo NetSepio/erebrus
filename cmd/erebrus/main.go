@@ -257,40 +257,61 @@ func run(cfg *config.Config) error {
 	// Gateway control plane (WebSocket + PASETO). Best-effort when configured.
 	var gwClient *gatewayclient.Client
 	if cfg.GatewayEnabled() {
-		nodeID, nodeToken, err := gatewayclient.LoadCredentials(ctx, st)
+		creds, err := gatewayclient.LoadCredentials(ctx, st)
 		if err != nil {
 			slog.Warn("load gateway credentials failed", "err", err)
+			creds = &gatewayclient.Credentials{}
 		}
+		nodeID := creds.NodeID
+		nodeToken := creds.NodeToken
 		if nodeID == "" {
 			nodeID = cfg.NodeID
 		}
 		if nodeToken == "" {
 			nodeToken = cfg.NodeToken
 		}
+		if creds.NodeKey != "" {
+			cfg.NodeKey = creds.NodeKey
+			cfg.NodeAPIToken = creds.NodeKey
+		}
+		if creds.GatewayPublicKey != "" {
+			cfg.GatewayPublicKey = creds.GatewayPublicKey
+		}
 		if (nodeID == "" || nodeToken == "") && cfg.GatewayAutoRegister {
 			reg, err := gatewayclient.Register(ctx, gatewayclient.RegistrationInput{
-				GatewayURL:  cfg.GatewayURL,
-				AuthEULA:    cfg.AuthEULA,
-				WalletChain: cfg.WalletChain,
-				Mnemonic:    cfg.Mnemonic,
-				PeerID:      peerID,
-				DID:         did,
-				Name:        cfg.NodeName,
-				Region:      cfg.Region,
-				APIBaseURL:  cfg.PublicAPIBaseURL(),
-				APIToken:    cfg.NodeAPIToken,
+				GatewayURL:          cfg.GatewayURL,
+				OrgEnrollmentSecret: cfg.OrgEnrollmentSecret,
+				WalletChain:         cfg.WalletChain,
+				Mnemonic:            cfg.Mnemonic,
+				PeerID:              peerID,
+				DID:                 did,
+				Name:                cfg.NodeName,
+				Region:              cfg.Region,
+				APIBaseURL:          cfg.PublicAPIBaseURL(),
+				NodeKey:             cfg.EffectiveNodeKey(),
+				AccessMode:          cfg.Mode.GatewayAccessMode(),
 			})
 			if err != nil {
 				slog.Warn("gateway registration failed", "err", err)
 			} else {
 				nodeID, nodeToken = reg.NodeID, reg.NodeToken
-				if err := gatewayclient.SaveCredentials(ctx, st, nodeID, nodeToken); err != nil {
+				cfg.NodeID = nodeID
+				cfg.NodeToken = nodeToken
+				cfg.NodeKey = reg.NodeKey
+				cfg.NodeAPIToken = reg.NodeKey
+				if reg.GatewayPublicKey != "" {
+					cfg.GatewayPublicKey = reg.GatewayPublicKey
+				}
+				if err := gatewayclient.SaveCredentials(ctx, st, &gatewayclient.Credentials{
+					NodeID: nodeID, NodeToken: nodeToken, NodeKey: reg.NodeKey, GatewayPublicKey: cfg.GatewayPublicKey,
+				}); err != nil {
 					slog.Warn("persist gateway credentials failed", "err", err)
 				} else {
 					slog.Info("gateway registered", "node_id", nodeID)
 				}
 			}
 		}
+		cfg.NodeID = nodeID
 		if nodeID != "" && nodeToken != "" {
 			bridge := node.NewGatewayBridge(svc, peerID, did, nodeID)
 			gwClient = gatewayclient.New(cfg.GatewayURL, nodeID, nodeToken, bridge, bridge, bridge.Status)
@@ -304,7 +325,7 @@ func run(cfg *config.Config) error {
 		gwReg := false
 		gwConn := false
 		if cfg.GatewayEnabled() {
-			if id, tok, err := gatewayclient.LoadCredentials(ctx, st); err == nil && id != "" && tok != "" {
+			if cred, err := gatewayclient.LoadCredentials(ctx, st); err == nil && cred.NodeID != "" && cred.NodeToken != "" {
 				gwReg = true
 			}
 			if gwClient != nil {

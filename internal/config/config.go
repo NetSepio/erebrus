@@ -38,14 +38,15 @@ type Config struct {
 	P2PListenPort        string
 	NodeID               string // gateway-assigned; persisted in SQLite when registered
 	NodeToken            string // gateway-issued PASETO for WS control plane
-	WalletChain          string // sol | evm — signs gateway registration challenge
-	AuthEULA             string // must match gateway AUTH_EULA for registration
-	APIPublicURL         string // URL gateway uses for peer provisioning (api_base_url)
-	GatewayAutoRegister  bool
+	WalletChain           string // sol | evm — signs gateway machine enrollment challenge
+	OrgEnrollmentSecret   string // EREBRUS_ORG_ENROLLMENT_SECRET — org workspace credential
+	APIPublicURL          string // URL gateway uses for peer provisioning (api_base_url)
+	GatewayAutoRegister   bool
+	GatewayPublicKey      string // gateway Ed25519 public key (hex) for verifying API calls
 
-	// auth (Phase 1: static bearer token for node API; Phase 2 swaps to
-	// gateway-issued PASETO verification)
-	NodeAPIToken string
+	// NodeKey is the per-node bearer (NODE_KEY). NODE_API_TOKEN is a legacy alias.
+	NodeKey      string
+	NodeAPIToken string // deprecated alias for NodeKey
 
 	// wireguard
 	WGConfDir      string
@@ -118,10 +119,12 @@ func Load() *Config {
 		NodeID:                 os.Getenv("NODE_ID"),
 		NodeToken:              os.Getenv("NODE_TOKEN"),
 		WalletChain:            env("WALLET_CHAIN", "sol"),
-		AuthEULA:               env("AUTH_EULA", "I accept the Erebrus Terms of Service https://erebrus.network/terms."),
+		OrgEnrollmentSecret:    firstEnv("EREBRUS_ORG_ENROLLMENT_SECRET", "ORG_ENROLLMENT_SECRET", ""),
 		APIPublicURL:           os.Getenv("API_PUBLIC_URL"),
 		GatewayAutoRegister:    boolEnv("GATEWAY_AUTO_REGISTER", true),
-		NodeAPIToken:           os.Getenv("NODE_API_TOKEN"),
+		GatewayPublicKey:       os.Getenv("GATEWAY_PUBLIC_KEY"),
+		NodeKey:                firstEnv("NODE_KEY", "NODE_API_TOKEN", ""),
+		NodeAPIToken:           firstEnv("NODE_KEY", "NODE_API_TOKEN", ""),
 		WGConfDir:              env("WG_CONF_DIR", "/etc/wireguard"),
 		WGInterface:            normalizeInterface(env("WG_INTERFACE_NAME", "wg0")),
 		WGEndpointHost:         os.Getenv("WG_ENDPOINT_HOST"),
@@ -223,6 +226,14 @@ func (c *Config) PublicAPIBaseURL() string {
 
 // GatewayEnabled reports whether the node should connect to the gateway control plane.
 func (c *Config) GatewayEnabled() bool { return strings.TrimSpace(c.GatewayURL) != "" }
+
+// EffectiveNodeKey returns the per-node API bearer (NODE_KEY legacy: NODE_API_TOKEN).
+func (c *Config) EffectiveNodeKey() string {
+	if k := strings.TrimSpace(c.NodeKey); k != "" {
+		return k
+	}
+	return strings.TrimSpace(c.NodeAPIToken)
+}
 
 // WGEndpointPortInt parses the endpoint port.
 func (c *Config) WGEndpointPortInt() int {

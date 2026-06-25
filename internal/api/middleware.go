@@ -7,40 +7,54 @@ import (
 	"strings"
 	"sync"
 
+	"github.com/NetSepio/erebrus/internal/gatewayauth"
 	"github.com/gin-gonic/gin"
 )
 
 var warnOnce sync.Once
 
-// bearerAuth guards the node's peer-management API with the static
-// NODE_API_TOKEN. It fails CLOSED: if the token is unset, the API is allowed
-// only in debug mode (local dev). In release mode an unset token disables the
-// authenticated routes entirely rather than exposing them. Comparison is
-// constant-time to avoid leaking the token via response timing.
-func (s *Server) bearerAuth() gin.HandlerFunc {
-	token := s.cfg.NodeAPIToken
+// gatewayAuth guards peer-management APIs. Production requires a gateway-issued
+// short-lived PASETO (Authorization) plus the per-node key (X-Erebrus-Node-Key).
+// Debug mode still accepts the legacy bearer node key in Authorization.
+func (s *Server) gatewayAuth() gin.HandlerFunc {
+	nodeKey := s.cfg.EffectiveNodeKey()
+	gwPub := s.cfg.GatewayPublicKey
 	debug := s.cfg.RunType == "debug"
 	return func(c *gin.Context) {
-		if token == "" {
+		if nodeKey == "" {
 			if debug {
 				warnOnce.Do(func() {
-					slog.Warn("NODE_API_TOKEN not set — peer API is UNAUTHENTICATED (debug only)")
+					slog.Warn("NODE_KEY not set — peer API is UNAUTHENTICATED (debug only)")
 				})
 				c.Next()
 				return
 			}
 			warnOnce.Do(func() {
-				slog.Error("NODE_API_TOKEN not set in release mode — peer API is DISABLED until configured")
+				slog.Error("NODE_KEY not set in release mode — peer API is DISABLED until configured")
 			})
 			c.AbortWithStatusJSON(http.StatusServiceUnavailable,
-				gin.H{"error": "node API disabled: NODE_API_TOKEN not configured"})
+				gin.H{"error": "node API disabled: NODE_KEY not configured"})
 			return
 		}
-		got := strings.TrimPrefix(c.GetHeader("Authorization"), "Bearer ")
-		if subtle.ConstantTimeCompare([]byte(got), []byte(token)) != 1 {
-			c.AbortWithStatusJSON(http.StatusUnauthorized, gin.H{"error": "unauthorized"})
+
+		bearer := strings.TrimSpace(strings.TrimPrefix(c.GetHeader("Authorization"), "Bearer "))
+		headerKey := strings.TrimSpace(c.GetHeader("X-Erebrus-Node-Key"))
+
+		if gwPub != "" && bearer != "" && headerKey != "" {
+			if _, err := gatewayauth.VerifyGatewayCall(bearer, gwPub, s.cfg.NodeID); err == nil {
+				if subtle.ConstantTimeCompare([]byte(headerKey), []byte(nodeKey)) == 1 {
+					c.Next()
+					return
+				}
+			}
+		}
+
+		// Debug fallback: legacy single bearer (NODE_API_TOKEN style).
+		if debug && bearer != "" && subtle.ConstantTimeCompare([]byte(bearer), []byte(nodeKey)) == 1 {
+			c.Next()
 			return
 		}
-		c.Next()
+
+		c.AbortWithStatusJSON(http.StatusUnauthorized, gin.H{"error": "unauthorized"})
 	}
 }

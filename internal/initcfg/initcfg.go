@@ -40,7 +40,7 @@ const DefaultEnvPath = "/etc/erebrus/erebrus.env"
 // ApplyModeDefaults sets ports and profiles from access mode when unset.
 func ApplyModeDefaults(o *Options) {
 	if o.AccessMode == "" {
-		o.AccessMode = config.ModePrivate
+		o.AccessMode = config.ModePublic
 	}
 	if o.NetworkProfile == "" {
 		if o.AccessMode == config.ModePublic {
@@ -154,13 +154,15 @@ func deployModeFor(o Options) config.DeployMode {
 func ParseAccessMode(s string) (config.RuntimeMode, error) {
 	s = strings.ToLower(strings.TrimSpace(s))
 	switch s {
-	case "", "private":
+	case "":
+		return config.ModePublic, nil
+	case "private":
 		return config.ModePrivate, nil
 	case "shared":
-		return config.ModeShared, nil
+		return config.ModePrivate, nil
 	case "public", "gateway":
 		return config.ModePublic, nil
 	default:
-		return "", fmt.Errorf("access mode must be private, shared, or public (got %q)", s)
+		return "", fmt.Errorf("access mode must be private or public (got %q)", s)
 	}
 }

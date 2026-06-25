@@ -10,18 +10,27 @@ func TestParseModeDefaults(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if m.RuntimeMode != ModePrivate || m.Deploy != DeployContainer || m.NetworkProfile != NetworkBridge {
+	if m.RuntimeMode != ModePublic || m.Deploy != DeployContainer || m.NetworkProfile != NetworkBridge {
 		t.Fatalf("got access=%s deploy=%s profile=%s", m.RuntimeMode, m.Deploy, m.NetworkProfile)
+	}
+	if m.GatewayAccessMode() != "public" {
+		t.Fatalf("gateway access = %q, want public", m.GatewayAccessMode())
 	}
 }
 
-func TestParseAccessShared(t *testing.T) {
+func TestParseAccessSharedDeprecated(t *testing.T) {
 	m, err := ParseModeSettings("shared", "container", "bridge")
 	if err != nil {
 		t.Fatal(err)
 	}
-	if !m.IsShared() || m.Deploy != DeployContainer || m.NetworkProfile != NetworkBridge {
+	if !m.IsPrivate() || m.Deploy != DeployContainer || m.NetworkProfile != NetworkBridge {
 		t.Fatalf("got access=%s deploy=%s profile=%s", m.RuntimeMode, m.Deploy, m.NetworkProfile)
+	}
+	if len(m.Warnings) == 0 || !strings.Contains(m.Warnings[0], "deprecated") {
+		t.Fatalf("expected shared deprecation warning, got %v", m.Warnings)
+	}
+	if m.GatewayAccessMode() != "private" {
+		t.Fatalf("gateway access = %q, want private", m.GatewayAccessMode())
 	}
 }
 
@@ -63,7 +72,7 @@ func TestLegacyDockerDeployAlias(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if m.RuntimeMode != ModePrivate || m.Deploy != DeployContainer || m.NetworkProfile != NetworkBridge {
+	if m.RuntimeMode != ModePublic || m.Deploy != DeployContainer || m.NetworkProfile != NetworkBridge {
 		t.Fatalf("got access=%s deploy=%s profile=%s", m.RuntimeMode, m.Deploy, m.NetworkProfile)
 	}
 	if len(m.Warnings) == 0 || !strings.Contains(m.Warnings[0], "deprecated") {
@@ -76,7 +85,7 @@ func TestLegacyHostDeployDecoupledFromAccess(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if m.RuntimeMode != ModePrivate || m.Deploy != DeployHost || m.NetworkProfile != NetworkHostNetwork {
+	if m.RuntimeMode != ModePublic || m.Deploy != DeployHost || m.NetworkProfile != NetworkHostNetwork {
 		t.Fatalf("got access=%s deploy=%s profile=%s", m.RuntimeMode, m.Deploy, m.NetworkProfile)
 	}
 }

@@ -110,7 +110,7 @@ Erebrus v2 node installer
 Usage: install.sh [options]
   --mode container|host     Deploy mode (container = Docker; host = bare metal)
   --deploy container|host   Alias for --mode
-  --access private|shared|public   Who can use this node (default: private)
+  --access private|public          Gateway visibility (default: public)
   --container | --docker    Shorthand for --mode container
   --host                    Shorthand for --mode host
   -y, --yes                 Non-interactive; accept defaults (pair with env vars)
