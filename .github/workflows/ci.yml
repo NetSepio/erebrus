@@ -1,0 +1,36 @@
+name: ci
+
+on:
+  push:
+    branches: [main, v2]
+  pull_request:
+
+jobs:
+  go:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with:
+          go-version-file: go.mod
+          cache: true
+      # with_reality_server enables the sing-box REALITY server (stealth carrier);
+      # required or the stealth start-test fails. Keep in sync with Makefile/Dockerfile.
+      - run: go vet -tags with_reality_server ./...
+      - run: go build -tags with_reality_server ./...
+      - run: go test -tags with_reality_server ./...
+      - uses: golangci/golangci-lint-action@v6
+        continue-on-error: true
+        with:
+          version: latest
+          args: --build-tags with_reality_server
+
+  gitleaks:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - uses: gitleaks/gitleaks-action@v2
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}

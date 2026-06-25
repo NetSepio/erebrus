@@ -1,0 +1,327 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>Erebrus Node</title>
+<link rel="icon" href="https://erebrus.io/favicon.ico" />
+<meta name="description" content="Erebrus DePIN VPN node — live status and identity" />
+<style>
+  :root{
+    --bg:#020417; --surface:rgba(8,12,32,.72); --stroke:rgba(99,179,237,.14);
+    --txt:#f8fafc; --txt2:#94a3b8; --muted:#64748b;
+    --cyan:#22d3ee; --blue:#60a5fa; --mint:#34d399; --violet:#a78bfa; --amber:#fbbf24; --danger:#f87171;
+    --glow:0 0 40px rgba(34,211,238,.12);
+  }
+  *{box-sizing:border-box}
+  body{
+    margin:0; min-height:100vh; color:var(--txt);
+    font-family:ui-sans-serif,system-ui,-apple-system,"Segoe UI",Roboto,Helvetica,Arial,sans-serif;
+    background:var(--bg);
+    background-image:
+      radial-gradient(ellipse 80% 50% at 50% -20%, rgba(34,211,238,.15), transparent),
+      radial-gradient(ellipse 60% 40% at 100% 0%, rgba(96,165,250,.08), transparent);
+    line-height:1.55;
+  }
+  a{color:var(--cyan);text-decoration:none}
+  a:hover{text-decoration:underline}
+  .nav{
+    position:sticky;top:0;z-index:10;
+    backdrop-filter:blur(12px);-webkit-backdrop-filter:blur(12px);
+    background:rgba(2,4,23,.65);border-bottom:1px solid var(--stroke);
+  }
+  .nav-in{max-width:1040px;margin:0 auto;padding:14px 20px;display:flex;align-items:center;justify-content:space-between;gap:16px}
+  .nav img{height:32px;width:auto;display:block}
+  .nav-links{display:flex;gap:20px;font-size:13px;font-weight:500}
+  .nav-links a{color:var(--txt2)}
+  .nav-links a:hover{color:var(--cyan);text-decoration:none}
+  .wrap{max-width:1040px;margin:0 auto;padding:28px 20px 72px}
+  .hero{margin-bottom:28px}
+  .hero h1{margin:0 0 6px;font-size:clamp(22px,4vw,30px);font-weight:700;letter-spacing:-.02em}
+  .hero p{margin:0;color:var(--txt2);font-size:15px;max-width:640px}
+  .badges{display:flex;flex-wrap:wrap;gap:8px;margin-top:14px}
+  .badge{
+    display:inline-flex;align-items:center;gap:8px;font-size:13px;font-weight:600;
+    padding:7px 13px;border-radius:12px;
+    border:1px solid var(--stroke);background:rgba(255,255,255,.04);
+  }
+  .badge-k{font-size:10px;font-weight:800;letter-spacing:.1em;text-transform:uppercase;color:var(--muted)}
+  .badge.on .badge-v{color:var(--mint)}
+  .badge.on{border-color:rgba(52,211,153,.35);background:rgba(52,211,153,.08)}
+  .badge.access .badge-v{color:var(--cyan)}
+  .badge.access{border-color:rgba(34,211,238,.35);background:rgba(34,211,238,.08)}
+  .meta{font-size:13px;color:var(--txt2);margin-top:8px}
+  .hint{font-size:13px;color:var(--txt2);margin-top:10px;max-width:520px}
+  .dot{width:7px;height:7px;border-radius:50%;background:var(--muted)}
+  .dot.on{background:var(--mint);box-shadow:0 0 8px var(--mint)}
+  .grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(140px,1fr));gap:14px;margin:22px 0}
+  .card{
+    background:var(--surface);border:1px solid var(--stroke);border-radius:16px;padding:16px 18px;
+    box-shadow:var(--glow);
+  }
+  .card.wide{grid-column:1/-1}
+  .label{font-size:10px;letter-spacing:.14em;color:var(--muted);text-transform:uppercase;font-weight:700}
+  .stat{font-size:26px;font-weight:800;letter-spacing:-.03em;margin-top:6px}
+  .stat small{font-size:13px;font-weight:600;color:var(--txt2)}
+  h2{
+    font-size:11px;letter-spacing:.16em;color:var(--muted);text-transform:uppercase;
+    margin:32px 0 12px;font-weight:800;
+  }
+  .id-grid{display:grid;gap:12px}
+  @media(min-width:720px){.id-grid{grid-template-columns:1fr 1fr}}
+  .id-row{
+    display:flex;flex-direction:column;gap:6px;padding:14px 16px;
+    background:rgba(0,0,0,.25);border:1px solid var(--stroke);border-radius:12px;
+  }
+  .id-row .k{font-size:10px;letter-spacing:.12em;text-transform:uppercase;color:var(--muted);font-weight:700}
+  .id-row .v{
+    font-family:ui-monospace,SFMono-Regular,Menlo,Monaco,Consolas,monospace;
+    font-size:12.5px;word-break:break-all;color:var(--txt);line-height:1.45;
+  }
+  .id-row .v.wallet{color:var(--cyan)}
+  .copy{
+    align-self:flex-start;margin-top:4px;font-size:11px;font-weight:600;color:var(--blue);
+    background:none;border:0;padding:0;cursor:pointer;
+  }
+  .copy:hover{color:var(--cyan)}
+  .pill{display:inline-block;font-size:11px;font-weight:700;padding:4px 10px;border-radius:999px;margin:0 6px 6px 0}
+  .pill.wg{color:var(--cyan);background:rgba(34,211,238,.1);border:1px solid rgba(34,211,238,.3)}
+  .pill.st{color:var(--violet);background:rgba(167,139,250,.1);border:1px solid rgba(167,139,250,.3)}
+  .checks{display:grid;gap:8px}
+  .check{
+    display:flex;align-items:flex-start;gap:10px;padding:10px 12px;border-radius:10px;
+    background:rgba(0,0,0,.2);border:1px solid var(--stroke);font-size:13px;
+  }
+  .check .mark{font-weight:800;min-width:28px;font-size:11px;letter-spacing:.04em}
+  .check.ok .mark{color:var(--mint)}
+  .check.fail .mark{color:var(--danger)}
+  .check .detail{color:var(--txt2);font-size:12px;margin-top:2px}
+  .row{display:flex;align-items:center;justify-content:space-between;gap:12px;padding:11px 0;border-bottom:1px solid var(--stroke)}
+  .row:last-child{border-bottom:0}
+  code{background:rgba(0,0,0,.35);border:1px solid var(--stroke);border-radius:6px;padding:2px 7px;font-size:12px}
+  .meth{font-weight:800;font-size:11px;margin-right:8px;letter-spacing:.04em}
+  .get{color:var(--mint)} .put{color:var(--amber)} .del{color:var(--danger)}
+  .lock{color:var(--muted);font-size:11px}
+  .foot{color:var(--muted);font-size:12px;margin-top:40px;text-align:center;padding-top:24px;border-top:1px solid var(--stroke)}
+  .err{color:var(--danger);font-size:13px;margin-top:12px}
+  .warn{font-size:12px;color:var(--amber);margin-top:8px}
+</style>
+</head>
+<body>
+<header class="nav">
+  <div class="nav-in">
+    <a href="https://erebrus.io" target="_blank" rel="noopener">
+      <img src="https://erebrus.io/images/Erebrus_logo_wordmark.webp" alt="Erebrus" width="150" height="32" />
+    </a>
+    <nav class="nav-links">
+      <a href="https://erebrus.io/explorer" target="_blank" rel="noopener">Explorer</a>
+      <a href="https://docs.netsepio.com/erebrus/" target="_blank" rel="noopener">Docs</a>
+      <a href="https://erebrus.io" target="_blank" rel="noopener">erebrus.io</a>
+    </nav>
+  </div>
+</header>
+
+<div class="wrap">
+  <section class="hero">
+    <h1 id="node-title">Erebrus Node</h1>
+    <p>VPN exit node for the Erebrus network. Shows live stats only — no traffic logs are kept.</p>
+    <p class="hint" id="access-hint"></p>
+    <div class="badges">
+      <span class="badge" id="status-badge"><span class="dot" id="sdot"></span><span class="badge-k">Status</span><span class="badge-v" id="status">…</span></span>
+      <span class="badge access" id="access-badge"><span class="badge-k">Access</span><span class="badge-v" id="access">…</span></span>
+      <span class="badge" id="region-badge"><span class="badge-k">Region</span><span class="badge-v" id="region">…</span></span>
+    </div>
+    <div id="protos" style="margin-top:10px"></div>
+  </section>
+
+  <div class="grid">
+    <div class="card"><div class="label">Connected</div><div class="stat" id="conn">…<small> peers</small></div></div>
+    <div class="card"><div class="label">Download</div><div class="stat" id="dl">…<small> /s</small></div></div>
+    <div class="card"><div class="label">Upload</div><div class="stat" id="ul">…<small> /s</small></div></div>
+    <div class="card"><div class="label">Total transfer</div><div class="stat" id="total">…</div></div>
+    <div class="card"><div class="label">Uptime</div><div class="stat" id="uptime">…</div></div>
+    <div class="card"><div class="label">Version</div><div class="stat" id="version" style="font-size:18px">…</div></div>
+  </div>
+
+  <h2>Node identity</h2>
+  <div class="card wide">
+    <div class="id-grid">
+      <div class="id-row">
+        <div class="k">libp2p Peer ID</div>
+        <div class="v" id="peer-id">…</div>
+        <button type="button" class="copy" data-copy="peer-id">Copy</button>
+      </div>
+      <div class="id-row">
+        <div class="k">DID</div>
+        <div class="v" id="did">…</div>
+        <button type="button" class="copy" data-copy="did">Copy</button>
+      </div>
+      <div class="id-row" id="wallet-row" style="display:none">
+        <div class="k" id="wallet-label">Solana wallet</div>
+        <div class="v wallet" id="wallet">…</div>
+        <button type="button" class="copy" data-copy="wallet">Copy</button>
+      </div>
+      <div class="id-row" id="wg-row" style="display:none">
+        <div class="k">WireGuard public key</div>
+        <div class="v" id="wg-pub">…</div>
+        <button type="button" class="copy" data-copy="wg-pub">Copy</button>
+      </div>
+      <div class="id-row" id="wg-ep-row" style="display:none">
+        <div class="k">WireGuard endpoint</div>
+        <div class="v" id="wg-ep">…</div>
+        <button type="button" class="copy" data-copy="wg-ep">Copy</button>
+      </div>
+    </div>
+  </div>
+
+  <h2>Readiness</h2>
+  <div class="card wide"><div class="checks" id="checks">…</div><div class="warn" id="warnings"></div></div>
+
+  <h2>Public API</h2>
+  <div class="card wide">
+    <div class="row"><div><span class="meth get">GET</span><code>/api/v2/status</code></div><div class="lock">identity, access, readiness</div></div>
+    <div class="row"><div><span class="meth get">GET</span><code>/api/v2/stats</code></div><div class="lock">bandwidth, uptime</div></div>
+    <div class="row"><div><span class="meth get">GET</span><code>/metrics</code></div><div class="lock">Prometheus</div></div>
+    <div class="row"><div><span class="meth get">GET</span><code>/healthz</code></div><div class="lock">liveness</div></div>
+  </div>
+
+  <h2>Authenticated API <span class="lock">· Bearer NODE_API_TOKEN</span></h2>
+  <div class="card wide">
+    <div class="row"><div><span class="meth get">GET</span><code>/api/v2/peers</code></div><div class="lock">list peers</div></div>
+    <div class="row"><div><span class="meth put">PUT</span><code>/api/v2/peers/:id</code></div><div class="lock">provision client</div></div>
+    <div class="row"><div><span class="meth del">DEL</span><code>/api/v2/peers/:id</code></div><div class="lock">remove client</div></div>
+    <div class="row"><div><span class="meth get">GET</span><code>/api/v2/peers/:id/credentials</code></div><div class="lock">credential bundle</div></div>
+  </div>
+
+  <div id="msg" class="err"></div>
+  <div class="foot">Erebrus DePIN · <a href="https://github.com/NetSepio/erebrus">Source</a> · <a href="https://erebrus.io">erebrus.io</a></div>
+</div>
+
+<script>
+  const $ = (id) => document.getElementById(id);
+  function human(b){ b=Number(b)||0; const u=['B','KB','MB','GB','TB']; let i=0; while(b>=1000&&i<u.length-1){b/=1000;i++;} return b.toFixed(i?1:0)+' '+u[i]; }
+  function dur(s){ s=Number(s)||0; const d=Math.floor(s/86400),h=Math.floor(s%86400/3600),m=Math.floor(s%3600/60); if(d)return d+'d '+h+'h'; if(h)return h+'h '+m+'m'; return m+'m'; }
+  function titleCase(s){ return (s||'').charAt(0).toUpperCase()+(s||'').slice(1); }
+  const CHECK_LABELS = {
+    identity:'Node identity',
+    public_address:'Public address',
+    node_api_key:'API key',
+    wireguard:'WireGuard',
+    stealth:'Stealth carriers',
+    control_plane:'Gateway link',
+  };
+
+  document.querySelectorAll('.copy').forEach(btn => {
+    btn.addEventListener('click', async () => {
+      const el = $(btn.dataset.copy);
+      if (!el) return;
+      try {
+        await navigator.clipboard.writeText(el.textContent.trim());
+        const prev = btn.textContent;
+        btn.textContent = 'Copied';
+        setTimeout(() => { btn.textContent = prev; }, 1200);
+      } catch (_) {}
+    });
+  });
+
+  let prev = null;
+  async function tick(){
+    try{
+      const [st, stats] = await Promise.all([
+        fetch('/api/v2/status').then(r=>r.json()),
+        fetch('/api/v2/stats').then(r=>r.json()),
+      ]);
+      $('msg').textContent='';
+
+      const name = st.node_name || 'Erebrus Node';
+      $('node-title').textContent = name;
+      document.title = name + ' · Erebrus';
+
+      const id = st.identity || {};
+      $('peer-id').textContent = id.peer_id || st.peer_id || '—';
+      $('did').textContent = id.did || st.did || '—';
+
+      const wallet = id.wallet_address || '';
+      if (wallet) {
+        $('wallet-row').style.display = '';
+        $('wallet').textContent = wallet;
+        const label = id.wallet_chain_label || 'Solana';
+        $('wallet-label').textContent = label + ' wallet';
+      }
+
+      const wg = (st.endpoints && st.endpoints.wireguard) || {};
+      if (wg.public_key) {
+        $('wg-row').style.display = '';
+        $('wg-pub').textContent = wg.public_key;
+      } else {
+        $('wg-row').style.display = 'none';
+      }
+      if (wg.endpoint) {
+        $('wg-ep-row').style.display = '';
+        $('wg-ep').textContent = wg.endpoint;
+      } else {
+        $('wg-ep-row').style.display = 'none';
+      }
+
+      const caps = st.capabilities || {};
+      const access = st.access_mode || 'private';
+      const accessName = caps.access_label || titleCase(access);
+      $('access').textContent = accessName;
+      $('access-hint').textContent = caps.access_hint || '';
+
+      const regionCode = (st.region || stats.region || '').trim();
+      const regionName = caps.region_label || '';
+      if (regionCode && regionName && regionName !== regionCode && !regionName.endsWith('(country code)')) {
+        $('region').textContent = regionName + ' (' + regionCode.toUpperCase() + ')';
+      } else if (regionName) {
+        $('region').textContent = regionName;
+      } else if (regionCode) {
+        $('region').textContent = regionCode.toUpperCase();
+      } else {
+        $('region').textContent = 'Not set';
+      }
+
+      $('version').textContent = st.version || stats.version || '—';
+
+      const rawStatus = (stats.status||st.status||'online');
+      const online = rawStatus !== 'offline';
+      $('sdot').className = 'dot'+(online?' on':'');
+      $('status').textContent = titleCase(rawStatus);
+      $('status-badge').className = 'badge'+(online?' on':'');
+
+      $('conn').innerHTML = (stats.connected_peers??0)+'<small> peers</small>';
+      $('total').textContent = human((stats.rx_bytes||0)+(stats.tx_bytes||0));
+      $('uptime').textContent = dur(stats.uptime_sec);
+
+      const now = Date.now();
+      if(prev){
+        const dt = (now - prev.t)/1000;
+        const dl = Math.max(0,(stats.tx_bytes - prev.tx))/dt;
+        const ul = Math.max(0,(stats.rx_bytes - prev.rx))/dt;
+        $('dl').innerHTML = human(dl)+'<small> /s</small>';
+        $('ul').innerHTML = human(ul)+'<small> /s</small>';
+      }
+      prev = {t:now, rx:stats.rx_bytes||0, tx:stats.tx_bytes||0};
+
+      const p = (st.protocols||[]);
+      $('protos').innerHTML = p.map(x => x==='wireguard'
+        ? '<span class="pill wg">WireGuard</span>'
+        : '<span class="pill st">'+x.replace(/-/g,' ')+'</span>').join('');
+
+      const checks = (st.readiness && st.readiness.checks) || [];
+      $('checks').innerHTML = checks.length ? checks.map(c => {
+        const label = CHECK_LABELS[c.id] || c.id;
+        return `<div class="check ${c.ok?'ok':'fail'}">
+          <span class="mark">${c.ok?'OK':'FAIL'}</span>
+          <div><div>${label}${c.optional?' · optional':''}</div><div class="detail">${c.detail||''}</div></div>
+        </div>`;
+      }).join('') : '<div class="check ok"><span class="mark">—</span><div>No health checks yet</div></div>';
+
+      const warns = (st.readiness && st.readiness.warnings) || [];
+      $('warnings').textContent = warns.join(' · ');
+    }catch(e){ $('msg').textContent = 'Node unreachable — '+e; }
+  }
+  tick(); setInterval(tick, 2000);
+</script>
+</body>
+</html>
