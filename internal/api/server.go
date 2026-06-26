@@ -117,10 +117,7 @@ func (s *Server) handleStatus(c *gin.Context) {
 		}
 	}
 	rep := readiness.Evaluate(in)
-	chain := s.cfg.WalletChain
-	if chain == "" {
-		chain = wallet.ChainSOL
-	}
+	chain := wallet.CanonicalChain(s.cfg.WalletChain)
 	idStatus := IdentityStatus{
 		Configured:  in.IdentityConfigured && s.cfg.Mnemonic != "",
 		PeerID:      s.id.PeerID,

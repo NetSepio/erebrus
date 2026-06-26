@@ -39,7 +39,7 @@ type Config struct {
 	P2PListenPort        string
 	NodeID               string // gateway-assigned; persisted in SQLite when registered
 	NodeToken            string // gateway-issued PASETO for WS control plane
-	WalletChain           string // sol | evm — signs gateway machine enrollment challenge
+	WalletChain           string // SOLANA | ETHEREUM (aliases sol/evm accepted) — gateway enrollment
 	OrgEnrollmentSecret   string // EREBRUS_ORG_ENROLLMENT_SECRET — org workspace credential
 	APIPublicURL          string // URL gateway uses for peer provisioning (api_base_url)
 	GatewayAutoRegister   bool
@@ -120,7 +120,7 @@ func Load() *Config {
 		P2PListenPort:          env("P2P_LISTEN_PORT", "9002"),
 		NodeID:                 os.Getenv("NODE_ID"),
 		NodeToken:              os.Getenv("NODE_TOKEN"),
-		WalletChain:            env("WALLET_CHAIN", "sol"),
+		WalletChain:            env("WALLET_CHAIN", "SOLANA"),
 		OrgEnrollmentSecret:    firstEnv("EREBRUS_ORG_ENROLLMENT_SECRET", "ORG_ENROLLMENT_SECRET", ""),
 		APIPublicURL:           os.Getenv("API_PUBLIC_URL"),
 		GatewayAutoRegister:    boolEnv("GATEWAY_AUTO_REGISTER", true),

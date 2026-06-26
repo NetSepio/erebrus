@@ -32,7 +32,7 @@ services:
       GATEWAY_URL: "${GATEWAY_URL:-}"
       GATEWAY_AUTO_REGISTER: "${GATEWAY_AUTO_REGISTER:-true}"
       EREBRUS_ORG_ENROLLMENT_SECRET: "${EREBRUS_ORG_ENROLLMENT_SECRET:-}"
-      WALLET_CHAIN: "${WALLET_CHAIN:-sol}"
+      WALLET_CHAIN: "${WALLET_CHAIN:-SOLANA}"
       AUTH_EULA: "${AUTH_EULA:-I accept the Erebrus Terms of Service https://erebrus.network/terms.}"
       API_PUBLIC_URL: "${API_PUBLIC_URL:-}"
       NODE_ID: "${NODE_ID:-}"

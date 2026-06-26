@@ -22,20 +22,50 @@ import (
 const (
 	ChainEVM = "evm"
 	ChainSOL = "sol"
+
+	// Canonical registration labels sent to the gateway.
+	ChainSolana   = "SOLANA"
+	ChainEthereum = "ETHEREUM"
 )
+
+// ResolveChain maps config/env aliases to the internal signing chain (sol | evm).
+func ResolveChain(chain string) string {
+	switch strings.ToUpper(strings.TrimSpace(chain)) {
+	case "", "SOL", "SOLANA":
+		return ChainSOL
+	case "EVM", "ETH", "ETHEREUM":
+		return ChainEVM
+	default:
+		switch strings.ToLower(strings.TrimSpace(chain)) {
+		case ChainSOL, "solana":
+			return ChainSOL
+		case ChainEVM, "ethereum", "eth":
+			return ChainEVM
+		default:
+			return ChainSOL
+		}
+	}
+}
+
+// CanonicalChain returns the gateway-facing chain label (SOLANA | ETHEREUM).
+func CanonicalChain(chain string) string {
+	switch ResolveChain(chain) {
+	case ChainEVM:
+		return ChainEthereum
+	default:
+		return ChainSolana
+	}
+}
 
 // ChainLabel returns a user-facing name for a chain code.
 func ChainLabel(chain string) string {
-	switch strings.ToLower(strings.TrimSpace(chain)) {
-	case ChainSOL, "solana":
+	switch ResolveChain(chain) {
+	case ChainEVM:
+		return "Ethereum"
+	case ChainSOL:
 		return "Solana"
-	case ChainEVM, "ethereum":
-		return "EVM"
 	default:
-		if chain == "" {
-			return "Solana"
-		}
-		return chain
+		return "Solana"
 	}
 }
 
@@ -57,11 +87,7 @@ func AddressFromMnemonic(mnemonic, chain string) (string, error) {
 
 // PublicKeyFromMnemonic returns the signing public key for gateway registration.
 func PublicKeyFromMnemonic(mnemonic, chain string) (string, error) {
-	chain = strings.ToLower(strings.TrimSpace(chain))
-	if chain == "" {
-		chain = ChainSOL
-	}
-	switch chain {
+	switch ResolveChain(chain) {
 	case ChainSOL:
 		seed := bip39.NewSeed(mnemonic, "")
 		derived, err := hdwallet.Derived(`m/44'/501'/0'/0'`, seed)
@@ -87,10 +113,7 @@ func PublicKeyFromMnemonic(mnemonic, chain string) (string, error) {
 
 // Derive returns the wallet identity for the given chain.
 func Derive(mnemonic, chain string) (*Identity, error) {
-	chain = strings.ToLower(strings.TrimSpace(chain))
-	if chain == "" {
-		chain = ChainSOL
-	}
+	chain = ResolveChain(chain)
 	if !bip39.IsMnemonicValid(mnemonic) {
 		return nil, fmt.Errorf("invalid mnemonic")
 	}
@@ -123,11 +146,7 @@ func deriveSolana(mnemonic string) (*Identity, error) {
 
 // SignChallengeWithMnemonic signs a challenge using the mnemonic directly.
 func SignChallengeWithMnemonic(mnemonic, chain, message string) (address, publicKey, signature string, err error) {
-	chain = strings.ToLower(strings.TrimSpace(chain))
-	if chain == "" {
-		chain = ChainSOL
-	}
-	switch chain {
+	switch ResolveChain(chain) {
 	case ChainSOL:
 		seed := bip39.NewSeed(mnemonic, "")
 		derived, err := hdwallet.Derived(`m/44'/501'/0'/0'`, seed)

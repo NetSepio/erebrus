@@ -165,7 +165,7 @@ func Register(ctx context.Context, in RegistrationInput) (*RegistrationResult, e
 		"signature":          signature,
 		"public_key":         pubKey,
 		"wallet_address":     walletAddr,
-		"chain":              normalizeChain(in.WalletChain),
+		"chain":              wallet.CanonicalChain(in.WalletChain),
 		"peer_id":            in.PeerID,
 		"did":                in.DID,
 		"name":               in.Name,
@@ -201,14 +201,6 @@ func Register(ctx context.Context, in RegistrationInput) (*RegistrationResult, e
 	return &RegistrationResult{
 		NodeID: out.NodeID, NodeToken: out.NodeToken, NodeKey: out.NodeKey, GatewayPublicKey: gwPub,
 	}, nil
-}
-
-func normalizeChain(chain string) string {
-	chain = strings.ToLower(strings.TrimSpace(chain))
-	if chain == "" {
-		return wallet.ChainSOL
-	}
-	return chain
 }
 
 func postJSON(ctx context.Context, client *http.Client, url string, body []byte) (json.RawMessage, int, error) {

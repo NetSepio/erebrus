@@ -21,8 +21,23 @@ func TestChainLabel(t *testing.T) {
 	if ChainLabel(ChainSOL) != "Solana" {
 		t.Fatalf("sol label = %q", ChainLabel(ChainSOL))
 	}
+	if ChainLabel(ChainEthereum) != "Ethereum" {
+		t.Fatalf("ethereum label = %q", ChainLabel(ChainEthereum))
+	}
 	if ChainLabel("") != "Solana" {
 		t.Fatalf("empty label = %q", ChainLabel(""))
+	}
+}
+
+func TestCanonicalChain(t *testing.T) {
+	if CanonicalChain("sol") != ChainSolana {
+		t.Fatalf("sol = %q", CanonicalChain("sol"))
+	}
+	if CanonicalChain("evm") != ChainEthereum {
+		t.Fatalf("evm = %q", CanonicalChain("evm"))
+	}
+	if CanonicalChain("SOLANA") != ChainSolana {
+		t.Fatalf("SOLANA = %q", CanonicalChain("SOLANA"))
 	}
 }
 
