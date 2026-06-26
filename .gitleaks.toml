@@ -10,4 +10,8 @@ paths = [
   '''docs/.*''',
   '''\.sample-env$''',
   '''internal/stealth/tlscert\.go$''',
+  # Legacy sample configs removed from the tree but still in git history (pre-v2).
+  '''(^|.*/)server\.json$''',
+  '''(^|.*/)wg0\.conf$''',
+  '''blockchain/solana/soon/setdata\.go$''',
 ]
