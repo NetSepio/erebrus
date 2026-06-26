@@ -22,6 +22,7 @@ services:
       HTTP_PORT: "${HTTP_PORT:-9080}"
       NODE_NAME: "${NODE_NAME:-erebrus-node}"
       REGION: "${REGION:-unknown}"
+      ZONE: "${ZONE:-}"
       MNEMONIC: "${MNEMONIC}"
       WG_ENDPOINT_HOST: "${WG_ENDPOINT_HOST}"
       NODE_API_TOKEN: "${NODE_API_TOKEN:-}"

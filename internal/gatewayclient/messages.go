@@ -45,6 +45,7 @@ type Spec struct {
 	CPU    string `json:"cpu"`
 	MemMB  int    `json:"mem_mb"`
 	Region string `json:"region"`
+	Zone   string `json:"zone,omitempty"` // optional; gateway may ignore until v2.1+
 	IP     string `json:"ip"`
 }
 

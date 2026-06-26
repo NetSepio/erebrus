@@ -288,6 +288,7 @@ func run(cfg *config.Config) error {
 				DID:                 did,
 				Name:                cfg.NodeName,
 				Region:              cfg.Region,
+				Zone:                cfg.Zone,
 				APIBaseURL:          cfg.PublicAPIBaseURL(),
 				NodeKey:             cfg.EffectiveNodeKey(),
 				AccessMode:          cfg.Mode.GatewayAccessMode(),

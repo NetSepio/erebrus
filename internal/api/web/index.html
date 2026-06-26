@@ -130,6 +130,7 @@
       <span class="badge" id="status-badge"><span class="dot" id="sdot"></span><span class="badge-k">Status</span><span class="badge-v" id="status">…</span></span>
       <span class="badge access" id="access-badge"><span class="badge-k">Access</span><span class="badge-v" id="access">…</span></span>
       <span class="badge" id="region-badge"><span class="badge-k">Region</span><span class="badge-v" id="region">…</span></span>
+      <span class="badge" id="zone-badge" style="display:none"><span class="badge-k">Zone</span><span class="badge-v" id="zone">…</span></span>
     </div>
     <div id="protos" style="margin-top:10px"></div>
   </section>
@@ -279,6 +280,16 @@
         $('region').textContent = regionCode.toUpperCase();
       } else {
         $('region').textContent = 'Not set';
+      }
+
+      const zoneCode = (st.zone || stats.zone || '').trim();
+      const zoneName = caps.zone_label || '';
+      const zoneBadge = $('zone-badge');
+      if (zoneCode || zoneName) {
+        zoneBadge.style.display = '';
+        $('zone').textContent = zoneName || zoneCode;
+      } else {
+        zoneBadge.style.display = 'none';
       }
 
       $('version').textContent = st.version || stats.version || '—';

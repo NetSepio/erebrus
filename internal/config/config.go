@@ -17,6 +17,7 @@ type Config struct {
 	HTTPPort string
 	NodeName string
 	Region   string
+	Zone     string // optional placement hint, e.g. east, west, us-east
 	Version  string
 
 	// runtime model (v2.1+)
@@ -111,6 +112,7 @@ func Load() *Config {
 		AutoTLS:                boolEnv("AUTO_TLS", true),
 		NodeName:               env("NODE_NAME", hostnameOr("erebrus-node")),
 		Region:                 env("REGION", "unknown"),
+		Zone:                   env("ZONE", ""),
 		Version:                Version,
 		Mnemonic:               os.Getenv("MNEMONIC"),
 		GatewayURL:             env("GATEWAY_URL", ""),

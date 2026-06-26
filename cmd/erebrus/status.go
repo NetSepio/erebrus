@@ -91,6 +91,9 @@ func runStatusCLI(args []string) error {
 	if region, ok := out.Capabilities["region_label"].(string); ok && region != "" {
 		fmt.Printf("Region: %s\n", region)
 	}
+	if zone, ok := out.Capabilities["zone_label"].(string); ok && zone != "" {
+		fmt.Printf("Zone: %s\n", zone)
+	}
 	fmt.Printf("Peer ID: %s\n", out.Identity.PeerID)
 	fmt.Printf("DID: %s\n", out.Identity.DID)
 	if out.Identity.WalletAddress != "" {

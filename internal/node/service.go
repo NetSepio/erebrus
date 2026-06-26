@@ -84,6 +84,7 @@ func (s *Service) Stats(ctx context.Context) (*api.NodeStats, error) {
 		Status:         "online",
 		Version:        s.cfg.Version,
 		Region:         s.cfg.Region,
+		Zone:           s.cfg.Zone,
 		Protocols:      protocols,
 		TotalPeers:     len(peers),
 		ConnectedPeers: live.Connected,

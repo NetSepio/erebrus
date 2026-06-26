@@ -31,6 +31,7 @@ paths:
                 properties:
                   version: { type: string, example: "2.0.0" }
                   region: { type: string, example: "SG" }
+                  zone: { type: string, example: "us-east", description: "Optional placement within region (e.g. east, west)" }
                   status: { type: string, enum: [online, draining] }
                   peer_id: { type: string }
                   did: { type: string, example: "did:erebrus:12D3KooW..." }
@@ -54,6 +55,7 @@ paths:
                   status: { type: string, enum: [online, draining] }
                   version: { type: string }
                   region: { type: string }
+                  zone: { type: string }
                   protocols: { type: array, items: { type: string } }
                   total_peers: { type: integer, description: Provisioned peers in the store }
                   connected_peers: { type: integer, description: WireGuard handshake in the last 3 minutes }

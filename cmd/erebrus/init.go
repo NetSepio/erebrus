@@ -21,6 +21,7 @@ func runInitCLI(args []string) error {
 		gatewayURL  = envOr("GATEWAY_URL", "https://gateway.erebrus.io")
 		nodeName    = envOr("NODE_NAME", hostnameOr("erebrus-node"))
 		region      = envOr("REGION", "unknown")
+		zone        = envOr("ZONE", "")
 		mnemonic    = os.Getenv("MNEMONIC")
 		apiToken    = os.Getenv("NODE_API_TOKEN")
 		envPath     = initcfg.DefaultEnvPath
@@ -67,6 +68,12 @@ func runInitCLI(args []string) error {
 				return fmt.Errorf("missing value for --region")
 			}
 			region = args[i]
+		case "--zone":
+			i++
+			if i >= len(args) {
+				return fmt.Errorf("missing value for --zone")
+			}
+			zone = args[i]
 		case "--env-file":
 			i++
 			if i >= len(args) {
@@ -129,6 +136,7 @@ func runInitCLI(args []string) error {
 		NetworkProfile:       netProfile,
 		NodeName:             nodeName,
 		Region:               region,
+		Zone:                 zone,
 		Mnemonic:             mnemonic,
 		NodeAPIToken:         apiToken,
 		GatewayURL:           gatewayURL,
@@ -167,7 +175,8 @@ Options:
   --public-address <ip-or-dns>     Public address clients dial (required)
   --gateway-url <url>              Control plane URL
   --node-name <name>
-  --region <code>
+  --region <code>                  ISO country or custom label (e.g. US)
+  --zone <zone>                    Optional placement (e.g. east, west, us-east)
   --enable-app-hosting             Public edge (public mode)
   --domain <base>                  e.g. apps.example.com
   --env-file <path>                default: /etc/erebrus/erebrus.env

@@ -1,7 +1,7 @@
 # Erebrus Node — Security & Data-Capture Audit (v2.0)
 
 _Scope: the `erebrus` node (this repo) and its trust boundaries with clients,
-the gateway, and the host. Last reviewed 2026-06-14 against the v2 codebase.
+the gateway, and the host. Last reviewed 2026-06-26 against the v2 codebase.
 This is an internal pre-release review, not a third-party pentest — an external
 audit is still recommended before a large public launch._
 
@@ -65,31 +65,20 @@ goal is to **store and transmit as little of that as possible**.
 
 ---
 
-## 3. Findings
+## 3. Open findings
 
-Severity: 🔴 high · 🟠 medium · 🟡 low · 🟢 informational. Status reflects this repo.
+Severity: 🔴 high · 🟠 medium · 🟡 low. Only items that still need operator action,
+roadmap work, or explicit acceptance.
 
-| # | Severity | Finding | Status |
+| # | Severity | Finding | Action |
 |---|---|---|---|
-| F1 | 🔴 | Node API auth failed *open* when `NODE_API_TOKEN` unset | ✅ Fixed |
-| F2 | 🟠 | Non-constant-time token comparison (timing oracle) | ✅ Fixed |
-| F3 | 🔴 | Node API + credential bundles served over plaintext HTTP | ⚠️ Operator |
-| F4 | 🟡 | Internal error strings echoed to API clients | ✅ Fixed |
-| F5 | 🟠 | DNS sent to a third party (Cloudflare) by default | ⚠️ Operator / roadmap |
-| F6 | 🟠 | Key material at rest unencrypted in SQLite / `config.env` | ⚠️ Partially mitigated |
-| F7 | 🟡 | `/metrics` and `/api/v2/stats` are public (info disclosure) | ⚠️ By design / operator |
-| F8 | 🟠 | No application-level rate limiting (brute-force / DoS) | ⚠️ Operator |
-| F9 | 🟢 | Open-relay via stealth carriers | ✅ Mitigated by design |
-| F10 | 🟡 | Shared node-wide carrier secret; partial rotation only | ⚠️ Roadmap |
-| F11 | 🟡 | Hysteria2 self-signed cert + client `insecure` | 🟢 Accepted |
-
-### F1 — Auth fail-open (FIXED)
-`bearerAuth` previously allowed all requests when `NODE_API_TOKEN` was empty.
-Now it **fails closed in release mode** (503 until configured) and only allows
-open access under `RUNTYPE=debug`. The installer always generates a strong token.
-
-### F2 — Timing-safe token compare (FIXED)
-Token comparison now uses `crypto/subtle.ConstantTimeCompare`.
+| F3 | 🔴 | Node API + credential bundles served over plaintext HTTP | Operator — TLS or firewall `:9080` to gateway only |
+| F5 | 🟠 | DNS sent to a third party (Cloudflare) by default | Operator: local resolver; roadmap: node-internal DNS |
+| F6 | 🟠 | Key material at rest unencrypted in SQLite / `config.env` | Operator: FDE, access control; repo: `0600` perms |
+| F7 | 🟡 | `/metrics` and `/api/v2/stats` are public (coarse aggregates only) | Operator: firewall scrapers if sensitive |
+| F8 | 🟠 | No application-level rate limiting | Operator: reverse proxy / fail2ban / cloud UDP protection |
+| F10 | 🟡 | Shared node-wide carrier secret; partial rotation only | Roadmap: full carrier-secret rotation command |
+| F11 | 🟡 | Hysteria2 self-signed cert + client `insecure` | Accepted — inner WG payload stays confidential |
 
 ### F3 — Plaintext node API (OPERATOR — top priority)
 `:9080` is plain HTTP. The `NODE_API_TOKEN` and full credential bundles
@@ -101,10 +90,6 @@ intercept bundles. **Mitigations:**
   management WireGuard link), never exposing it to the public internet.
 The installer's preflight opens `:9080`; production deployments should put it
 behind TLS or a firewall. _Roadmap: gateway↔node mTLS / PASETO-signed calls._
-
-### F4 — Error leakage (FIXED)
-Peer handlers returned raw `err.Error()` (potentially driver/SQL text). They now
-log detail server-side and return generic messages.
 
 ### F5 — DNS leakage (OPERATOR / ROADMAP)
 With `WG_DNS=1.1.1.1`, clients' DNS resolves at Cloudflare. Operators wanting
@@ -135,13 +120,6 @@ gateway), and UDP floods on WG/Hy2. **Mitigations:** provisioning is
 gateway-gated by entitlement; put a rate-limiting reverse proxy and/or
 fail2ban in front; rely on the cloud provider's UDP flood protection.
 
-### F9 — Open-relay prevention (MITIGATED — call-out)
-A classic risk for proxy carriers is becoming an open internet relay. The
-stealth carriers' `direct` outbound is **pinned to `127.0.0.1:<wg-port>`**, so a
-carrier connection can only ever reach the local WireGuard listener — never an
-arbitrary host. The shared carrier secret gets a client *to the WG door only*;
-it still needs a registered WG keypair to get a tunnel. Auth stays in WireGuard.
-
 ### F10 — Carrier secret rotation (ROADMAP)
 The VLESS UUID / Hy2 password are node-wide and shared with every client. A leak
 lets a holder reach the WG door (not the VPN itself). `rotate_reality` rotates
@@ -154,14 +132,13 @@ Hy2 uses a self-signed cert; clients connect with `insecure`. An active MITM on
 node's WG public key from the bundle), so confidentiality holds. REALITY (the
 TCP carrier) resists MITM by design.
 
-### Verified safe
-- **SQL injection:** all store queries are parameterized (`$n` / `?`). ✅
-- **Command injection:** `wg-quick`/iptables run only operator-configured
-  `WG_POST_UP/DOWN`; no user-controlled input reaches a shell. ✅
-- **IP allocation races:** peer IP allocation is a single immediate SQLite
-  transaction — race-free under concurrency. ✅
-- **Peer name injection:** names are used only as labels (URL-escaped in share
-  URIs), never written into the WG conf. ✅
+### Resolved in codebase (no action)
+
+- **F1** — API auth no longer fails open when `NODE_API_TOKEN` is unset (release fails closed).
+- **F2** — Token compare uses `crypto/subtle.ConstantTimeCompare`.
+- **F4** — API errors are generic; detail logged server-side only.
+- **F9** — Stealth `direct` outbound pinned to `127.0.0.1:<wg-port>`; WG auth still required.
+- **SQL injection / command injection / IP races / peer name injection** — reviewed safe in v2.
 
 ---
 
@@ -177,17 +154,12 @@ TCP carrier) resists MITM by design.
 - [ ] Keep the OS + `wireguard` module patched; rebuild the image for sing-box CVEs.
 - [ ] Back up the mnemonic securely; rotating it changes the node identity.
 
-## 5. Release-readiness sweep (other observations)
+## 5. Release-readiness notes
 
-- ✅ Build is reproducible and requires `-tags with_reality_server` (Makefile,
-  Dockerfile, CI all set it).
-- ✅ No secrets committed; `.gitleaks.toml` + CI gitleaks job in place.
-- ✅ `/healthz` added for orchestration probes.
-- 🟡 The node does not self-measure speedtest in v2 (removed with v1 `util`);
-  the gateway receives speed via heartbeat only if the node reports it — wire a
-  periodic speedtest in Phase 2 if the directory UX needs it.
-- 🟡 No graceful WireGuard teardown on SIGTERM beyond process exit; `wg-quick
-  down` relies on `PostDown`. Acceptable; document for operators.
-- 🟡 Container runs as root for `NET_ADMIN`; consider dropping to a capability
-  set (`cap_add: NET_ADMIN` only) — the compose already uses `cap_add` rather
-  than `privileged`.
+**Done:** reproducible `-tags with_reality_server` builds; gitleaks CI; `/healthz`;
+node self-speedtest on heartbeats (`internal/speedtest`).
+
+**Operator awareness (not blockers):**
+
+- WireGuard teardown on SIGTERM relies on `wg-quick down` / `PostDown` — document for restarts.
+- Container needs `NET_ADMIN`; compose uses `cap_add` rather than `privileged`.

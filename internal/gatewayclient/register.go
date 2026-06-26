@@ -36,6 +36,7 @@ type RegistrationInput struct {
 	DID                string
 	Name               string
 	Region             string
+	Zone               string
 	APIBaseURL         string
 	NodeKey            string // optional; gateway mints if empty
 	AccessMode         string // public | private
@@ -169,6 +170,7 @@ func Register(ctx context.Context, in RegistrationInput) (*RegistrationResult, e
 		"did":                in.DID,
 		"name":               in.Name,
 		"region":             in.Region,
+		"zone":               in.Zone,
 		"api_base_url":       in.APIBaseURL,
 		"node_key":           in.NodeKey,
 		"access_mode":        access,

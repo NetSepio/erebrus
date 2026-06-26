@@ -17,6 +17,7 @@ type Options struct {
 	NetworkProfile  config.NetworkProfile
 	NodeName        string
 	Region          string
+	Zone            string
 	Mnemonic        string
 	NodeAPIToken    string
 	GatewayURL      string
@@ -88,6 +89,7 @@ SERVER=0.0.0.0
 HTTP_PORT=%s
 NODE_NAME=%s
 REGION=%s
+ZONE=%s
 MNEMONIC=%s
 NODE_API_TOKEN=%s
 GATEWAY_URL=%s
@@ -121,7 +123,7 @@ CHAIN_REGISTRATION=off
 `,
 		time.Now().Format("2006-01-02 15:04:05"),
 		o.AccessMode, deployModeFor(o), o.NetworkProfile,
-		o.HTTPPort, o.NodeName, o.Region,
+		o.HTTPPort, o.NodeName, o.Region, o.Zone,
 		o.Mnemonic, o.NodeAPIToken, o.GatewayURL,
 		o.PublicAddress, o.HTTPPort,
 		o.PublicAddress, iface, iface,

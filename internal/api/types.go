@@ -57,6 +57,7 @@ type NodeStats struct {
 	Status         string   `json:"status"`
 	Version        string   `json:"version"`
 	Region         string   `json:"region"`
+	Zone           string   `json:"zone,omitempty"`
 	Protocols      []string `json:"protocols"`
 	TotalPeers     int      `json:"total_peers"`     // provisioned in the store
 	ConnectedPeers int      `json:"connected_peers"` // handshake in the last 3m
@@ -92,6 +93,7 @@ type StatusResponse struct {
 	Version      string         `json:"version"`
 	NodeName     string         `json:"node_name"`
 	Region       string         `json:"region"`
+	Zone         string         `json:"zone,omitempty"`
 	Status       string         `json:"status"`
 	AccessMode   string         `json:"access_mode"`
 	PeerID       string         `json:"peer_id"` // deprecated: use identity.peer_id

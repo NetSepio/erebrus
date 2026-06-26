@@ -44,6 +44,30 @@ Full reference: [`.env.example`](../.env.example). The only required values are
 `MNEMONIC` (the node identity — back it up) and `WG_ENDPOINT_HOST`. The installer
 generates a `MNEMONIC` and `NODE_API_TOKEN` for you if unset.
 
+### Region and zone (for multi-node directories)
+
+| Variable | Purpose | Example |
+|----------|---------|---------|
+| `REGION` | Country or broad geography | `US` (installer auto-detects via ipinfo), `NO`, `SG` |
+| `ZONE` | Optional sub-region for clients to pick between nodes | `east`, `west`, `us-east`, `nyc-1` |
+| `NODE_NAME` | Operator-facing label | `erebrus-us-east-01` |
+
+Both `REGION` and `ZONE` are sent to the gateway on registration and in WebSocket
+`hello` / `heartbeat` (`spec.region`, `spec.zone`). The local dashboard shows them
+too. Gateway-side filtering/display is a separate follow-up.
+
+On an existing US node:
+
+```bash
+# docker: edit /opt/erebrus/.env (or your INSTALL_DIR)
+ZONE=east
+REGION=US
+docker compose up -d
+
+# host: edit /etc/erebrus/erebrus.env then
+systemctl restart erebrus
+```
+
 - **docker** config: `${INSTALL_DIR}/.env` (default `/opt/erebrus/.env`)
 - **host** config: `/etc/erebrus/erebrus.env`
 

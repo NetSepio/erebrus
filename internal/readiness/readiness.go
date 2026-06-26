@@ -236,6 +236,25 @@ func RegionLabel(code string) string {
 	return code + " (country code)"
 }
 
+// ZoneLabel turns a ZONE env value into a dashboard-friendly label.
+// Common US values: east → US East, west → US West. Unknown values pass through.
+func ZoneLabel(zone string) string {
+	zone = strings.TrimSpace(zone)
+	if zone == "" {
+		return ""
+	}
+	switch strings.ToLower(strings.ReplaceAll(zone, "_", "-")) {
+	case "east", "us-east", "useast":
+		return "US East"
+	case "west", "us-west", "uswest":
+		return "US West"
+	case "central", "us-central", "uscentral":
+		return "US Central"
+	default:
+		return zone
+	}
+}
+
 // PublicAPIURL returns the URL operators should allow for gateway provisioning.
 func PublicAPIURL(cfg *config.Config) string {
 	if cfg == nil {

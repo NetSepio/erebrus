@@ -119,7 +119,7 @@ Usage: install.sh [options]
   -h, --help                This help
 
 Key env overrides: EREBRUS_ACCESS, EREBRUS_DEPLOY, MNEMONIC, WG_ENDPOINT_HOST,
-  NODE_NAME, REGION, GATEWAY_URL, NODE_API_TOKEN, ENABLE_STEALTH,
+  NODE_NAME, REGION, ZONE, GATEWAY_URL, NODE_API_TOKEN, ENABLE_STEALTH,
   REALITY_SERVER_NAMES, HYSTERIA2_OBFS_PASSWORD, ENABLE_APP_HOSTING,
   APP_WILDCARD_DOMAIN, INSTALL_DIR, MIN_DOWN_MBPS, MIN_UP_MBPS
 Linux only (x86_64/arm64). Needs a static public IP, bandwidth, and open ports.
@@ -365,7 +365,7 @@ choose_access() {
 }
 
 # config values
-NODE_NAME=""; REGION=""; WG_ENDPOINT_HOST=""; MNEMONIC="${MNEMONIC:-}"
+NODE_NAME=""; REGION=""; ZONE=""; WG_ENDPOINT_HOST=""; MNEMONIC="${MNEMONIC:-}"
 NODE_API_TOKEN="${NODE_API_TOKEN:-}"; NODE_KEY="${NODE_KEY:-}"
 EREBRUS_ORG_ENROLLMENT_SECRET="${EREBRUS_ORG_ENROLLMENT_SECRET:-}"
 GATEWAY_URL="${GATEWAY_URL:-https://gateway.erebrus.io}"
@@ -382,6 +382,7 @@ gather_config() {
   echo; info "${C_BOLD}Node configuration${C_RESET}"
   REGION="${REGION:-$(curl -fsS --max-time 6 https://ipinfo.io/country 2>/dev/null | tr -d '[:space:]' || echo unknown)}"
   ask NODE_NAME "Node name" "${NODE_NAME:-erebrus-$(hostname -s 2>/dev/null || echo node)}"
+  ask ZONE "Zone (optional — e.g. east, west, us-east)" "${ZONE:-}"
   ask WG_ENDPOINT_HOST "Public endpoint host (IP or domain clients dial)" "${WG_ENDPOINT_HOST:-$PUBLIC_IP}"
   ask GATEWAY_URL "Gateway URL" "$GATEWAY_URL"
   [[ -n "$NODE_API_TOKEN" ]] || NODE_API_TOKEN="$(rand_token)"
@@ -453,6 +454,7 @@ SERVER=0.0.0.0
 HTTP_PORT=${HTTP_PORT}
 NODE_NAME=${NODE_NAME}
 REGION=${REGION}
+ZONE=${ZONE}
 MNEMONIC=${MNEMONIC}
 NODE_API_TOKEN=${NODE_API_TOKEN}
 NODE_KEY=${NODE_KEY:-${NODE_API_TOKEN}}

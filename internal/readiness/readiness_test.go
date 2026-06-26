@@ -62,3 +62,18 @@ func TestRegionLabel(t *testing.T) {
 		t.Fatalf("custom region = %q", RegionLabel("EU-WEST"))
 	}
 }
+
+func TestZoneLabel(t *testing.T) {
+	if ZoneLabel("") != "" {
+		t.Fatalf("empty zone")
+	}
+	if ZoneLabel("east") != "US East" {
+		t.Fatalf("east = %q", ZoneLabel("east"))
+	}
+	if ZoneLabel("us-west") != "US West" {
+		t.Fatalf("us-west = %q", ZoneLabel("us-west"))
+	}
+	if ZoneLabel("nyc-1") != "nyc-1" {
+		t.Fatalf("custom zone = %q", ZoneLabel("nyc-1"))
+	}
+}

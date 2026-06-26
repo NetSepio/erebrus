@@ -100,6 +100,7 @@ func (g *GatewayBridge) BuildHello(nodeID string) gatewayclient.Hello {
 			CPU:    fmt.Sprintf("%d CPU", runtime.NumCPU()),
 			MemMB:  hostMemMB(),
 			Region: cfg.Region,
+			Zone:   cfg.Zone,
 			IP:     cfg.WGEndpointHost,
 		},
 		Capabilities: gatewayclient.Capabilities{
