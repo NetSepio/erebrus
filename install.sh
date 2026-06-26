@@ -119,7 +119,8 @@ Usage: install.sh [options]
   -h, --help                This help
 
 Key env overrides: EREBRUS_ACCESS, EREBRUS_DEPLOY, MNEMONIC, WG_ENDPOINT_HOST,
-  NODE_NAME, REGION, ZONE, GATEWAY_URL, NODE_API_TOKEN, ENABLE_STEALTH,
+  NODE_NAME, REGION, ZONE (auto for US if unset), EREBRUS_IMAGE, EREBRUS_BUILD_LOCAL,
+  GATEWAY_URL, NODE_API_TOKEN, ENABLE_STEALTH,
   REALITY_SERVER_NAMES, HYSTERIA2_OBFS_PASSWORD, ENABLE_APP_HOSTING,
   APP_WILDCARD_DOMAIN, INSTALL_DIR, MIN_DOWN_MBPS, MIN_UP_MBPS
 Linux only (x86_64/arm64). Needs a static public IP, bandwidth, and open ports.
@@ -378,9 +379,28 @@ EREBRUS_BIN=""  # path/way to invoke binary for genmnemonic
 
 rand_token() { head -c 24 /dev/urandom | base64 | tr -d '/+=' | head -c 32; }
 
+# For US nodes, derive east/west from ipinfo longitude when ZONE is unset.
+detect_zone() {
+  [[ -n "${ZONE:-}" ]] && return
+  local country="${REGION:-}"
+  country="$(echo "$country" | tr '[:lower:]' '[:upper:]' | tr -d '[:space:]')"
+  [[ "$country" == "US" ]] || return
+  local loc lon
+  loc="$(curl -fsS --max-time 6 https://ipinfo.io/loc 2>/dev/null | tr -d '[:space:]' || true)"
+  [[ "$loc" == *,* ]] || return
+  lon="${loc#*,}"
+  if awk -v lon="$lon" 'BEGIN { if (lon+0 < -102) exit 0; exit 1 }'; then
+    ZONE="west"
+  else
+    ZONE="east"
+  fi
+}
+
 gather_config() {
   echo; info "${C_BOLD}Node configuration${C_RESET}"
   REGION="${REGION:-$(curl -fsS --max-time 6 https://ipinfo.io/country 2>/dev/null | tr -d '[:space:]' || echo unknown)}"
+  detect_zone
+  [[ -n "${ZONE:-}" ]] && ok "Auto-detected zone: ${ZONE} (US east/west from geo)"
   ask NODE_NAME "Node name" "${NODE_NAME:-erebrus-$(hostname -s 2>/dev/null || echo node)}"
   ask ZONE "Zone (optional — e.g. east, west, us-east)" "${ZONE:-}"
   ask WG_ENDPOINT_HOST "Public endpoint host (IP or domain clients dial)" "${WG_ENDPOINT_HOST:-$PUBLIC_IP}"
@@ -421,10 +441,13 @@ gather_config() {
   fi
 }
 
-# Invoke the node CLI regardless of install mode (built image vs host binary).
+# Container image: registry default; local build fallback.
+EREBRUS_IMAGE="${EREBRUS_IMAGE:-ghcr.io/netsepio/erebrus:latest}"
+
+# Invoke the node CLI regardless of install mode (pulled/built image vs host binary).
 erebrus_cli() {
   if [[ "$DEPLOY" == "container" ]]; then
-    run docker run --rm erebrus:v2 "$@"
+    run docker run --rm "$EREBRUS_IMAGE" "$@"
   else
     /usr/local/bin/erebrus "$@"
   fi
@@ -447,6 +470,7 @@ write_env_file() {
 # Erebrus v2 node — generated $(date '+%F %T')
 # See .env.example in the repo for field documentation.
 RUNTYPE=release
+EREBRUS_IMAGE=${EREBRUS_IMAGE}
 EREBRUS_ACCESS=${EREBRUS_ACCESS:-private}
 EREBRUS_MODE=${EREBRUS_MODE:-container}
 EREBRUS_NETWORK_PROFILE=${EREBRUS_NETWORK_PROFILE:-bridge}
@@ -543,18 +567,37 @@ install_docker_mode() {
   run systemctl enable --now docker >>"$LOG_FILE" 2>&1 || true
   ensure_tool git
 
-  info "Fetching source ($BRANCH) for image build…"
-  if [[ -d "$INSTALL_DIR/.git" ]]; then
-    run git -C "$INSTALL_DIR" fetch --depth 1 origin "$BRANCH" >>"$LOG_FILE" 2>&1
-    run git -C "$INSTALL_DIR" checkout -f "$BRANCH" >>"$LOG_FILE" 2>&1
-    run git -C "$INSTALL_DIR" reset --hard "origin/$BRANCH" >>"$LOG_FILE" 2>&1
-  else
-    run mkdir -p "$INSTALL_DIR"
-    run git clone --depth 1 -b "$BRANCH" "$REPO_URL" "$INSTALL_DIR" >>"$LOG_FILE" 2>&1
+  local skip_build=false
+  if [[ "${EREBRUS_BUILD_LOCAL:-false}" != "true" ]]; then
+    info "Pulling node image ${EREBRUS_IMAGE}…"
+    if run docker pull "$EREBRUS_IMAGE" >>"$LOG_FILE" 2>&1; then
+      skip_build=true
+      ok "Using registry image ${EREBRUS_IMAGE}"
+    else
+      warn "Registry pull failed; will build from source (set EREBRUS_BUILD_LOCAL=true to skip pull)."
+    fi
   fi
 
-  info "Building node image (includes -tags ${BUILD_TAGS})…"
-  ( cd "$INSTALL_DIR" && run docker build -t erebrus:v2 . >>"$LOG_FILE" 2>&1 ) || die "image build failed"
+  if ! $skip_build; then
+    info "Fetching source ($BRANCH) for image build…"
+    if [[ -d "$INSTALL_DIR/.git" ]]; then
+      run git -C "$INSTALL_DIR" fetch --depth 1 origin "$BRANCH" >>"$LOG_FILE" 2>&1
+      run git -C "$INSTALL_DIR" checkout -f "$BRANCH" >>"$LOG_FILE" 2>&1
+      run git -C "$INSTALL_DIR" reset --hard "origin/$BRANCH" >>"$LOG_FILE" 2>&1
+    else
+      run mkdir -p "$INSTALL_DIR"
+      run git clone --depth 1 -b "$BRANCH" "$REPO_URL" "$INSTALL_DIR" >>"$LOG_FILE" 2>&1
+    fi
+    info "Building node image (includes -tags ${BUILD_TAGS})…"
+    ( cd "$INSTALL_DIR" && run docker build -t "$EREBRUS_IMAGE" . >>"$LOG_FILE" 2>&1 ) || die "image build failed"
+  else
+    run mkdir -p "$INSTALL_DIR"
+    # Compose file + .env.example for operators; no source build required.
+    if [[ ! -f "$INSTALL_DIR/docker-compose.yml" ]]; then
+      curl -fsSL "https://raw.githubusercontent.com/NetSepio/erebrus/${BRANCH}/docker-compose.yml" \
+        -o "$INSTALL_DIR/docker-compose.yml" >>"$LOG_FILE" 2>&1 || die "failed to fetch docker-compose.yml"
+    fi
+  fi
 
   ensure_mnemonic
   write_env_file "$INSTALL_DIR/.env"

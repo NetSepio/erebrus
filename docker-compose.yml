@@ -1,7 +1,9 @@
 services:
   erebrus:
-    build: .
-    image: erebrus:v2
+    image: ${EREBRUS_IMAGE:-ghcr.io/netsepio/erebrus:latest}
+    build:
+      context: .
+      dockerfile: Dockerfile
     container_name: erebrus
     restart: unless-stopped
     # NET_ADMIN + module access let the node bring up the WireGuard interface.

@@ -49,7 +49,7 @@ generates a `MNEMONIC` and `NODE_API_TOKEN` for you if unset.
 | Variable | Purpose | Example |
 |----------|---------|---------|
 | `REGION` | Country or broad geography | `US` (installer auto-detects via ipinfo), `NO`, `SG` |
-| `ZONE` | Optional sub-region for clients to pick between nodes | `east`, `west`, `us-east`, `nyc-1` |
+| `ZONE` | Optional sub-region for clients to pick between nodes | `east`, `west` (auto for US via ipinfo longitude), `nyc-1` |
 | `NODE_NAME` | Operator-facing label | `erebrus-us-east-01` |
 
 Both `REGION` and `ZONE` are sent to the gateway on registration and in WebSocket
