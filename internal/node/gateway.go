@@ -10,14 +10,16 @@ import (
 
 	"github.com/NetSepio/erebrus/internal/gatewayclient"
 	"github.com/NetSepio/erebrus/internal/registrar"
+	"github.com/NetSepio/erebrus/internal/speedtest"
 )
 
 // GatewayBridge implements gatewayclient.SnapshotProvider and CommandHandler.
 type GatewayBridge struct {
-	svc    *Service
-	peerID string
-	did    string
-	nodeID string
+	svc       *Service
+	peerID    string
+	did       string
+	nodeID    string
+	speedtest *speedtest.Cache
 
 	mu     sync.RWMutex
 	status string
@@ -31,12 +33,13 @@ type usageCounters struct {
 }
 
 // NewGatewayBridge wires the node service to the gateway control plane.
-func NewGatewayBridge(svc *Service, peerID, did, nodeID string) *GatewayBridge {
+func NewGatewayBridge(svc *Service, peerID, did, nodeID string, speedtestCache *speedtest.Cache) *GatewayBridge {
 	return &GatewayBridge{
 		svc:       svc,
 		peerID:    peerID,
 		did:       did,
 		nodeID:    nodeID,
+		speedtest: speedtestCache,
 		status:    "online",
 		lastUsage: map[string]usageCounters{},
 	}
@@ -63,6 +66,7 @@ func (g *GatewayBridge) BuildHello(nodeID string) gatewayclient.Hello {
 	cfg := g.svc.cfg
 	eps := gatewayclient.Endpoints{
 		WireGuard: gatewayclient.WireGuardEndpoint{
+			Host:      cfg.WGEndpointHost,
 			Port:      cfg.WGEndpointPortInt(),
 			PublicKey: g.svc.wg.ServerPublicKey(),
 		},
@@ -121,12 +125,19 @@ func (g *GatewayBridge) BuildHeartbeat(status string) gatewayclient.Heartbeat {
 			RxBytes:       live.RxBytes,
 			TxBytes:       live.TxBytes,
 		},
-		Speedtest: gatewayclient.Speedtest{},
+		Speedtest: g.cachedSpeedtest(),
 		Versions: map[string]string{
 			"node":    g.svc.cfg.Version,
 			"singbox": "1.11.15",
 		},
 	}
+}
+
+func (g *GatewayBridge) cachedSpeedtest() gatewayclient.Speedtest {
+	if g.speedtest == nil {
+		return gatewayclient.Speedtest{}
+	}
+	return g.speedtest.Get()
 }
 
 func (g *GatewayBridge) BuildUsageReport() gatewayclient.UsageReport {

@@ -24,6 +24,7 @@ import (
 	"github.com/NetSepio/erebrus/internal/readiness"
 	"github.com/NetSepio/erebrus/internal/registrar"
 	"github.com/NetSepio/erebrus/internal/services"
+	"github.com/NetSepio/erebrus/internal/speedtest"
 	"github.com/NetSepio/erebrus/internal/stealth"
 	"github.com/NetSepio/erebrus/internal/store"
 	"github.com/NetSepio/erebrus/internal/telemetry"
@@ -313,7 +314,9 @@ func run(cfg *config.Config) error {
 		}
 		cfg.NodeID = nodeID
 		if nodeID != "" && nodeToken != "" {
-			bridge := node.NewGatewayBridge(svc, peerID, did, nodeID)
+			speedtestCache := speedtest.NewCache()
+			speedtestCache.Start(ctx)
+			bridge := node.NewGatewayBridge(svc, peerID, did, nodeID, speedtestCache)
 			gwClient = gatewayclient.New(cfg.GatewayURL, nodeID, nodeToken, bridge, bridge, bridge.Status)
 			go gwClient.Run(ctx)
 		} else {

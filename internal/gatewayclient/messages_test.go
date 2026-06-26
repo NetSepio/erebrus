@@ -76,6 +76,10 @@ func TestHeartbeatAndUsageRoundTrip(t *testing.T) {
 	if got.Load.RxBytes != 123456789 || got.Load.TxBytes != 987654321 {
 		t.Errorf("byte counters lost: %+v", got.Load)
 	}
+	if got.Speedtest.DownloadMbps != 940.2 || got.Speedtest.UploadMbps != 870.1 ||
+		got.Speedtest.LatencyMs != 3.2 || got.Speedtest.MeasuredAt != 1765580400 {
+		t.Errorf("speedtest fields lost: %+v", got.Speedtest)
+	}
 
 	ur := UsageReport{TS: 1765584000, Peers: []PeerUsage{{PeerID: "c0a4f1de", RxBytesDelta: 1048576, TxBytesDelta: 8388608, LastHandshake: 1765583970}}}
 	frame, _ = wrap(TypeUsageReport, ur)

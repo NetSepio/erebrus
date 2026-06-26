@@ -170,6 +170,19 @@ func (s *Store) UpsertPeer(ctx context.Context, in *Peer, subnet string, gen Gen
 	if err != nil && !errors.Is(err, sql.ErrNoRows) {
 		return nil, err
 	}
+	// Reconnect: gateway should reuse the same peer id, but if a new id is sent
+	// with an already-registered WG public key, update the existing peer instead
+	// of failing the UNIQUE constraint.
+	if existing == nil && in.WGPublicKey != "" {
+		byKey, keyErr := txGetPeerByWGPublicKey(ctx, tx, in.WGPublicKey)
+		if keyErr != nil && !errors.Is(keyErr, sql.ErrNoRows) {
+			return nil, keyErr
+		}
+		if byKey != nil {
+			existing = byKey
+			in.ID = byKey.ID
+		}
+	}
 
 	now := time.Now().Unix()
 	if existing != nil {
@@ -254,6 +267,10 @@ func scanPeer(sc scanner) (*Peer, error) {
 
 func txGetPeer(ctx context.Context, tx *sql.Tx, id string) (*Peer, error) {
 	return scanPeer(tx.QueryRowContext(ctx, selectCols+` WHERE id = ?`, id))
+}
+
+func txGetPeerByWGPublicKey(ctx context.Context, tx *sql.Tx, wgPub string) (*Peer, error) {
+	return scanPeer(tx.QueryRowContext(ctx, selectCols+` WHERE wg_public_key = ?`, wgPub))
 }
 
 func boolToInt(b bool) int {

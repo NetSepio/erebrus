@@ -19,7 +19,7 @@ set -euo pipefail
 # Constants / defaults (override via env)
 # ---------------------------------------------------------------------------
 REPO_URL="${EREBRUS_REPO_URL:-https://github.com/NetSepio/erebrus}"
-BRANCH="${EREBRUS_BRANCH:-v2}"
+BRANCH="${EREBRUS_BRANCH:-main}"
 INSTALL_DIR="${INSTALL_DIR:-/opt/erebrus}"
 STATE_DIR="${STATE_DIR:-/var/lib/erebrus}"
 ENV_DIR="/etc/erebrus"
@@ -115,7 +115,7 @@ Usage: install.sh [options]
   --host                    Shorthand for --mode host
   -y, --yes                 Non-interactive; accept defaults (pair with env vars)
   --skip-checks             Skip static-IP / bandwidth / port preflight
-  --branch <name>           Source branch to build from (default: v2)
+  --branch <name>           Source branch to build from (default: main)
   -h, --help                This help
 
 Key env overrides: EREBRUS_ACCESS, EREBRUS_DEPLOY, MNEMONIC, WG_ENDPOINT_HOST,
@@ -366,7 +366,9 @@ choose_access() {
 
 # config values
 NODE_NAME=""; REGION=""; WG_ENDPOINT_HOST=""; MNEMONIC="${MNEMONIC:-}"
-NODE_API_TOKEN="${NODE_API_TOKEN:-}"; GATEWAY_URL="${GATEWAY_URL:-https://gateway.erebrus.io}"
+NODE_API_TOKEN="${NODE_API_TOKEN:-}"; NODE_KEY="${NODE_KEY:-}"
+EREBRUS_ORG_ENROLLMENT_SECRET="${EREBRUS_ORG_ENROLLMENT_SECRET:-}"
+GATEWAY_URL="${GATEWAY_URL:-https://gateway.erebrus.io}"
 ENABLE_STEALTH="${ENABLE_STEALTH:-true}"; REALITY_SERVER_NAMES="${REALITY_SERVER_NAMES:-www.microsoft.com}"
 HYSTERIA2_OBFS_PASSWORD="${HYSTERIA2_OBFS_PASSWORD:-}"
 ENABLE_APP_HOSTING="${ENABLE_APP_HOSTING:-false}"; APP_WILDCARD_DOMAIN="${APP_WILDCARD_DOMAIN:-}"
@@ -453,8 +455,10 @@ NODE_NAME=${NODE_NAME}
 REGION=${REGION}
 MNEMONIC=${MNEMONIC}
 NODE_API_TOKEN=${NODE_API_TOKEN}
+NODE_KEY=${NODE_KEY:-${NODE_API_TOKEN}}
 GATEWAY_URL=${GATEWAY_URL}
 GATEWAY_AUTO_REGISTER=true
+EREBRUS_ORG_ENROLLMENT_SECRET=${EREBRUS_ORG_ENROLLMENT_SECRET}
 WALLET_CHAIN=sol
 API_PUBLIC_URL=http://${WG_ENDPOINT_HOST}:${HTTP_PORT}
 
