@@ -1,0 +1,31 @@
+services:
+  erebrus-node:
+    image: ${EREBRUS_IMAGE:-ghcr.io/netsepio/erebrus:latest}
+    build:
+      context: ../..
+      dockerfile: docker/erebrus-node.Dockerfile
+    container_name: erebrus-node
+    restart: unless-stopped
+    cap_add:
+      - NET_ADMIN
+      - SYS_MODULE
+    sysctls:
+      - net.ipv4.ip_forward=1
+    env_file:
+      - .env
+    environment:
+      LOAD_CONFIG_FILE: "TRUE"
+      EREBRUS_PROFILE: erebrus
+      FIREWALL_PROVIDER: none
+    ports:
+      - "${WG_ENDPOINT_PORT:-51820}:${WG_ENDPOINT_PORT:-51820}/udp"
+      - "${HTTP_PORT:-9080}:${HTTP_PORT:-9080}/tcp"
+      - "${STEALTH_TCP_PORT:-8443}:${STEALTH_TCP_PORT:-8443}/tcp"
+      - "${STEALTH_UDP_PORT:-4443}:${STEALTH_UDP_PORT:-4443}/udp"
+    volumes:
+      - erebrus_data:${STATE_DIR:-/var/lib/erebrus}
+      - erebrus_wireguard:${WG_CONF_DIR:-/etc/wireguard}
+
+volumes:
+  erebrus_data:
+  erebrus_wireguard:

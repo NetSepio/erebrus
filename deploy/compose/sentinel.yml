@@ -1,0 +1,58 @@
+services:
+  erebrus-sentinel:
+    image: ${SENTINEL_IMAGE:-ghcr.io/netsepio/erebrus-sentinel:latest}
+    build:
+      context: ../..
+      dockerfile: docker/erebrus-sentinel.Dockerfile
+    restart: unless-stopped
+    expose:
+      - "53/tcp"
+      - "53/udp"
+      - "8788/tcp"
+    env_file:
+      - .env
+    volumes:
+      - sentinel_data:/var/lib/erebrus-sentinel
+      - sentinel_unbound:/etc/unbound/conf.d/generated
+    healthcheck:
+      test: ["CMD", "wget", "-qO-", "http://127.0.0.1:8788/health"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  erebrus-node:
+    image: ${EREBRUS_IMAGE:-ghcr.io/netsepio/erebrus:latest}
+    build:
+      context: ../..
+      dockerfile: docker/erebrus-node.Dockerfile
+    restart: unless-stopped
+    depends_on:
+      erebrus-sentinel:
+        condition: service_healthy
+    env_file:
+      - .env
+    environment:
+      LOAD_CONFIG_FILE: "TRUE"
+      EREBRUS_PROFILE: sentinel
+      FIREWALL_PROVIDER: unbound_erebrus
+      FIREWALL_DNS_ADDR: erebrus-sentinel:53
+      SENTINEL_API_URL: http://erebrus-sentinel:8788
+    cap_add:
+      - NET_ADMIN
+      - SYS_MODULE
+    sysctls:
+      - net.ipv4.ip_forward=1
+    ports:
+      - "${WG_ENDPOINT_PORT:-51820}:${WG_ENDPOINT_PORT:-51820}/udp"
+      - "${HTTP_PORT:-9080}:${HTTP_PORT:-9080}/tcp"
+      - "${STEALTH_TCP_PORT:-8443}:${STEALTH_TCP_PORT:-8443}/tcp"
+      - "${STEALTH_UDP_PORT:-4443}:${STEALTH_UDP_PORT:-4443}/udp"
+    volumes:
+      - erebrus_data:${STATE_DIR:-/var/lib/erebrus}
+      - erebrus_wireguard:${WG_CONF_DIR:-/etc/wireguard}
+
+volumes:
+  erebrus_data:
+  erebrus_wireguard:
+  sentinel_data:
+  sentinel_unbound:
