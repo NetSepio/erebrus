@@ -1,4 +1,4 @@
-// Command erebrus is a backward-compatible alias for erebrus-node.
+// Command erebrus-node is the Erebrus v2 VPN node binary.
 package main
 
 import (

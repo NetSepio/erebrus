@@ -91,6 +91,14 @@ type Config struct {
 	PrivateDNSAddr    string
 	UpstreamDNS       string
 	DNSQueryLogs      bool
+
+	// deployment profile (erebrus | shield | sentinel)
+	ErebrusProfile  string
+	FirewallProvider string
+	FirewallDNSAddr  string
+	ShieldAdminURL   string
+	SentinelAPIURL   string
+	SentinelImage    string
 }
 
 // Load reads configuration from the environment, applying sane defaults.
@@ -155,7 +163,14 @@ func Load() *Config {
 		PrivateDNSAddr:         os.Getenv("PRIVATE_DNS_ADDR"),
 		UpstreamDNS:            env("UPSTREAM_DNS", "1.1.1.1"),
 		DNSQueryLogs:           boolEnv("DNS_QUERY_LOGS", false),
+		ErebrusProfile:         env("EREBRUS_PROFILE", ProfileErebrus),
+		FirewallProvider:       env("FIREWALL_PROVIDER", ""),
+		FirewallDNSAddr:        os.Getenv("FIREWALL_DNS_ADDR"),
+		ShieldAdminURL:         os.Getenv("SHIELD_ADMIN_URL"),
+		SentinelAPIURL:         os.Getenv("SENTINEL_API_URL"),
+		SentinelImage:          env("SENTINEL_IMAGE", "ghcr.io/netsepio/erebrus-sentinel:latest"),
 	}
+	c.ApplyProfileDefaults()
 	if mode, err := ParseModeSettingsFromEnv(); err == nil {
 		c.Mode = mode
 	}
@@ -208,7 +223,7 @@ func (c *Config) Validate() error {
 		c.Mode.Warnings = append(c.Mode.Warnings,
 			"WARNING: Public access mode production should expose stealth on 443/tcp and 443/udp (STEALTH_TCP_PORT/STEALTH_UDP_PORT) for best reachability.")
 	}
-	return nil
+	return c.ValidateProfile()
 }
 
 // DBPath is the SQLite file path.

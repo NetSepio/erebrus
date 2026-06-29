@@ -1,5 +1,5 @@
-# Backward-compatible alias — builds erebrus-node (also installs `erebrus` symlink binary).
 # syntax=docker/dockerfile:1
+
 FROM golang:alpine AS build-app
 RUN apk update && apk add --no-cache git
 WORKDIR /app
@@ -9,7 +9,7 @@ COPY . .
 RUN go build -tags "with_reality_server" \
     -ldflags "-X github.com/NetSepio/erebrus/internal/config.Version=2.0.0-$(git rev-parse --short HEAD 2>/dev/null || echo dev)" \
     -o erebrus-node ./cmd/erebrus-node && \
-    ln -sf erebrus-node erebrus
+    cp erebrus-node erebrus
 
 FROM alpine:latest
 WORKDIR /app
