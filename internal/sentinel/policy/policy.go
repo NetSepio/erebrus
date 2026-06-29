@@ -58,14 +58,23 @@ func (w *Writer) render(p Policy) (blocks, allows, rewrites, upstreams string) {
 			continue
 		}
 		target := dnsZone(r.Target)
-		switch r.Action {
-		case "block":
-			blocks += fmt.Sprintf("local-zone: %q always_nxdomain\n", target)
-		case "allow":
-			allows += fmt.Sprintf("# allow %s\n", target)
-		case "rewrite":
+		action := strings.ToLower(strings.TrimSpace(r.Action))
+		switch action {
+		case "block", "domain_block", "wildcard_domain_block":
+			if strings.HasPrefix(strings.TrimSpace(r.Target), "*.") {
+				wild := strings.TrimPrefix(strings.TrimSpace(r.Target), "*.")
+				blocks += fmt.Sprintf("local-zone: %q always_nxdomain\n", dnsZone(wild))
+			} else {
+				blocks += fmt.Sprintf("local-zone: %q always_nxdomain\n", target)
+			}
+		case "allow", "domain_allow":
+			allows += fmt.Sprintf("local-zone: %q transparent\n", target)
+		case "rewrite", "dns_rewrite":
 			val := strings.TrimSpace(r.Value)
 			if val == "" {
+				val = strings.TrimSpace(r.Action)
+			}
+			if val == "" || val == "rewrite" || val == "dns_rewrite" {
 				continue
 			}
 			rewrites += fmt.Sprintf("local-zone: %q static\n", target)

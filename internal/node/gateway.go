@@ -8,8 +8,10 @@ import (
 	"sync"
 	"time"
 
+	"github.com/NetSepio/erebrus/internal/firewall"
 	"github.com/NetSepio/erebrus/internal/gatewayclient"
 	"github.com/NetSepio/erebrus/internal/registrar"
+	"github.com/NetSepio/erebrus/internal/serviceagent"
 	"github.com/NetSepio/erebrus/internal/speedtest"
 )
 
@@ -20,6 +22,8 @@ type GatewayBridge struct {
 	did       string
 	nodeID    string
 	speedtest *speedtest.Cache
+	agent     *serviceagent.Agent
+	fw        *firewall.Client
 
 	mu     sync.RWMutex
 	status string
@@ -33,13 +37,15 @@ type usageCounters struct {
 }
 
 // NewGatewayBridge wires the node service to the gateway control plane.
-func NewGatewayBridge(svc *Service, peerID, did, nodeID string, speedtestCache *speedtest.Cache) *GatewayBridge {
+func NewGatewayBridge(svc *Service, peerID, did, nodeID string, speedtestCache *speedtest.Cache, agent *serviceagent.Agent, fw *firewall.Client) *GatewayBridge {
 	return &GatewayBridge{
 		svc:       svc,
 		peerID:    peerID,
 		did:       did,
 		nodeID:    nodeID,
 		speedtest: speedtestCache,
+		agent:     agent,
+		fw:        fw,
 		status:    "online",
 		lastUsage: map[string]usageCounters{},
 	}
@@ -108,7 +114,9 @@ func (g *GatewayBridge) BuildHello(_ string) gatewayclient.Hello {
 			AppHosting:     cfg.EnableAppHosting,
 			WildcardDomain: cfg.AppWildcardDomain,
 		},
-		Endpoints: eps,
+		Endpoints:         eps,
+		DeploymentProfile: cfg.ErebrusProfile,
+		Services:          g.serviceSnapshot(),
 	}
 }
 
@@ -131,7 +139,15 @@ func (g *GatewayBridge) BuildHeartbeat(status string) gatewayclient.Heartbeat {
 			"node":    g.svc.cfg.Version,
 			"singbox": "1.11.15",
 		},
+		Services: g.serviceSnapshot(),
 	}
+}
+
+func (g *GatewayBridge) serviceSnapshot() map[string]string {
+	if g.agent == nil {
+		return map[string]string{"vpn": "active"}
+	}
+	return g.agent.Snapshot()
 }
 
 func (g *GatewayBridge) cachedSpeedtest() gatewayclient.Speedtest {
@@ -221,6 +237,36 @@ func (g *GatewayBridge) HandleCommand(ctx context.Context, cmd gatewayclient.Com
 		}
 	case gatewayclient.ActionSyncApps:
 		// Phase 5 — acknowledge without effect in v2.0.
+	case gatewayclient.ActionSyncFirewall:
+		if g.fw == nil {
+			res.OK = false
+			res.Error = "firewall not configured"
+			return res
+		}
+		if err := g.fw.Sync(ctx, cmd.Args); err != nil {
+			res.OK = false
+			res.Error = err.Error()
+		}
+	case gatewayclient.ActionRestartFirewall:
+		if g.fw == nil {
+			res.OK = false
+			res.Error = "firewall not configured"
+			return res
+		}
+		if err := g.fw.Restart(ctx); err != nil {
+			res.OK = false
+			res.Error = err.Error()
+		}
+	case gatewayclient.ActionResetFirewallCredentials:
+		if g.fw == nil {
+			res.OK = false
+			res.Error = "firewall not configured"
+			return res
+		}
+		if err := g.fw.ResetCredentials(ctx); err != nil {
+			res.OK = false
+			res.Error = err.Error()
+		}
 	default:
 		res.OK = false
 		res.Error = "unknown action"

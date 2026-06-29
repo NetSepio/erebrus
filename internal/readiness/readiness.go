@@ -31,6 +31,8 @@ type Input struct {
 	GatewayConnected   bool
 	WireGuardOK        bool
 	StealthListening   bool
+	FirewallOK         bool
+	FirewallDetail     string
 }
 
 // Evaluate builds a readiness report from config and runtime signals.
@@ -59,6 +61,7 @@ func Evaluate(in Input) Report {
 		},
 	}
 	checks = append(checks, stealthCheck(cfg, in.StealthListening))
+	checks = append(checks, firewallCheck(cfg, in.FirewallOK, in.FirewallDetail))
 	checks = append(checks, controlPlaneCheck(cfg, in.GatewayRegistered, in.GatewayConnected))
 
 	warnings := append([]string{}, cfg.Mode.Warnings...)
@@ -133,6 +136,19 @@ func stealthDetail(listening bool) string {
 		return "vless-reality and hysteria2 listening"
 	}
 	return "carriers enabled but not listening"
+}
+
+func firewallCheck(cfg *config.Config, ok bool, detail string) Check {
+	if !cfg.HasFirewallService() {
+		return Check{ID: "firewall", OK: true, Optional: true, Detail: "not configured"}
+	}
+	if detail == "" {
+		detail = "sidecar healthy"
+	}
+	if !ok {
+		return Check{ID: "firewall", OK: false, Detail: detail}
+	}
+	return Check{ID: "firewall", OK: true, Detail: detail}
 }
 
 func controlPlaneCheck(cfg *config.Config, registered, connected bool) Check {

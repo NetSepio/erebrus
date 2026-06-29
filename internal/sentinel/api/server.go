@@ -3,9 +3,11 @@ package api
 
 import (
 	"encoding/json"
+	"fmt"
 	"log/slog"
 	"net/http"
 	"os"
+	"os/exec"
 	"sync"
 	"time"
 
@@ -30,7 +32,8 @@ func New(addr, confDir string) *Server {
 	if confDir == "" {
 		confDir = "/etc/unbound/conf.d/generated"
 	}
-	return &Server{addr: addr, confDir: confDir, licensed: true}
+	licensed := os.Getenv("SENTINEL_LICENSED") != "false"
+	return &Server{addr: addr, confDir: confDir, licensed: licensed}
 }
 
 // ListenAndServe blocks until the server stops.
@@ -68,11 +71,17 @@ func (s *Server) handleLicenseCheck(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
 		return
 	}
-	// Stub: always licensed until gateway license push is wired.
+	var req struct {
+		Licensed *bool `json:"licensed"`
+	}
+	_ = json.NewDecoder(r.Body).Decode(&req)
 	s.mu.Lock()
-	s.licensed = true
+	if req.Licensed != nil {
+		s.licensed = *req.Licensed
+	}
+	lic := s.licensed
 	s.mu.Unlock()
-	writeJSON(w, map[string]any{"licensed": true})
+	writeJSON(w, map[string]any{"licensed": lic})
 }
 
 func (s *Server) handlePolicyApply(w http.ResponseWriter, r *http.Request) {
@@ -101,8 +110,25 @@ func (s *Server) handleReload(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
 		return
 	}
-	// Unbound reload is handled by host entrypoint in full deploy; stub ok here.
-	writeJSON(w, map[string]string{"status": "reload_queued"})
+	if err := reloadUnbound(); err != nil {
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
+	writeJSON(w, map[string]string{"status": "reloaded"})
+}
+
+func reloadUnbound() error {
+	if out, err := exec.Command("unbound-control", "reload").CombinedOutput(); err == nil {
+		return nil
+	} else if len(out) > 0 {
+		slog.Debug("unbound-control reload", "out", string(out), "err", err)
+	}
+	if out, err := exec.Command("unbound-control", "status").CombinedOutput(); err != nil {
+		return err
+	} else {
+		_ = out
+	}
+	return exec.Command("killall", "-HUP", "unbound").Run()
 }
 
 func (s *Server) handleMetrics(w http.ResponseWriter, _ *http.Request) {
@@ -112,6 +138,12 @@ func (s *Server) handleMetrics(w http.ResponseWriter, _ *http.Request) {
 }
 
 func (s *Server) apply(p policy.Policy) error {
+	s.mu.RLock()
+	lic := s.licensed
+	s.mu.RUnlock()
+	if !lic {
+		return fmt.Errorf("sentinel unlicensed")
+	}
 	w := &policy.Writer{Dir: s.confDir}
 	if err := w.Apply(p); err != nil {
 		return err

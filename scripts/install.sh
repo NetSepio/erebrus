@@ -822,6 +822,9 @@ main() {
   choose_deploy
   choose_access
   choose_profile
+  if [[ "$DEPLOY" == "host" && "${PROFILE:-erebrus}" != "erebrus" ]]; then
+    die "shield/sentinel profiles require container deploy (--mode container)"
+  fi
   run_preflight
   gather_config
   case "$DEPLOY" in

@@ -14,6 +14,7 @@ import (
 	"github.com/NetSepio/erebrus/internal/config"
 	dnspkg "github.com/NetSepio/erebrus/internal/dns"
 	"github.com/NetSepio/erebrus/internal/edge"
+	"github.com/NetSepio/erebrus/internal/firewall"
 	"github.com/NetSepio/erebrus/internal/gatewayclient"
 	"github.com/NetSepio/erebrus/internal/node"
 	"github.com/NetSepio/erebrus/internal/p2p"
@@ -100,10 +101,26 @@ func Run(cfg *config.Config) error {
 	svcReg := &services.Registry{St: st}
 	tunnelDNS := dnspkg.DefaultListenAddr(cfg.WGIPv4Subnet, cfg.PrivateDNSAddr)
 
+	fwClient := firewall.New(cfg)
+	if cfg.HasFirewallService() && cfg.FirewallProvider == config.FirewallUnboundErebrus {
+		if licensed, err := fwClient.CheckLicense(ctx); err != nil {
+			slog.Warn("sentinel license check failed", "err", err)
+			cfg.SentinelLicensed = true // dev fallback when sidecar not up yet
+		} else {
+			cfg.SentinelLicensed = licensed
+		}
+	} else {
+		cfg.SentinelLicensed = true
+	}
+
 	if cfg.PrivateDNSEnabled {
+		upstream := cfg.UpstreamDNS
+		if cfg.HasFirewallService() {
+			upstream = cfg.FirewallDNSAddr
+		}
 		dnsCfg := dnspkg.Config{
 			Enabled: true, Domain: cfg.PrivateDNSDomain, ListenAddr: tunnelDNS,
-			Upstream: cfg.UpstreamDNS, QueryLogs: cfg.DNSQueryLogs,
+			Upstream: upstream, QueryLogs: cfg.DNSQueryLogs,
 		}
 		if err := dnsCfg.Validate(); err != nil {
 			slog.Warn("private DNS disabled", "err", err)
@@ -114,7 +131,7 @@ func Run(cfg *config.Config) error {
 				}
 			}()
 		}
-	} else if cfg.HasFirewallService() {
+	} else if cfg.HasFirewallService() && cfg.SentinelLicensed {
 		fwd := dnspkg.ForwarderConfig{ListenAddr: tunnelDNS, Upstream: cfg.FirewallDNSAddr}
 		go func() {
 			if err := dnspkg.NewForwarder(fwd).Start(ctx); err != nil {
@@ -122,6 +139,8 @@ func Run(cfg *config.Config) error {
 			}
 		}()
 		slog.Info("firewall DNS forwarder listening", "addr", tunnelDNS, "upstream", cfg.FirewallDNSAddr)
+	} else if cfg.HasFirewallService() && !cfg.SentinelLicensed {
+		slog.Warn("sentinel unlicensed — VPN DNS forwarding disabled")
 	}
 
 	agent := serviceagent.New(cfg)
@@ -182,7 +201,7 @@ func Run(cfg *config.Config) error {
 				WalletChain: cfg.WalletChain, Mnemonic: cfg.Mnemonic, PeerID: peerID, DID: did,
 				Name: cfg.NodeName, Region: cfg.Region, Zone: cfg.Zone,
 				APIBaseURL: cfg.PublicAPIBaseURL(), NodeKey: cfg.EffectiveNodeKey(),
-				AccessMode: cfg.Mode.GatewayAccessMode(),
+				AccessMode: cfg.Mode.GatewayAccessMode(), DeploymentProfile: cfg.ErebrusProfile,
 			})
 			if err != nil {
 				slog.Warn("gateway registration failed", "err", err)
@@ -208,7 +227,7 @@ func Run(cfg *config.Config) error {
 		if nodeID != "" && nodeToken != "" {
 			speedtestCache := speedtest.NewCache()
 			speedtestCache.Start(ctx)
-			bridge := node.NewGatewayBridge(svc, peerID, did, nodeID, speedtestCache)
+			bridge := node.NewGatewayBridge(svc, peerID, did, nodeID, speedtestCache, agent, fwClient)
 			gwClient = gatewayclient.New(cfg.GatewayURL, nodeID, nodeToken, bridge, bridge, bridge.Status)
 			go gwClient.Run(ctx)
 		} else {
@@ -226,11 +245,16 @@ func Run(cfg *config.Config) error {
 				gwConn = gwClient.Connected()
 			}
 		}
+		fwOK, fwDetail := true, ""
+		if cfg.HasFirewallService() {
+			fwOK, fwDetail = agent.FirewallOK()
+		}
 		return readiness.Input{
 			Cfg: cfg, IdentityConfigured: true, GatewayRegistered: gwReg, GatewayConnected: gwConn,
-			WireGuardOK: wgOK, StealthListening: stealthOK,
+			WireGuardOK: wgOK, StealthListening: stealthOK, FirewallOK: fwOK, FirewallDetail: fwDetail,
 		}
 	})
+	apiServer.SetServiceSnapshot(agent.Snapshot)
 
 	srv := &http.Server{
 		Addr: fmt.Sprintf("%s:%s", cfg.BindAddr, cfg.HTTPPort), Handler: apiServer.Router(),

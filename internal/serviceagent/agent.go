@@ -6,24 +6,25 @@ import (
 	"log/slog"
 	"net/http"
 	"strings"
+	"sync"
 	"time"
 
 	"github.com/NetSepio/erebrus/internal/config"
 )
 
-// Agent polls local firewall sidecars and logs health (gateway push deferred).
+// Agent polls local firewall sidecars and exposes health for status/heartbeats.
 type Agent struct {
 	cfg *config.Config
+
+	mu       sync.RWMutex
+	snapshot map[string]string
 }
 
 // New constructs an Agent.
-func New(cfg *config.Config) *Agent { return &Agent{cfg: cfg} }
+func New(cfg *config.Config) *Agent { return &Agent{cfg: cfg, snapshot: map[string]string{"vpn": "active"}} }
 
 // Start runs periodic health checks until ctx is done.
 func (a *Agent) Start(ctx context.Context) {
-	if !a.cfg.HasFirewallService() {
-		return
-	}
 	go a.loop(ctx)
 }
 
@@ -42,16 +43,30 @@ func (a *Agent) loop(ctx context.Context) {
 }
 
 func (a *Agent) check() {
-	status := map[string]string{"vpn": "active"}
+	status := a.probeAll()
+	a.mu.Lock()
+	a.snapshot = status
+	a.mu.Unlock()
+	slog.Info("service health", "profile", a.cfg.ErebrusProfile, "services", status)
+}
+
+func (a *Agent) probeAll() map[string]string {
+	out := map[string]string{"vpn": "active"}
+	if !a.cfg.HasFirewallService() {
+		return out
+	}
 	switch a.cfg.FirewallProvider {
 	case config.FirewallAdGuardHome:
-		status["shield"] = probeHTTP(a.cfg.ShieldAdminURL + "/")
+		out["community_firewall"] = probeHTTP(a.cfg.ShieldAdminURL + "/")
 	case config.FirewallUnboundErebrus:
-		status["sentinel"] = probeHTTP(a.cfg.SentinelAPIURL + "/health")
-	default:
-		return
+		state := probeHTTP(a.cfg.SentinelAPIURL + "/health")
+		if !a.cfg.SentinelLicensed {
+			out["erebrus_firewall"] = "unlicensed"
+		} else {
+			out["erebrus_firewall"] = state
+		}
 	}
-	slog.Info("service health", "profile", a.cfg.ErebrusProfile, "services", status)
+	return out
 }
 
 func probeHTTP(url string) string {
@@ -78,15 +93,32 @@ func probeHTTP(url string) string {
 
 // Snapshot returns the latest coarse service map for API/status extensions.
 func (a *Agent) Snapshot() map[string]string {
-	if !a.cfg.HasFirewallService() {
-		return map[string]string{"vpn": "active"}
-	}
-	out := map[string]string{"vpn": "active"}
-	switch a.cfg.FirewallProvider {
-	case config.FirewallAdGuardHome:
-		out["community_firewall"] = probeHTTP(a.cfg.ShieldAdminURL + "/")
-	case config.FirewallUnboundErebrus:
-		out["erebrus_firewall"] = probeHTTP(a.cfg.SentinelAPIURL + "/health")
+	a.mu.RLock()
+	defer a.mu.RUnlock()
+	out := make(map[string]string, len(a.snapshot))
+	for k, v := range a.snapshot {
+		out[k] = v
 	}
 	return out
+}
+
+// FirewallOK reports whether the configured firewall sidecar is healthy enough for readiness.
+func (a *Agent) FirewallOK() (bool, string) {
+	if !a.cfg.HasFirewallService() {
+		return true, "not configured"
+	}
+	snap := a.Snapshot()
+	switch a.cfg.FirewallProvider {
+	case config.FirewallAdGuardHome:
+		st := snap["community_firewall"]
+		return st == "active", st
+	case config.FirewallUnboundErebrus:
+		if !a.cfg.SentinelLicensed {
+			return false, "unlicensed"
+		}
+		st := snap["erebrus_firewall"]
+		return st == "active", st
+	default:
+		return true, "unknown provider"
+	}
 }

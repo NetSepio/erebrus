@@ -99,6 +99,9 @@ type Config struct {
 	ShieldAdminURL   string
 	SentinelAPIURL   string
 	SentinelImage    string
+
+	// SentinelLicensed is set at runtime after license check (not from env).
+	SentinelLicensed bool
 }
 
 // Load reads configuration from the environment, applying sane defaults.

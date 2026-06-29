@@ -45,8 +45,9 @@ type Server struct {
 	id   Identity
 	// status reflects drain state ("online" | "draining"); Phase 2 toggles it.
 	status           string
-	readinessFn      func() readiness.Input
+	readinessFn        func() readiness.Input
 	wireGuardPublicKey func() string
+	serviceSnapshotFn  func() map[string]string
 }
 
 // NewServer builds the API server.
@@ -62,6 +63,11 @@ func (s *Server) SetReadinessProvider(fn func() readiness.Input) {
 // SetWireGuardPublicKeyProvider supplies the node's WireGuard server public key.
 func (s *Server) SetWireGuardPublicKeyProvider(fn func() string) {
 	s.wireGuardPublicKey = fn
+}
+
+// SetServiceSnapshot supplies attached service health for /api/v2/status.
+func (s *Server) SetServiceSnapshot(fn func() map[string]string) {
+	s.serviceSnapshotFn = fn
 }
 
 // SetStatus updates the public status field (online | draining).
@@ -157,21 +163,31 @@ func (s *Server) handleStatus(c *gin.Context) {
 			},
 		},
 		Capabilities: map[string]any{
-			"access_mode":     s.cfg.Mode.RuntimeMode,
-			"access_label":    readiness.AccessModeLabel(s.cfg.Mode.RuntimeMode),
-			"access_hint":     readiness.AccessModeHint(s.cfg.Mode.RuntimeMode),
-			"region_label":    readiness.RegionLabel(s.cfg.Region),
-			"zone_label":      readiness.ZoneLabel(s.cfg.Zone),
-			"network_profile": s.cfg.Mode.NetworkProfile,
-			"app_hosting":     s.cfg.EnableAppHosting,
-			"wildcard_domain": s.cfg.AppWildcardDomain,
-			"public_domain":   s.cfg.PublicDomain,
-			"stealth":         s.cfg.EnableStealth,
-			"public_api_url":  readiness.PublicAPIURL(s.cfg),
+			"access_mode":        s.cfg.Mode.RuntimeMode,
+			"access_label":       readiness.AccessModeLabel(s.cfg.Mode.RuntimeMode),
+			"access_hint":        readiness.AccessModeHint(s.cfg.Mode.RuntimeMode),
+			"region_label":       readiness.RegionLabel(s.cfg.Region),
+			"zone_label":         readiness.ZoneLabel(s.cfg.Zone),
+			"network_profile":    s.cfg.Mode.NetworkProfile,
+			"deployment_profile": s.cfg.ErebrusProfile,
+			"firewall_provider":  s.cfg.FirewallProvider,
+			"app_hosting":        s.cfg.EnableAppHosting,
+			"wildcard_domain":    s.cfg.AppWildcardDomain,
+			"public_domain":      s.cfg.PublicDomain,
+			"stealth":            s.cfg.EnableStealth,
+			"public_api_url":     readiness.PublicAPIURL(s.cfg),
+			"services":           s.servicesSnapshot(),
 		},
 		Protocols: protocols,
 		Readiness: rep,
 	})
+}
+
+func (s *Server) servicesSnapshot() map[string]string {
+	if s.serviceSnapshotFn != nil {
+		return s.serviceSnapshotFn()
+	}
+	return map[string]string{"vpn": "active"}
 }
 
 func (s *Server) handleStats(c *gin.Context) {

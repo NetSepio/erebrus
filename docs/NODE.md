@@ -66,7 +66,11 @@ too. Gateway-side filtering/display is a separate follow-up.
 
 Installer: `./install.sh --profile shield` (or interactive prompt). Sets
 `EREBRUS_PROFILE`, `FIREWALL_PROVIDER`, `FIREWALL_DNS_ADDR`, and `WG_DNS` for
-tunnel DNS routing.
+tunnel DNS routing. **Shield and Sentinel require container deploy** (`--mode container`);
+host/systemd install supports `erebrus` profile only.
+
+Registration sends `deployment_profile` to the gateway; firewall rules sync via
+WS `sync_firewall` when an operator calls `POST .../firewall/sync` on the gateway.
 
 ### Gateway registration
 

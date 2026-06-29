@@ -41,6 +41,7 @@ type RegistrationInput struct {
 	APIBaseURL         string
 	NodeKey            string // optional; gateway mints if empty
 	AccessMode         string // public | private
+	DeploymentProfile  string // erebrus | shield | sentinel
 }
 
 // RegistrationResult holds the gateway-issued node credentials.
@@ -181,7 +182,8 @@ func Register(ctx context.Context, in RegistrationInput) (*RegistrationResult, e
 		"zone":               in.Zone,
 		"api_base_url":       in.APIBaseURL,
 		"node_key":           in.NodeKey,
-		"access_mode":        access,
+		"access_mode":         access,
+		"deployment_profile":  strings.TrimSpace(in.DeploymentProfile),
 	})
 	raw, status, err = postJSON(ctx, client, base+"/api/v2/nodes/register", step2)
 	if err != nil {
