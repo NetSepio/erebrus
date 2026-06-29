@@ -56,6 +56,18 @@ Both `REGION` and `ZONE` are sent to the gateway on registration and in WebSocke
 `hello` / `heartbeat` (`spec.region`, `spec.zone`). The local dashboard shows them
 too. Gateway-side filtering/display is a separate follow-up.
 
+### Deployment profiles
+
+| Profile | Compose | Extra services |
+|---------|---------|----------------|
+| `erebrus` (default) | `deploy/compose/erebrus.yml` | VPN node only |
+| `shield` | `deploy/compose/shield.yml` | AdGuard Home DNS |
+| `sentinel` | `deploy/compose/sentinel.yml` | erebrus-sentinel (Unbound API) |
+
+Installer: `./install.sh --profile shield` (or interactive prompt). Sets
+`EREBRUS_PROFILE`, `FIREWALL_PROVIDER`, `FIREWALL_DNS_ADDR`, and `WG_DNS` for
+tunnel DNS routing.
+
 ### Gateway registration
 
 Nodes enroll with a scoped **registration token** (`ere_reg_*`), not a permanent org

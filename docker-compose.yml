@@ -1,10 +1,11 @@
+# Default single-node stack. For Shield/Sentinel use deploy/compose/{shield,sentinel}.yml
 services:
-  erebrus:
+  erebrus-node:
     image: ${EREBRUS_IMAGE:-ghcr.io/netsepio/erebrus:latest}
     build:
       context: .
-      dockerfile: Dockerfile
-    container_name: erebrus
+      dockerfile: docker/erebrus-node.Dockerfile
+    container_name: erebrus-node
     restart: unless-stopped
     # NET_ADMIN + module access let the node bring up the WireGuard interface.
     cap_add:
@@ -17,6 +18,11 @@ services:
       # Docker injects env from --env-file; LOAD_CONFIG_FILE skips godotenv inside the binary.
       LOAD_CONFIG_FILE: "TRUE"
       RUNTYPE: "${RUNTYPE:-release}"
+      EREBRUS_PROFILE: "${EREBRUS_PROFILE:-erebrus}"
+      FIREWALL_PROVIDER: "${FIREWALL_PROVIDER:-none}"
+      FIREWALL_DNS_ADDR: "${FIREWALL_DNS_ADDR:-}"
+      SHIELD_ADMIN_URL: "${SHIELD_ADMIN_URL:-}"
+      SENTINEL_API_URL: "${SENTINEL_API_URL:-}"
       EREBRUS_ACCESS: "${EREBRUS_ACCESS:-private}"
       EREBRUS_MODE: "${EREBRUS_MODE:-container}"
       EREBRUS_NETWORK_PROFILE: "${EREBRUS_NETWORK_PROFILE:-bridge}"
