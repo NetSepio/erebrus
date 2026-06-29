@@ -37,10 +37,10 @@ type Config struct {
 	GatewayURL           string
 	GatewayPeerMultiaddr string
 	P2PListenPort        string
-	NodeID               string // gateway-assigned; persisted in SQLite when registered
-	NodeToken            string // gateway-issued PASETO for WS control plane
+	NodeID                string // canonical peer_id; persisted in SQLite when registered
+	NodeToken             string // gateway-issued PASETO for WS control plane
 	WalletChain           string // SOLANA | ETHEREUM (aliases sol/evm accepted) — gateway enrollment
-	OrgEnrollmentSecret   string // EREBRUS_ORG_ENROLLMENT_SECRET — org workspace credential
+	NodeRegistrationToken string // EREBRUS_NODE_REGISTRATION_TOKEN — scoped org registration token
 	APIPublicURL          string // URL gateway uses for peer provisioning (api_base_url)
 	GatewayAutoRegister   bool
 	GatewayPublicKey      string // gateway Ed25519 public key (hex) for verifying API calls
@@ -121,7 +121,7 @@ func Load() *Config {
 		NodeID:                 os.Getenv("NODE_ID"),
 		NodeToken:              os.Getenv("NODE_TOKEN"),
 		WalletChain:            env("WALLET_CHAIN", "SOLANA"),
-		OrgEnrollmentSecret:    firstEnv("EREBRUS_ORG_ENROLLMENT_SECRET", "ORG_ENROLLMENT_SECRET", ""),
+		NodeRegistrationToken:  firstEnv("EREBRUS_NODE_REGISTRATION_TOKEN", "EREBRUS_ORG_ENROLLMENT_SECRET", "ORG_ENROLLMENT_SECRET", ""),
 		APIPublicURL:           os.Getenv("API_PUBLIC_URL"),
 		GatewayAutoRegister:    boolEnv("GATEWAY_AUTO_REGISTER", true),
 		GatewayPublicKey:       os.Getenv("GATEWAY_PUBLIC_KEY"),
@@ -228,6 +228,11 @@ func (c *Config) PublicAPIBaseURL() string {
 
 // GatewayEnabled reports whether the node should connect to the gateway control plane.
 func (c *Config) GatewayEnabled() bool { return strings.TrimSpace(c.GatewayURL) != "" }
+
+// EffectiveRegistrationToken returns the scoped node registration token.
+func (c *Config) EffectiveRegistrationToken() string {
+	return strings.TrimSpace(c.NodeRegistrationToken)
+}
 
 // EffectiveNodeKey returns the per-node API bearer (NODE_KEY legacy: NODE_API_TOKEN).
 func (c *Config) EffectiveNodeKey() string {

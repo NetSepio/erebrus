@@ -56,6 +56,21 @@ Both `REGION` and `ZONE` are sent to the gateway on registration and in WebSocke
 `hello` / `heartbeat` (`spec.region`, `spec.zone`). The local dashboard shows them
 too. Gateway-side filtering/display is a separate follow-up.
 
+### Gateway registration
+
+Nodes enroll with a scoped **registration token** (`ere_reg_*`), not a permanent org
+secret. Org owners/admins mint tokens via the gateway:
+`POST /api/v2/orgs/{org_id}/node-registration-tokens`.
+
+| Variable | Purpose |
+|----------|---------|
+| `GATEWAY_URL` | Gateway base URL (e.g. `https://gateway.erebrus.io`) |
+| `EREBRUS_NODE_REGISTRATION_TOKEN` | Scoped token for `POST /api/v2/nodes/register` |
+| `NODE_ID` / `NODE_TOKEN` | Persisted after registration (auto-register when unset) |
+
+The gateway returns `node_id` = libp2p `peer_id` (same value in WS `hello.node_id`).
+`EREBRUS_ORG_ENROLLMENT_SECRET` is a deprecated alias for the registration token.
+
 On an existing US node:
 
 ```bash

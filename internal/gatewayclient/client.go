@@ -243,6 +243,14 @@ func (c *Client) writePump(ctx context.Context, ws *websocket.Conn) error {
 			if err := ws.WriteMessage(websocket.TextMessage, frame); err != nil {
 				return err
 			}
+			// Best-effort REST heartbeat keeps org_nodes.last_seen_at in sync when WS is up.
+			go func(h Heartbeat) {
+				ctx, cancel := context.WithTimeout(context.Background(), 8*time.Second)
+				defer cancel()
+				if err := PostRESTHeartbeat(ctx, c.gatewayURL, c.nodeID, c.nodeToken, h); err != nil {
+					c.log.Debug("rest heartbeat failed", "err", err)
+				}
+			}(hb)
 		case <-usageTicker.C:
 			ur := c.snap.BuildUsageReport()
 			frame, err := wrap(TypeUsageReport, ur)

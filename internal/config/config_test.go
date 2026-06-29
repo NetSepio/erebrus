@@ -137,6 +137,20 @@ func TestLoadAPIBindDefault(t *testing.T) {
 	}
 }
 
+func TestLoadRegistrationTokenAlias(t *testing.T) {
+	t.Setenv("EREBRUS_NODE_REGISTRATION_TOKEN", "")
+	t.Setenv("EREBRUS_ORG_ENROLLMENT_SECRET", "ere_reg_legacy")
+	c := Load()
+	if c.EffectiveRegistrationToken() != "ere_reg_legacy" {
+		t.Fatalf("token = %q, want legacy alias", c.EffectiveRegistrationToken())
+	}
+	t.Setenv("EREBRUS_NODE_REGISTRATION_TOKEN", "ere_reg_new")
+	c = Load()
+	if c.EffectiveRegistrationToken() != "ere_reg_new" {
+		t.Fatalf("token = %q, want ere_reg_new", c.EffectiveRegistrationToken())
+	}
+}
+
 func TestLoadAPIBindOverride(t *testing.T) {
 	t.Setenv("API_BIND_ADDR", "127.0.0.1")
 	t.Setenv("SERVER", "0.0.0.0")

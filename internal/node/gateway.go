@@ -62,7 +62,7 @@ func (g *GatewayBridge) SetStatus(status string) {
 	}
 }
 
-func (g *GatewayBridge) BuildHello(nodeID string) gatewayclient.Hello {
+func (g *GatewayBridge) BuildHello(_ string) gatewayclient.Hello {
 	cfg := g.svc.cfg
 	eps := gatewayclient.Endpoints{
 		WireGuard: gatewayclient.WireGuardEndpoint{
@@ -89,7 +89,7 @@ func (g *GatewayBridge) BuildHello(nodeID string) gatewayclient.Hello {
 		}
 	}
 	return gatewayclient.Hello{
-		NodeID:  nodeID,
+		NodeID:  g.peerID,
 		Version: cfg.Version,
 		Identity: gatewayclient.Identity{
 			PeerID: g.peerID,

@@ -271,6 +271,11 @@ func run(cfg *config.Config) error {
 		if nodeToken == "" {
 			nodeToken = cfg.NodeToken
 		}
+		// Migrate off legacy gateway UUID node_ids — canonical id is peer_id.
+		if nodeID != "" && nodeID != peerID {
+			slog.Warn("stored gateway node_id is not peer_id; will re-register", "stored", nodeID, "peer_id", peerID)
+			nodeID, nodeToken = "", ""
+		}
 		if creds.NodeKey != "" {
 			cfg.NodeKey = creds.NodeKey
 			cfg.NodeAPIToken = creds.NodeKey
@@ -280,8 +285,8 @@ func run(cfg *config.Config) error {
 		}
 		if (nodeID == "" || nodeToken == "") && cfg.GatewayAutoRegister {
 			reg, err := gatewayclient.Register(ctx, gatewayclient.RegistrationInput{
-				GatewayURL:          cfg.GatewayURL,
-				OrgEnrollmentSecret: cfg.OrgEnrollmentSecret,
+				GatewayURL:        cfg.GatewayURL,
+				RegistrationToken: cfg.EffectiveRegistrationToken(),
 				WalletChain:         cfg.WalletChain,
 				Mnemonic:            cfg.Mnemonic,
 				PeerID:              peerID,

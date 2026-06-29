@@ -28,9 +28,10 @@ type SettingsStore interface {
 
 // RegistrationInput is the node identity payload sent to the gateway.
 type RegistrationInput struct {
-	GatewayURL         string
-	OrgEnrollmentSecret string
-	WalletChain        string
+	GatewayURL          string
+	RegistrationToken   string // EREBRUS_NODE_REGISTRATION_TOKEN (preferred)
+	OrgEnrollmentSecret string // deprecated alias for RegistrationToken
+	WalletChain         string
 	Mnemonic           string
 	PeerID             string
 	DID                string
@@ -99,15 +100,22 @@ func SaveCredentials(ctx context.Context, st SettingsStore, cred *Credentials) e
 	return nil
 }
 
-// Register performs the two-step org enrollment flow and returns node credentials.
+func registrationToken(in RegistrationInput) string {
+	if t := strings.TrimSpace(in.RegistrationToken); t != "" {
+		return t
+	}
+	return strings.TrimSpace(in.OrgEnrollmentSecret)
+}
+
+// Register performs the two-step node registration flow and returns node credentials.
 func Register(ctx context.Context, in RegistrationInput) (*RegistrationResult, error) {
 	base := strings.TrimRight(strings.TrimSpace(in.GatewayURL), "/")
-	secret := strings.TrimSpace(in.OrgEnrollmentSecret)
+	token := registrationToken(in)
 	if base == "" {
 		return nil, fmt.Errorf("gateway URL is empty")
 	}
-	if secret == "" {
-		return nil, fmt.Errorf("org enrollment secret is empty")
+	if token == "" {
+		return nil, fmt.Errorf("node registration token is empty")
 	}
 	if in.PeerID == "" {
 		return nil, fmt.Errorf("peer_id is empty")
@@ -124,10 +132,10 @@ func Register(ctx context.Context, in RegistrationInput) (*RegistrationResult, e
 
 	client := &http.Client{Timeout: 15 * time.Second}
 
-	// Step 1: machine challenge (gated by enrollment_secret).
+	// Step 1: machine challenge (gated by registration_token).
 	step1, _ := json.Marshal(map[string]string{
-		"enrollment_secret": secret,
-		"peer_id":           in.PeerID,
+		"registration_token": token,
+		"peer_id":            in.PeerID,
 	})
 	raw, status, err := postJSON(ctx, client, base+"/api/v2/nodes/register", step1)
 	if err != nil {
@@ -161,7 +169,7 @@ func Register(ctx context.Context, in RegistrationInput) (*RegistrationResult, e
 	// Step 2: signed machine registration.
 	step2, _ := json.Marshal(map[string]string{
 		"flow_id":            challenge.FlowID,
-		"enrollment_secret":  secret,
+		"registration_token": token,
 		"signature":          signature,
 		"public_key":         pubKey,
 		"wallet_address":     walletAddr,
@@ -184,6 +192,7 @@ func Register(ctx context.Context, in RegistrationInput) (*RegistrationResult, e
 	}
 	var out struct {
 		NodeID           string `json:"node_id"`
+		PeerID           string `json:"peer_id"`
 		NodeToken        string `json:"node_token"`
 		NodeKey          string `json:"node_key"`
 		GatewayPublicKey string `json:"gateway_public_key"`
@@ -191,15 +200,22 @@ func Register(ctx context.Context, in RegistrationInput) (*RegistrationResult, e
 	if err := json.Unmarshal(raw, &out); err != nil {
 		return nil, fmt.Errorf("parse registration response: %w", err)
 	}
-	if out.NodeID == "" || out.NodeToken == "" || out.NodeKey == "" {
+	nodeID := out.NodeID
+	if out.PeerID != "" {
+		nodeID = out.PeerID
+	}
+	if nodeID == "" || out.NodeToken == "" || out.NodeKey == "" {
 		return nil, fmt.Errorf("gateway returned incomplete registration response")
+	}
+	if nodeID != in.PeerID {
+		return nil, fmt.Errorf("gateway node_id %q does not match local peer_id %q", nodeID, in.PeerID)
 	}
 	gwPub := out.GatewayPublicKey
 	if gwPub == "" {
 		gwPub = challenge.GatewayPublicKey
 	}
 	return &RegistrationResult{
-		NodeID: out.NodeID, NodeToken: out.NodeToken, NodeKey: out.NodeKey, GatewayPublicKey: gwPub,
+		NodeID: nodeID, NodeToken: out.NodeToken, NodeKey: out.NodeKey, GatewayPublicKey: gwPub,
 	}, nil
 }
 

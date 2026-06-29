@@ -8,7 +8,7 @@ import (
 const canonicalHello = `{
   "type": "hello",
   "data": {
-    "node_id": "9d3b0d5e-3a3c-4b9e-9a31-0c5a9f0e6c11",
+    "node_id": "12D3KooWQYhTNQdmr3ArTeo5gCtJ8m1bbb73Bb4Q4xxK9zMrf1nK",
     "version": "2.0.0",
     "identity": {
       "peer_id": "12D3KooWQYhTNQdmr3ArTeo5gCtJ8m1bbb73Bb4Q4xxK9zMrf1nK",
@@ -37,8 +37,11 @@ func TestParseCanonicalHello(t *testing.T) {
 	if err := json.Unmarshal(env.Data, &h); err != nil {
 		t.Fatalf("unmarshal hello: %v", err)
 	}
-	if h.NodeID != "9d3b0d5e-3a3c-4b9e-9a31-0c5a9f0e6c11" {
+	if h.NodeID != "12D3KooWQYhTNQdmr3ArTeo5gCtJ8m1bbb73Bb4Q4xxK9zMrf1nK" {
 		t.Errorf("node_id = %q", h.NodeID)
+	}
+	if h.NodeID != h.Identity.PeerID {
+		t.Errorf("node_id %q should equal peer_id %q", h.NodeID, h.Identity.PeerID)
 	}
 	if h.Identity.DID != "did:erebrus:"+"12D3KooWQYhTNQdmr3ArTeo5gCtJ8m1bbb73Bb4Q4xxK9zMrf1nK" {
 		t.Errorf("did = %q", h.Identity.DID)

@@ -1,7 +1,7 @@
 // Package gatewayclient implements the node side of the node↔gateway control
 // plane: HTTPS registration and the WebSocket client.
 //
-// Message structs are a hand-mirrored copy of docs/v2/ws-protocol.md (FROZEN
+// Message structs are a hand-mirrored copy of erebrus-gateway/docs/ws-protocol.md (FROZEN
 // v2.0) and erebrus-gateway/internal/gw/nodehub/messages.go. Change
 // ws-protocol.md first, then both repos.
 package gatewayclient
