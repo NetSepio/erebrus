@@ -8,7 +8,7 @@ COPY . .
 RUN go build -o erebrus-sentinel ./cmd/erebrus-sentinel
 
 FROM alpine:latest
-RUN apk add --no-cache ca-certificates wget unbound unbound-root
+RUN apk add --no-cache ca-certificates wget unbound
 WORKDIR /app
 COPY --from=build /app/erebrus-sentinel /usr/local/bin/erebrus-sentinel
 COPY docker/sentinel/unbound.conf /etc/unbound/unbound.conf
