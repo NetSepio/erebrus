@@ -1,6 +1,6 @@
 // Package wallet derives node wallet keys from the BIP39 mnemonic and signs
 // gateway registration challenges. Solana (chain "sol") is the default; EVM
-// (chain "evm") is also supported to match erebrus-gateway/internal/gw/wallet.
+// (chain "evm") is also supported to match erebrus-gateway/internal/wallet.
 package wallet
 
 import (

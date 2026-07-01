@@ -2,7 +2,7 @@
 // plane: HTTPS registration and the WebSocket client.
 //
 // Message structs are a hand-mirrored copy of erebrus-gateway/docs/ws-protocol.md (FROZEN
-// v2.0) and erebrus-gateway/internal/gw/nodehub/messages.go. Change
+// v2.0) and erebrus-gateway/internal/nodehub/messages.go. Change
 // ws-protocol.md first, then both repos.
 package gatewayclient
 
