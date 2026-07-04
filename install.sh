@@ -492,6 +492,13 @@ ensure_mnemonic() {
 write_env_file() {
   local f="$1"
   run mkdir -p "$(dirname "$f")"
+  # Shield profile: generate a strong AdGuard admin password once. The node
+  # configures AdGuard with it on startup and reports it to the gateway, where
+  # org paid seats can view/rotate it.
+  if [[ "${PROFILE:-erebrus}" == "shield" ]]; then
+    SHIELD_ADMIN_USER="${SHIELD_ADMIN_USER:-admin}"
+    SHIELD_ADMIN_PASSWORD="${SHIELD_ADMIN_PASSWORD:-$(rand_token)}"
+  fi
   run tee "$f" >/dev/null <<EOF
 # Erebrus v2 node — generated $(date '+%F %T')
 # See .env.example in the repo for field documentation.
@@ -556,10 +563,12 @@ default_iface() { ip route show default 2>/dev/null | awk '/default/{print $5; e
 profile_env_block() {
   case "${PROFILE:-erebrus}" in
     shield)
-      cat <<'PEOF'
+      cat <<PEOF
 FIREWALL_PROVIDER=adguard_home
 FIREWALL_DNS_ADDR=adguardhome:53
 SHIELD_ADMIN_URL=http://adguardhome:3000
+SHIELD_ADMIN_USER=${SHIELD_ADMIN_USER:-admin}
+SHIELD_ADMIN_PASSWORD=${SHIELD_ADMIN_PASSWORD}
 WG_DNS=10.0.0.1
 PEOF
       ;;

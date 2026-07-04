@@ -267,6 +267,25 @@ func (g *GatewayBridge) HandleCommand(ctx context.Context, cmd gatewayclient.Com
 			res.OK = false
 			res.Error = err.Error()
 		}
+	case gatewayclient.ActionSetFirewallCredentials:
+		if g.fw == nil {
+			res.OK = false
+			res.Error = "firewall not configured"
+			return res
+		}
+		var args struct {
+			AdminUser     string `json:"admin_user"`
+			AdminPassword string `json:"admin_password"`
+		}
+		if err := json.Unmarshal(cmd.Args, &args); err != nil || args.AdminPassword == "" {
+			res.OK = false
+			res.Error = "invalid args"
+			return res
+		}
+		if err := g.fw.SetAdminPassword(ctx, args.AdminUser, args.AdminPassword); err != nil {
+			res.OK = false
+			res.Error = err.Error()
+		}
 	default:
 		res.OK = false
 		res.Error = "unknown action"

@@ -126,6 +126,63 @@ func (c *Client) Restart(ctx context.Context) error {
 	}
 }
 
+func (c *Client) adminUser() string {
+	if c.cfg.ShieldAdminUser != "" {
+		return c.cfg.ShieldAdminUser
+	}
+	return "admin"
+}
+
+// AdminCredentials returns the configured Shield (AdGuard) admin login.
+func (c *Client) AdminCredentials() (user, password, url string) {
+	return c.adminUser(), c.cfg.ShieldAdminPassword, strings.TrimRight(c.cfg.ShieldAdminURL, "/")
+}
+
+// installConfigure body for AdGuard's initial-setup API.
+func (c *Client) configureBody(user, password string) []byte {
+	body, _ := json.Marshal(map[string]any{
+		"web":      map[string]any{"ip": "0.0.0.0", "port": 3000},
+		"dns":      map[string]any{"ip": "0.0.0.0", "port": 53},
+		"username": user,
+		"password": password,
+	})
+	return body
+}
+
+// ConfigureAdmin sets the AdGuard admin credentials on a freshly-installed Shield
+// node via the install API. No-op for non-Shield or when no password is set.
+// Best-effort: an already-configured AdGuard rejects it, which is ignored.
+func (c *Client) ConfigureAdmin(ctx context.Context) error {
+	if c.cfg.FirewallProvider != config.FirewallAdGuardHome || c.cfg.ShieldAdminPassword == "" {
+		return nil
+	}
+	base := strings.TrimRight(c.cfg.ShieldAdminURL, "/")
+	if base == "" {
+		return nil
+	}
+	_ = c.post(ctx, base+"/control/install/configure", c.configureBody(c.adminUser(), c.cfg.ShieldAdminPassword))
+	return nil
+}
+
+// SetAdminPassword applies a new admin password to AdGuard. AdGuard has no stable
+// password-change API on a configured instance, so this attempts the install API;
+// the gateway stays the source of truth for the stored value.
+func (c *Client) SetAdminPassword(ctx context.Context, user, password string) error {
+	if c.cfg.FirewallProvider != config.FirewallAdGuardHome || password == "" {
+		return nil
+	}
+	base := strings.TrimRight(c.cfg.ShieldAdminURL, "/")
+	if base == "" {
+		return nil
+	}
+	if user == "" {
+		user = c.adminUser()
+	}
+	c.cfg.ShieldAdminUser = user
+	c.cfg.ShieldAdminPassword = password
+	return c.post(ctx, base+"/control/install/configure", c.configureBody(user, password))
+}
+
 // ResetCredentials clears Shield admin credentials reference (AdGuard re-setup).
 func (c *Client) ResetCredentials(ctx context.Context) error {
 	if c.cfg.FirewallProvider != config.FirewallAdGuardHome {

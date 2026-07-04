@@ -230,6 +230,21 @@ func Run(cfg *config.Config) error {
 			bridge := node.NewGatewayBridge(svc, peerID, did, nodeID, speedtestCache, agent, fwClient)
 			gwClient = gatewayclient.New(cfg.GatewayURL, nodeID, nodeToken, bridge, bridge, bridge.Status)
 			go gwClient.Run(ctx)
+
+			// Shield: configure AdGuard's admin login and report it to the gateway
+			// (revealed to org paid seats). Best-effort — never blocks startup.
+			if cfg.FirewallProvider == config.FirewallAdGuardHome && cfg.ShieldAdminPassword != "" {
+				reportNodeID, reportToken := peerID, nodeToken
+				go func() {
+					if err := fwClient.ConfigureAdmin(ctx); err != nil {
+						slog.Warn("adguard admin configure failed", "err", err)
+					}
+					user, pass, url := fwClient.AdminCredentials()
+					if err := gatewayclient.PostFirewallCredentials(ctx, cfg.GatewayURL, reportNodeID, reportToken, user, pass, url); err != nil {
+						slog.Warn("report firewall credentials failed", "err", err)
+					}
+				}()
+			}
 		} else {
 			slog.Warn("gateway URL set but node credentials missing — WS control plane disabled")
 		}

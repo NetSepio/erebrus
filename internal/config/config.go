@@ -97,6 +97,8 @@ type Config struct {
 	FirewallProvider string
 	FirewallDNSAddr  string
 	ShieldAdminURL   string
+	ShieldAdminUser     string
+	ShieldAdminPassword string
 	SentinelAPIURL   string
 	SentinelImage    string
 
@@ -170,6 +172,8 @@ func Load() *Config {
 		FirewallProvider:       env("FIREWALL_PROVIDER", ""),
 		FirewallDNSAddr:        os.Getenv("FIREWALL_DNS_ADDR"),
 		ShieldAdminURL:         os.Getenv("SHIELD_ADMIN_URL"),
+		ShieldAdminUser:        env("SHIELD_ADMIN_USER", "admin"),
+		ShieldAdminPassword:    os.Getenv("SHIELD_ADMIN_PASSWORD"),
 		SentinelAPIURL:         os.Getenv("SENTINEL_API_URL"),
 		SentinelImage:          env("SENTINEL_IMAGE", "ghcr.io/netsepio/erebrus-sentinel:latest"),
 	}
