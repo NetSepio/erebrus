@@ -46,11 +46,12 @@ type Client struct {
 	cmds   CommandHandler
 	status func() string
 
-	mu           sync.Mutex
-	heartbeatSec int
-	lastUsage    map[string]peerCounters
-	onReconnect  func()
-	connected    atomic.Bool
+	mu            sync.Mutex
+	heartbeatSec  int
+	lastUsage     map[string]peerCounters
+	onReconnect   func()
+	refreshToken  func(context.Context) (string, error)
+	connected     atomic.Bool
 }
 
 type peerCounters struct {
@@ -83,6 +84,12 @@ func (c *Client) SetLogger(log *slog.Logger) {
 // SetOnReconnect is called after each successful reconnect (e.g. to re-send hello).
 func (c *Client) SetOnReconnect(fn func()) { c.onReconnect = fn }
 
+// SetTokenRefresher is called when the WS dial fails with an auth error so the
+// client can obtain a fresh control-plane PASETO before retrying.
+func (c *Client) SetTokenRefresher(fn func(context.Context) (string, error)) {
+	c.refreshToken = fn
+}
+
 // Connected reports whether the gateway WebSocket session is active.
 func (c *Client) Connected() bool { return c.connected.Load() }
 
@@ -96,6 +103,18 @@ func (c *Client) Run(ctx context.Context) {
 		err := c.session(ctx)
 		if ctx.Err() != nil {
 			return
+		}
+		if err != nil && c.refreshToken != nil && isAuthDialError(err) {
+			if tok, rerr := c.refreshToken(ctx); rerr == nil && tok != "" {
+				c.mu.Lock()
+				c.nodeToken = tok
+				c.mu.Unlock()
+				c.log.Info("gateway node token refreshed")
+				backoff = time.Second
+				continue
+			} else if rerr != nil {
+				c.log.Warn("gateway token refresh failed", "err", rerr)
+			}
 		}
 		c.log.Warn("gateway disconnected", "err", err)
 		jitter := time.Duration(rand.Int63n(int64(backoff / 5)))
@@ -111,13 +130,27 @@ func (c *Client) Run(ctx context.Context) {
 	}
 }
 
+func isAuthDialError(err error) bool {
+	if err == nil {
+		return false
+	}
+	msg := strings.ToLower(err.Error())
+	return strings.Contains(msg, "bad handshake") ||
+		strings.Contains(msg, "401") ||
+		strings.Contains(msg, "unauthorized")
+}
+
 func (c *Client) session(ctx context.Context) error {
 	wsURL := strings.Replace(c.gatewayURL, "https://", "wss://", 1)
 	wsURL = strings.Replace(wsURL, "http://", "ws://", 1)
 	wsURL += "/api/v2/nodes/ws"
 
+	c.mu.Lock()
+	nodeToken := c.nodeToken
+	c.mu.Unlock()
+
 	header := http.Header{}
-	header.Set("Authorization", "Bearer "+c.nodeToken)
+	header.Set("Authorization", "Bearer "+nodeToken)
 	dialer := websocket.Dialer{HandshakeTimeout: 10 * time.Second}
 	ws, _, err := dialer.DialContext(ctx, wsURL, header)
 	if err != nil {

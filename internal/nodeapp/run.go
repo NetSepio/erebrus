@@ -229,6 +229,23 @@ func Run(cfg *config.Config) error {
 			speedtestCache.Start(ctx)
 			bridge := node.NewGatewayBridge(svc, peerID, did, nodeID, speedtestCache, agent, fwClient)
 			gwClient = gatewayclient.New(cfg.GatewayURL, nodeID, nodeToken, bridge, bridge, bridge.Status)
+			refreshKey := cfg.EffectiveNodeKey()
+			gwClient.SetTokenRefresher(func(ctx context.Context) (string, error) {
+				if refreshKey == "" {
+					return "", fmt.Errorf("node_key not configured")
+				}
+				tok, err := gatewayclient.RefreshNodeToken(ctx, cfg.GatewayURL, nodeID, refreshKey)
+				if err != nil {
+					return "", err
+				}
+				cfg.NodeToken = tok
+				if err := gatewayclient.SaveCredentials(ctx, st, &gatewayclient.Credentials{
+					NodeID: nodeID, NodeToken: tok, NodeKey: refreshKey, GatewayPublicKey: cfg.GatewayPublicKey,
+				}); err != nil {
+					slog.Warn("persist refreshed gateway token failed", "err", err)
+				}
+				return tok, nil
+			})
 			go gwClient.Run(ctx)
 
 			// Shield: configure AdGuard's admin login and report it to the gateway

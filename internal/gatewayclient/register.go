@@ -221,6 +221,43 @@ func Register(ctx context.Context, in RegistrationInput) (*RegistrationResult, e
 	}, nil
 }
 
+// RefreshNodeToken exchanges the long-lived node_key for a fresh control-plane PASETO.
+func RefreshNodeToken(ctx context.Context, gatewayURL, peerID, nodeKey string) (string, error) {
+	base := strings.TrimRight(strings.TrimSpace(gatewayURL), "/")
+	peerID = strings.TrimSpace(peerID)
+	nodeKey = strings.TrimSpace(nodeKey)
+	if base == "" || peerID == "" || nodeKey == "" {
+		return "", fmt.Errorf("gateway URL, peer_id and node_key are required")
+	}
+	body, _ := json.Marshal(map[string]string{"peer_id": peerID})
+	req, err := http.NewRequestWithContext(ctx, http.MethodPost, base+"/api/v2/nodes/token/refresh", bytes.NewReader(body))
+	if err != nil {
+		return "", err
+	}
+	req.Header.Set("Content-Type", "application/json")
+	req.Header.Set("Authorization", "Bearer "+nodeKey)
+	client := &http.Client{Timeout: 15 * time.Second}
+	resp, err := client.Do(req)
+	if err != nil {
+		return "", err
+	}
+	defer resp.Body.Close()
+	raw, _ := io.ReadAll(io.LimitReader(resp.Body, 1<<20))
+	if resp.StatusCode != http.StatusOK {
+		return "", fmt.Errorf("token refresh: %d: %s", resp.StatusCode, truncate(raw))
+	}
+	var out struct {
+		NodeToken string `json:"node_token"`
+	}
+	if err := json.Unmarshal(raw, &out); err != nil {
+		return "", fmt.Errorf("parse refresh response: %w", err)
+	}
+	if out.NodeToken == "" {
+		return "", fmt.Errorf("gateway returned empty node_token")
+	}
+	return out.NodeToken, nil
+}
+
 func postJSON(ctx context.Context, client *http.Client, url string, body []byte) (json.RawMessage, int, error) {
 	req, err := http.NewRequestWithContext(ctx, http.MethodPost, url, bytes.NewReader(body))
 	if err != nil {
