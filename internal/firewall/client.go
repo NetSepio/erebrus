@@ -15,6 +15,9 @@ import (
 	"github.com/NetSepio/erebrus/internal/sentinel/policy"
 )
 
+// defaultShieldUpstreams are fast UDP resolvers for AdGuard on Shield nodes.
+var defaultShieldUpstreams = []string{"1.1.1.1", "1.0.0.1"}
+
 // SyncPayload mirrors gateway store.FirewallSyncPayload.
 type SyncPayload struct {
 	OrgID       string       `json:"org_id"`
@@ -107,7 +110,7 @@ func (c *Client) syncShield(ctx context.Context, _ SyncPayload) error {
 	if base == "" {
 		return nil
 	}
-	return c.post(ctx, base+"/control/cache_clear", []byte(`{}`))
+	return c.postAuth(ctx, base+"/control/cache_clear", []byte(`{}`))
 }
 
 // Restart reloads the local firewall sidecar.
@@ -150,8 +153,9 @@ func (c *Client) configureBody(user, password string) []byte {
 }
 
 // ConfigureAdmin sets the AdGuard admin credentials on a freshly-installed Shield
-// node via the install API. No-op for non-Shield or when no password is set.
-// Best-effort: an already-configured AdGuard rejects it, which is ignored.
+// node via the install API, then swaps AdGuard's stock upstream for fast UDP
+// resolvers. No-op for non-Shield or when no password is set. Best-effort: an
+// already-configured AdGuard rejects the install call, which is ignored.
 func (c *Client) ConfigureAdmin(ctx context.Context) error {
 	if c.cfg.FirewallProvider != config.FirewallAdGuardHome || c.cfg.ShieldAdminPassword == "" {
 		return nil
@@ -161,7 +165,68 @@ func (c *Client) ConfigureAdmin(ctx context.Context) error {
 		return nil
 	}
 	_ = c.post(ctx, base+"/control/install/configure", c.configureBody(c.adminUser(), c.cfg.ShieldAdminPassword))
-	return nil
+	return c.ensureShieldUpstreams(ctx)
+}
+
+func (c *Client) shieldUpstreams() []string {
+	raw := strings.TrimSpace(c.cfg.ShieldUpstreamDNS)
+	if raw == "" {
+		return append([]string(nil), defaultShieldUpstreams...)
+	}
+	var out []string
+	for _, part := range strings.Split(raw, ",") {
+		if u := strings.TrimSpace(part); u != "" {
+			out = append(out, u)
+		}
+	}
+	if len(out) == 0 {
+		return append([]string(nil), defaultShieldUpstreams...)
+	}
+	return out
+}
+
+// ensureShieldUpstreams replaces AdGuard's stock upstream (Quad9 DoH) with fast
+// UDP resolvers. DoH cache misses on long CNAME chains resolve slower than VPN
+// clients wait for tunnel DNS, so the stock default degrades every peer on the
+// node. Upstreams an operator changed by hand are left untouched.
+func (c *Client) ensureShieldUpstreams(ctx context.Context) error {
+	base := strings.TrimRight(c.cfg.ShieldAdminURL, "/")
+	if base == "" {
+		return nil
+	}
+	raw, err := c.getAuth(ctx, base+"/control/dns_info")
+	if err != nil {
+		return err
+	}
+	var dnsCfg map[string]any
+	if err := json.Unmarshal(raw, &dnsCfg); err != nil {
+		return fmt.Errorf("parse adguard dns_info: %w", err)
+	}
+	if !isStockUpstreams(dnsCfg["upstream_dns"]) {
+		return nil
+	}
+	dnsCfg["upstream_dns"] = c.shieldUpstreams()
+	body, err := json.Marshal(dnsCfg)
+	if err != nil {
+		return err
+	}
+	return c.postAuth(ctx, base+"/control/dns_config", body)
+}
+
+// isStockUpstreams reports whether AdGuard still runs its shipped default
+// upstream (Quad9 DoH) — i.e. nobody has picked resolvers for this node yet.
+func isStockUpstreams(v any) bool {
+	list, ok := v.([]any)
+	if !ok || len(list) == 0 {
+		return true
+	}
+	for _, item := range list {
+		s, _ := item.(string)
+		if !strings.Contains(s, "dns10.quad9.net") {
+			return false
+		}
+	}
+	return true
 }
 
 // SetAdminPassword applies a new admin password to AdGuard. AdGuard has no stable
@@ -223,6 +288,57 @@ func (c *Client) CheckLicense(ctx context.Context) (bool, error) {
 	_ = json.Unmarshal(raw, &out)
 	c.SetLicensed(out.Licensed)
 	return out.Licensed, nil
+}
+
+func (c *Client) getAuth(ctx context.Context, url string) ([]byte, error) {
+	url = strings.TrimSpace(url)
+	if url == "" {
+		return nil, fmt.Errorf("empty URL")
+	}
+	req, err := http.NewRequestWithContext(ctx, http.MethodGet, url, nil)
+	if err != nil {
+		return nil, err
+	}
+	req.SetBasicAuth(c.adminUser(), c.cfg.ShieldAdminPassword)
+	resp, err := c.http.Do(req)
+	if err != nil {
+		return nil, err
+	}
+	defer resp.Body.Close()
+	raw, _ := io.ReadAll(io.LimitReader(resp.Body, 1<<20))
+	if resp.StatusCode/100 != 2 {
+		return nil, fmt.Errorf("%s: %d %s", url, resp.StatusCode, strings.TrimSpace(string(raw)))
+	}
+	return raw, nil
+}
+
+func (c *Client) postAuth(ctx context.Context, url string, body []byte) error {
+	url = strings.TrimSpace(url)
+	if url == "" {
+		return fmt.Errorf("empty URL")
+	}
+	var r io.Reader
+	if len(body) > 0 {
+		r = bytes.NewReader(body)
+	}
+	req, err := http.NewRequestWithContext(ctx, http.MethodPost, url, r)
+	if err != nil {
+		return err
+	}
+	if body != nil {
+		req.Header.Set("Content-Type", "application/json")
+	}
+	req.SetBasicAuth(c.adminUser(), c.cfg.ShieldAdminPassword)
+	resp, err := c.http.Do(req)
+	if err != nil {
+		return err
+	}
+	defer resp.Body.Close()
+	if resp.StatusCode/100 != 2 {
+		b, _ := io.ReadAll(io.LimitReader(resp.Body, 512))
+		return fmt.Errorf("%s: %d %s", url, resp.StatusCode, strings.TrimSpace(string(b)))
+	}
+	return nil
 }
 
 func (c *Client) post(ctx context.Context, url string, body []byte) error {

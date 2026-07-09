@@ -99,6 +99,10 @@ type Config struct {
 	ShieldAdminURL   string
 	ShieldAdminUser     string
 	ShieldAdminPassword string
+	// ShieldUpstreamDNS is a comma-separated list of AdGuard upstream resolvers
+	// (UDP). Defaults to fast public DNS — avoid DoH here; VPN clients time out on
+	// slow cache-miss chains through the tunnel DNS forwarder.
+	ShieldUpstreamDNS string
 	SentinelAPIURL   string
 	SentinelImage    string
 
@@ -174,6 +178,7 @@ func Load() *Config {
 		ShieldAdminURL:         os.Getenv("SHIELD_ADMIN_URL"),
 		ShieldAdminUser:        env("SHIELD_ADMIN_USER", "admin"),
 		ShieldAdminPassword:    os.Getenv("SHIELD_ADMIN_PASSWORD"),
+		ShieldUpstreamDNS:      env("SHIELD_UPSTREAM_DNS", "1.1.1.1,1.0.0.1"),
 		SentinelAPIURL:         os.Getenv("SENTINEL_API_URL"),
 		SentinelImage:          env("SENTINEL_IMAGE", "ghcr.io/netsepio/erebrus-sentinel:latest"),
 	}

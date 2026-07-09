@@ -47,7 +47,7 @@ func (f *Forwarder) handle(w dns.ResponseWriter, r *dns.Msg) {
 	if !strings.Contains(up, ":") {
 		up = net.JoinHostPort(up, "53")
 	}
-	c := &dns.Client{Timeout: 2 * time.Second}
+	c := &dns.Client{Timeout: 5 * time.Second}
 	msg, _, err := c.Exchange(r, up)
 	if err != nil {
 		m := new(dns.Msg)
