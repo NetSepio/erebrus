@@ -113,7 +113,7 @@ Usage: install.sh [options]
   --mode container|host     Deploy mode (container = Docker; host = bare metal)
   --deploy container|host   Alias for --mode
   --access private|public          Gateway visibility (default: public)
-  --profile standard|shield|sentinel  Deployment profile (default: standard; erebrus accepted)
+  --profile standard|shield|sentinel  Deployment profile (default: standard)
   --container | --docker    Shorthand for --mode container
   --host                    Shorthand for --mode host
   -y, --yes                 Non-interactive; accept defaults (pair with env vars)
@@ -371,7 +371,7 @@ choose_access() {
 choose_profile() {
   if [[ -n "$PROFILE" ]]; then
     case "$PROFILE" in
-      standard|erebrus|shield|sentinel) ok "Profile: $PROFILE"; return ;;
+      standard|shield|sentinel) ok "Profile: $PROFILE"; return ;;
       *) die "invalid profile: $PROFILE (use standard, shield, or sentinel)" ;;
     esac
   fi
@@ -382,7 +382,7 @@ choose_profile() {
   echo "  3) Erebrus Sentinel — node + Unbound licensed firewall"
   local c; ask c "Selection [1/2/3]" "1"
   case "$c" in
-    1|erebrus|standard) PROFILE="standard" ;;
+    1|standard) PROFILE="standard" ;;
     2|shield)  PROFILE="shield" ;;
     3|sentinel) PROFILE="sentinel" ;;
     *) die "invalid selection: $c" ;;
@@ -580,7 +580,7 @@ PEOF
 install_compose_file() {
   local dest="$1"
   local name="${PROFILE:-standard}"
-  case "$name" in erebrus|standard) name="erebrus" ;; esac
+  case "$name" in standard) name="erebrus" ;; esac
   local src=""
   if [[ -f "$INSTALL_DIR/deploy/compose/${name}.yml" ]]; then
     src="$INSTALL_DIR/deploy/compose/${name}.yml"
@@ -823,7 +823,7 @@ main() {
   choose_deploy
   choose_access
   choose_profile
-  if [[ "$DEPLOY" == "host" && "${PROFILE:-standard}" != "standard" && "${PROFILE:-standard}" != "erebrus" ]]; then
+  if [[ "$DEPLOY" == "host" && "${PROFILE:-standard}" != "standard" ]]; then
     die "shield/sentinel profiles require container deploy (--mode container)"
   fi
   run_preflight

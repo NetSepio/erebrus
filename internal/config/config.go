@@ -92,7 +92,7 @@ type Config struct {
 	UpstreamDNS       string
 	DNSQueryLogs      bool
 
-	// deployment profile (erebrus | shield | sentinel)
+	// deployment profile (standard | shield | sentinel)
 	ErebrusProfile  string
 	FirewallProvider string
 	FirewallDNSAddr  string

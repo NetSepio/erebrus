@@ -60,14 +60,14 @@ too. Gateway-side filtering/display is a separate follow-up.
 
 | Profile | Compose | Extra services |
 |---------|---------|----------------|
-| `erebrus` (default) | `deploy/compose/erebrus.yml` | VPN node only |
+| `standard` (default) | `deploy/compose/erebrus.yml` | VPN node only |
 | `shield` | `deploy/compose/shield.yml` | AdGuard Home DNS |
 | `sentinel` | `deploy/compose/sentinel.yml` | erebrus-sentinel (Unbound API) |
 
 Installer: `./install.sh --profile shield` (or interactive prompt). Sets
 `EREBRUS_PROFILE`, `FIREWALL_PROVIDER`, `FIREWALL_DNS_ADDR`, and `WG_DNS` for
 tunnel DNS routing. **Shield and Sentinel require container deploy** (`--mode container`);
-host/systemd install supports `erebrus` profile only.
+host/systemd install supports `standard` profile only.
 
 Registration sends `deployment_profile` to the gateway; firewall rules sync via
 WS `sync_firewall` when an operator calls `POST .../firewall/sync` on the gateway.

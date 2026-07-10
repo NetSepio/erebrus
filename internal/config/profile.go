@@ -13,18 +13,6 @@ const (
 	ProfileSentinel = "sentinel"
 )
 
-// normalizeProfile maps legacy and empty values to the canonical profile name.
-func normalizeProfile(profile string) string {
-	switch strings.ToLower(strings.TrimSpace(profile)) {
-	case ProfileShield, ProfileSentinel:
-		return strings.ToLower(strings.TrimSpace(profile))
-	case ProfileStandard, "erebrus":
-		return ProfileStandard
-	default:
-		return ProfileStandard
-	}
-}
-
 // Firewall providers for attached services.
 const (
 	FirewallNone           = "none"
@@ -40,11 +28,15 @@ func (c *Config) HasFirewallService() bool {
 
 // ApplyProfileDefaults fills profile-specific env defaults after Load().
 func (c *Config) ApplyProfileDefaults() {
-	c.ErebrusProfile = normalizeProfile(c.ErebrusProfile)
+	profile := strings.ToLower(strings.TrimSpace(c.ErebrusProfile))
+	if profile == "" {
+		profile = ProfileStandard
+	}
+	c.ErebrusProfile = profile
 
 	tunnelDNS := tunnelGatewayIP(c.WGIPv4Subnet, c.PrivateDNSAddr)
 
-	switch c.ErebrusProfile {
+	switch profile {
 	case ProfileShield:
 		if c.FirewallProvider == "" {
 			c.FirewallProvider = FirewallAdGuardHome
@@ -80,8 +72,7 @@ func (c *Config) ApplyProfileDefaults() {
 		if c.PrivateDNSAddr == "" {
 			c.PrivateDNSAddr = tunnelDNS
 		}
-	default:
-		c.ErebrusProfile = ProfileStandard
+	case ProfileStandard:
 		if c.FirewallProvider == "" {
 			c.FirewallProvider = FirewallNone
 		}
@@ -101,7 +92,7 @@ func tunnelGatewayIP(subnet, override string) string {
 
 // ValidateProfile returns an error for unknown profile or provider values.
 func (c *Config) ValidateProfile() error {
-	switch normalizeProfile(c.ErebrusProfile) {
+	switch c.ErebrusProfile {
 	case ProfileStandard, ProfileShield, ProfileSentinel:
 	default:
 		return fmt.Errorf("invalid EREBRUS_PROFILE %q (expected standard, shield, or sentinel)", c.ErebrusProfile)

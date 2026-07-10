@@ -16,11 +16,11 @@ func TestApplyProfileDefaultsShield(t *testing.T) {
 	}
 }
 
-func TestNormalizeProfileLegacyErebrus(t *testing.T) {
-	c := &Config{ErebrusProfile: "erebrus"}
+func TestValidateProfileRejectsUnknown(t *testing.T) {
+	c := &Config{ErebrusProfile: "erebrus", FirewallProvider: FirewallNone}
 	c.ApplyProfileDefaults()
-	if c.ErebrusProfile != ProfileStandard {
-		t.Fatalf("profile = %q, want %q", c.ErebrusProfile, ProfileStandard)
+	if err := c.ValidateProfile(); err == nil {
+		t.Fatal("expected validation error for unknown profile")
 	}
 }
 
