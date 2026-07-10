@@ -113,7 +113,7 @@ Usage: install.sh [options]
   --mode container|host     Deploy mode (container = Docker; host = bare metal)
   --deploy container|host   Alias for --mode
   --access private|public          Gateway visibility (default: public)
-  --profile erebrus|shield|sentinel  Deployment profile (default: erebrus)
+  --profile standard|shield|sentinel  Deployment profile (default: standard; erebrus accepted)
   --container | --docker    Shorthand for --mode container
   --host                    Shorthand for --mode host
   -y, --yes                 Non-interactive; accept defaults (pair with env vars)
@@ -371,8 +371,8 @@ choose_access() {
 choose_profile() {
   if [[ -n "$PROFILE" ]]; then
     case "$PROFILE" in
-      erebrus|shield|sentinel) ok "Profile: $PROFILE"; return ;;
-      *) die "invalid profile: $PROFILE (use erebrus, shield, or sentinel)" ;;
+      standard|erebrus|shield|sentinel) ok "Profile: $PROFILE"; return ;;
+      *) die "invalid profile: $PROFILE (use standard, shield, or sentinel)" ;;
     esac
   fi
   echo
@@ -382,7 +382,7 @@ choose_profile() {
   echo "  3) Erebrus Sentinel — node + Unbound licensed firewall"
   local c; ask c "Selection [1/2/3]" "1"
   case "$c" in
-    1|erebrus) PROFILE="erebrus" ;;
+    1|erebrus|standard) PROFILE="standard" ;;
     2|shield)  PROFILE="shield" ;;
     3|sentinel) PROFILE="sentinel" ;;
     *) die "invalid selection: $c" ;;
@@ -495,7 +495,7 @@ write_env_file() {
   # Shield profile: generate a strong AdGuard admin password once. The node
   # configures AdGuard with it on startup and reports it to the gateway, where
   # org paid seats can view/rotate it.
-  if [[ "${PROFILE:-erebrus}" == "shield" ]]; then
+  if [[ "${PROFILE:-standard}" == "shield" ]]; then
     SHIELD_ADMIN_USER="${SHIELD_ADMIN_USER:-admin}"
     SHIELD_ADMIN_PASSWORD="${SHIELD_ADMIN_PASSWORD:-$(rand_token)}"
   fi
@@ -504,7 +504,7 @@ write_env_file() {
 # See .env.example in the repo for field documentation.
 RUNTYPE=release
 EREBRUS_IMAGE=${EREBRUS_IMAGE}
-EREBRUS_PROFILE=${PROFILE:-erebrus}
+EREBRUS_PROFILE=${PROFILE:-standard}
 EREBRUS_ACCESS=${EREBRUS_ACCESS:-private}
 EREBRUS_MODE=${EREBRUS_MODE:-container}
 EREBRUS_NETWORK_PROFILE=${EREBRUS_NETWORK_PROFILE:-bridge}
@@ -561,7 +561,7 @@ EOF
 default_iface() { ip route show default 2>/dev/null | awk '/default/{print $5; exit}' || echo eth0; }
 
 profile_env_block() {
-  case "${PROFILE:-erebrus}" in
+  case "${PROFILE:-standard}" in
     shield)
       cat <<PEOF
 FIREWALL_PROVIDER=adguard_home
@@ -589,7 +589,8 @@ PEOF
 
 install_compose_file() {
   local dest="$1"
-  local name="${PROFILE:-erebrus}"
+  local name="${PROFILE:-standard}"
+  case "$name" in erebrus|standard) name="erebrus" ;; esac
   local src=""
   if [[ -f "$INSTALL_DIR/deploy/compose/${name}.yml" ]]; then
     src="$INSTALL_DIR/deploy/compose/${name}.yml"
@@ -800,7 +801,7 @@ validate_and_summary() {
   fi
 
   echo
-  echo -e "${C_BOLD}${C_G}Erebrus node installed (profile=${PROFILE:-erebrus}, deploy=${DEPLOY}, access=${EREBRUS_ACCESS}).${C_RESET}"
+  echo -e "${C_BOLD}${C_G}Erebrus node installed (profile=${PROFILE:-standard}, deploy=${DEPLOY}, access=${EREBRUS_ACCESS}).${C_RESET}"
   echo "  REST API : http://${WG_ENDPOINT_HOST}:${HTTP_PORT}/api/v2/status"
   echo "  WireGuard: ${WG_ENDPOINT_HOST}:${WG_PORT}/udp"
   echo "  Stealth  : VLESS+REALITY :${STEALTH_TCP_PORT}/tcp · Hysteria2 :${STEALTH_UDP_PORT}/udp"

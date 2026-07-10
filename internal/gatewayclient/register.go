@@ -41,7 +41,7 @@ type RegistrationInput struct {
 	APIBaseURL         string
 	NodeKey            string // optional; gateway mints if empty
 	AccessMode         string // public | private
-	DeploymentProfile  string // erebrus | shield | sentinel
+	DeploymentProfile  string // standard | shield | sentinel
 }
 
 // RegistrationResult holds the gateway-issued node credentials.

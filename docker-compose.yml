@@ -18,7 +18,7 @@ services:
       # Docker injects env from --env-file; LOAD_CONFIG_FILE skips godotenv inside the binary.
       LOAD_CONFIG_FILE: "TRUE"
       RUNTYPE: "${RUNTYPE:-release}"
-      EREBRUS_PROFILE: "${EREBRUS_PROFILE:-erebrus}"
+      EREBRUS_PROFILE: "${EREBRUS_PROFILE:-standard}"
       FIREWALL_PROVIDER: "${FIREWALL_PROVIDER:-none}"
       FIREWALL_DNS_ADDR: "${FIREWALL_DNS_ADDR:-}"
       SHIELD_ADMIN_URL: "${SHIELD_ADMIN_URL:-}"

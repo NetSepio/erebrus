@@ -172,7 +172,7 @@ func Load() *Config {
 		PrivateDNSAddr:         os.Getenv("PRIVATE_DNS_ADDR"),
 		UpstreamDNS:            env("UPSTREAM_DNS", "1.1.1.1"),
 		DNSQueryLogs:           boolEnv("DNS_QUERY_LOGS", false),
-		ErebrusProfile:         env("EREBRUS_PROFILE", ProfileErebrus),
+		ErebrusProfile:         env("EREBRUS_PROFILE", ProfileStandard),
 		FirewallProvider:       env("FIREWALL_PROVIDER", ""),
 		FirewallDNSAddr:        os.Getenv("FIREWALL_DNS_ADDR"),
 		ShieldAdminURL:         os.Getenv("SHIELD_ADMIN_URL"),

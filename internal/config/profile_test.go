@@ -16,6 +16,22 @@ func TestApplyProfileDefaultsShield(t *testing.T) {
 	}
 }
 
+func TestNormalizeProfileLegacyErebrus(t *testing.T) {
+	c := &Config{ErebrusProfile: "erebrus"}
+	c.ApplyProfileDefaults()
+	if c.ErebrusProfile != ProfileStandard {
+		t.Fatalf("profile = %q, want %q", c.ErebrusProfile, ProfileStandard)
+	}
+}
+
+func TestApplyProfileDefaultsStandard(t *testing.T) {
+	c := &Config{ErebrusProfile: ProfileStandard}
+	c.ApplyProfileDefaults()
+	if c.FirewallProvider != FirewallNone {
+		t.Fatalf("provider = %q", c.FirewallProvider)
+	}
+}
+
 func TestApplyProfileDefaultsSentinel(t *testing.T) {
 	c := &Config{ErebrusProfile: ProfileSentinel, WGIPv4Subnet: "10.0.0.1/16"}
 	c.ApplyProfileDefaults()

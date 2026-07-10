@@ -15,7 +15,7 @@ services:
       - .env
     environment:
       LOAD_CONFIG_FILE: "TRUE"
-      EREBRUS_PROFILE: erebrus
+      EREBRUS_PROFILE: standard
       FIREWALL_PROVIDER: none
     ports:
       - "${WG_ENDPOINT_PORT:-51820}:${WG_ENDPOINT_PORT:-51820}/udp"

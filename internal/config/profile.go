@@ -8,10 +8,22 @@ import (
 
 // Deployment profiles (product/runtime).
 const (
-	ProfileErebrus  = "erebrus"
+	ProfileStandard = "standard"
 	ProfileShield   = "shield"
 	ProfileSentinel = "sentinel"
 )
+
+// normalizeProfile maps legacy and empty values to the canonical profile name.
+func normalizeProfile(profile string) string {
+	switch strings.ToLower(strings.TrimSpace(profile)) {
+	case ProfileShield, ProfileSentinel:
+		return strings.ToLower(strings.TrimSpace(profile))
+	case ProfileStandard, "erebrus":
+		return ProfileStandard
+	default:
+		return ProfileStandard
+	}
+}
 
 // Firewall providers for attached services.
 const (
@@ -28,15 +40,11 @@ func (c *Config) HasFirewallService() bool {
 
 // ApplyProfileDefaults fills profile-specific env defaults after Load().
 func (c *Config) ApplyProfileDefaults() {
-	profile := strings.ToLower(strings.TrimSpace(c.ErebrusProfile))
-	if profile == "" {
-		profile = ProfileErebrus
-	}
-	c.ErebrusProfile = profile
+	c.ErebrusProfile = normalizeProfile(c.ErebrusProfile)
 
 	tunnelDNS := tunnelGatewayIP(c.WGIPv4Subnet, c.PrivateDNSAddr)
 
-	switch profile {
+	switch c.ErebrusProfile {
 	case ProfileShield:
 		if c.FirewallProvider == "" {
 			c.FirewallProvider = FirewallAdGuardHome
@@ -73,7 +81,7 @@ func (c *Config) ApplyProfileDefaults() {
 			c.PrivateDNSAddr = tunnelDNS
 		}
 	default:
-		c.ErebrusProfile = ProfileErebrus
+		c.ErebrusProfile = ProfileStandard
 		if c.FirewallProvider == "" {
 			c.FirewallProvider = FirewallNone
 		}
@@ -93,10 +101,10 @@ func tunnelGatewayIP(subnet, override string) string {
 
 // ValidateProfile returns an error for unknown profile or provider values.
 func (c *Config) ValidateProfile() error {
-	switch c.ErebrusProfile {
-	case ProfileErebrus, ProfileShield, ProfileSentinel:
+	switch normalizeProfile(c.ErebrusProfile) {
+	case ProfileStandard, ProfileShield, ProfileSentinel:
 	default:
-		return fmt.Errorf("invalid EREBRUS_PROFILE %q (expected erebrus, shield, or sentinel)", c.ErebrusProfile)
+		return fmt.Errorf("invalid EREBRUS_PROFILE %q (expected standard, shield, or sentinel)", c.ErebrusProfile)
 	}
 	switch c.FirewallProvider {
 	case FirewallNone, FirewallAdGuardHome, FirewallUnboundErebrus:
