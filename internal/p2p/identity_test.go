@@ -32,7 +32,7 @@ func TestStableIdentityDerivations(t *testing.T) {
 	if err != nil {
 		t.Fatalf("repeat Kubo identity derivation: %v", err)
 	}
-	if repeated != kubo {
+	if repeated.PeerID != kubo.PeerID || repeated.PrivKey != kubo.PrivKey {
 		t.Fatal("Kubo identity derivation must be deterministic")
 	}
 	if erebrusPeerID == kubo.PeerID {
