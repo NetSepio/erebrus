@@ -56,3 +56,20 @@ func TestServiceRejectsOperationsBeforeIdentityAndHealthAreReady(t *testing.T) {
 		t.Fatalf("identity conflict error = %v", err)
 	}
 }
+
+func TestServiceWritesRequireActiveState(t *testing.T) {
+	cfg := config.Load()
+	cfg.DropEnabled = true
+	service := NewService(cfg, nil)
+	service.identityReady = true
+
+	for _, state := range []string{"starting", "degraded", "full", "unreachable"} {
+		service.setSnapshot(Snapshot{State: state, StorageMaxBytes: 2_000_000_000})
+		_, err := service.Upload(context.Background(), AddRequest{
+			Body: strings.NewReader("x"), DeclaredSize: 1,
+		})
+		if !errors.Is(err, ErrUnavailable) {
+			t.Fatalf("state %q error = %v, want unavailable", state, err)
+		}
+	}
+}

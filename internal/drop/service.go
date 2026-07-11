@@ -95,7 +95,7 @@ func (s *Service) Upload(ctx context.Context, in AddRequest) (AddResult, error) 
 	if !s.cfg.DropEnabled {
 		return AddResult{}, ErrDisabled
 	}
-	if !s.operational() {
+	if !s.writable() {
 		return AddResult{}, ErrUnavailable
 	}
 	if in.DeclaredSize > MaxObjectBytes {
@@ -223,6 +223,12 @@ func (s *Service) operational() bool {
 	default:
 		return false
 	}
+}
+
+func (s *Service) writable() bool {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+	return s.identityReady && s.snapshot.State == "active"
 }
 
 func (s *Service) observeOperation(operation string, err error) {

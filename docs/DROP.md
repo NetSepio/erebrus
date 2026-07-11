@@ -138,6 +138,9 @@ Drop states are:
 
 The Drop readiness check is always optional. `degraded`, `full`, or
 `unreachable` can change Drop behavior but cannot make VPN readiness false.
+New uploads are accepted only while Drop is `active`; reads, pin inspection,
+and cleanup remain available in `degraded` or `full` state when Kubo is still
+reachable.
 
 Gateway-private `GET /api/v2/drop/status` returns Kubo version, repository size,
 storage maximum, object count, and the same state.
