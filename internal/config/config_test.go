@@ -151,6 +151,62 @@ func TestLoadRegistrationTokenAlias(t *testing.T) {
 	}
 }
 
+func TestLoadDropDefaultsAndOverrides(t *testing.T) {
+	t.Setenv("DROP_ENABLED", "")
+	t.Setenv("DROP_STORAGE_MAX", "")
+	t.Setenv("DROP_SWARM_PORT", "")
+	t.Setenv("DROP_WEBUI_ENABLED", "")
+	c := Load()
+	if c.DropEnabled || c.DropStorageMax != "10GB" || c.DropStorageMaxBytes != 10_000_000_000 ||
+		c.DropSwarmPortInt() != 4001 || c.DropWebUIEnabled {
+		t.Fatalf("Drop defaults = %+v", c)
+	}
+
+	t.Setenv("DROP_ENABLED", "true")
+	t.Setenv("DROP_STORAGE_MAX", "5GB")
+	t.Setenv("DROP_SWARM_PORT", "4101")
+	t.Setenv("DROP_WEBUI_ENABLED", "true")
+	t.Setenv("EREBRUS_ACCESS", "private")
+	t.Setenv("EREBRUS_MODE", "container")
+	c = Load()
+	if !c.DropEnabled || c.DropStorageMaxBytes != 5_000_000_000 ||
+		c.DropSwarmPortInt() != 4101 || !c.DropWebUIAvailable() {
+		t.Fatalf("Drop overrides = %+v", c)
+	}
+}
+
+func TestDropValidation(t *testing.T) {
+	t.Setenv("DROP_ENABLED", "true")
+	t.Setenv("DROP_STORAGE_MAX", "invalid")
+	t.Setenv("EREBRUS_ACCESS", "private")
+	t.Setenv("EREBRUS_MODE", "container")
+	c := Load()
+	c.Mnemonic = "test"
+	c.WGEndpointHost = "203.0.113.1"
+	if err := c.Validate(); err == nil || !strings.Contains(err.Error(), "DROP_STORAGE_MAX") {
+		t.Fatalf("expected storage validation error, got %v", err)
+	}
+
+	t.Setenv("DROP_STORAGE_MAX", "10GB")
+	t.Setenv("EREBRUS_MODE", "host")
+	c = Load()
+	c.Mnemonic = "test"
+	c.WGEndpointHost = "203.0.113.1"
+	if err := c.Validate(); err == nil || !strings.Contains(err.Error(), "container deployment") {
+		t.Fatalf("expected host deployment error, got %v", err)
+	}
+
+	t.Setenv("EREBRUS_MODE", "container")
+	t.Setenv("EREBRUS_ACCESS", "public")
+	t.Setenv("DROP_WEBUI_ENABLED", "true")
+	c = Load()
+	c.Mnemonic = "test"
+	c.WGEndpointHost = "203.0.113.1"
+	if err := c.Validate(); err == nil || !strings.Contains(err.Error(), "private or shared") {
+		t.Fatalf("expected public WebUI error, got %v", err)
+	}
+}
+
 func TestLoadAPIBindOverride(t *testing.T) {
 	t.Setenv("API_BIND_ADDR", "127.0.0.1")
 	t.Setenv("SERVER", "0.0.0.0")

@@ -24,6 +24,29 @@ type Claims struct {
 // VerifyGatewayCall parses a gateway PASETO and checks it is a valid short-lived
 // gateway→node call for this node.
 func VerifyGatewayCall(token, gatewayPublicKeyHex, expectNodeID string) (*Claims, error) {
+	c, err := verifyGatewayCall(token, gatewayPublicKeyHex)
+	if err != nil {
+		return nil, err
+	}
+	if expectNodeID != "" && c.NodeID != "" && c.NodeID != expectNodeID {
+		return nil, fmt.Errorf("node_id mismatch")
+	}
+	return c, nil
+}
+
+// VerifyGatewayCallPurpose requires an exact purpose and exact node target.
+func VerifyGatewayCallPurpose(token, gatewayPublicKeyHex, expectNodeID, expectPurpose string) (*Claims, error) {
+	c, err := verifyGatewayCall(token, gatewayPublicKeyHex)
+	if err != nil {
+		return nil, err
+	}
+	if err := validatePurposeClaims(c, expectNodeID, expectPurpose); err != nil {
+		return nil, err
+	}
+	return c, nil
+}
+
+func verifyGatewayCall(token, gatewayPublicKeyHex string) (*Claims, error) {
 	raw, err := hex.DecodeString(strings.TrimPrefix(gatewayPublicKeyHex, "0x"))
 	if err != nil {
 		return nil, fmt.Errorf("decode gateway public key: %w", err)
@@ -41,8 +64,19 @@ func VerifyGatewayCall(token, gatewayPublicKeyHex, expectNodeID string) (*Claims
 	if c.Role != roleGatewayCall {
 		return nil, fmt.Errorf("unexpected role %q", c.Role)
 	}
-	if expectNodeID != "" && c.NodeID != "" && c.NodeID != expectNodeID {
-		return nil, fmt.Errorf("node_id mismatch")
-	}
 	return &c, nil
+}
+
+func validatePurposeClaims(c *Claims, expectNodeID, expectPurpose string) error {
+	nodeID := c.NodeID
+	if nodeID == "" {
+		nodeID = c.PeerID
+	}
+	if expectNodeID == "" || nodeID != expectNodeID {
+		return fmt.Errorf("node_id mismatch")
+	}
+	if expectPurpose == "" || c.Purpose != expectPurpose {
+		return fmt.Errorf("purpose mismatch")
+	}
+	return nil
 }

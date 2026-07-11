@@ -48,6 +48,28 @@ func TestPreboot(t *testing.T) {
 	}
 }
 
+func TestDropFailureDoesNotFailVPNReadiness(t *testing.T) {
+	cfg := config.Load()
+	cfg.Mnemonic = "abandon abandon abandon abandon abandon abandon abandon abandon abandon abandon abandon about"
+	cfg.WGEndpointHost = "203.0.113.1"
+	cfg.NodeAPIToken = "secret"
+	cfg.RunType = "release"
+	cfg.DropEnabled = true
+
+	r := Evaluate(Input{
+		Cfg: cfg, IdentityConfigured: true, WireGuardOK: true,
+		StealthListening: true, DropState: "unreachable",
+	})
+	if !r.OK {
+		t.Fatalf("Drop must be optional for VPN readiness: %+v", r)
+	}
+	for _, check := range r.Checks {
+		if check.ID == "drop" && (!check.Optional || check.OK) {
+			t.Fatalf("unexpected Drop readiness check: %+v", check)
+		}
+	}
+}
+
 func TestAccessModeLabel(t *testing.T) {
 	if AccessModeLabel(config.ModePublic) != "Public" {
 		t.Fatalf("public label = %q", AccessModeLabel(config.ModePublic))

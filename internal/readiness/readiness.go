@@ -33,6 +33,7 @@ type Input struct {
 	StealthListening   bool
 	FirewallOK         bool
 	FirewallDetail     string
+	DropState          string
 }
 
 // Evaluate builds a readiness report from config and runtime signals.
@@ -44,8 +45,8 @@ func Evaluate(in Input) Report {
 
 	checks := []Check{
 		{
-			ID: "identity",
-			OK: in.IdentityConfigured && cfg.Mnemonic != "",
+			ID:     "identity",
+			OK:     in.IdentityConfigured && cfg.Mnemonic != "",
 			Detail: identityDetail(in.IdentityConfigured, cfg.Mnemonic != ""),
 		},
 		{
@@ -62,6 +63,7 @@ func Evaluate(in Input) Report {
 	}
 	checks = append(checks, stealthCheck(cfg, in.StealthListening))
 	checks = append(checks, firewallCheck(cfg, in.FirewallOK, in.FirewallDetail))
+	checks = append(checks, dropCheck(cfg, in.DropState))
 	checks = append(checks, controlPlaneCheck(cfg, in.GatewayRegistered, in.GatewayConnected))
 
 	warnings := append([]string{}, cfg.Mode.Warnings...)
@@ -151,6 +153,19 @@ func firewallCheck(cfg *config.Config, ok bool, detail string) Check {
 	return Check{ID: "firewall", OK: true, Detail: detail}
 }
 
+func dropCheck(cfg *config.Config, state string) Check {
+	if !cfg.DropEnabled {
+		return Check{ID: "drop", OK: true, Optional: true, Detail: "disabled"}
+	}
+	if state == "" {
+		state = "starting"
+	}
+	return Check{
+		ID: "drop", OK: state == "active" || state == "full",
+		Optional: true, Detail: state,
+	}
+}
+
 func controlPlaneCheck(cfg *config.Config, registered, connected bool) Check {
 	if !cfg.GatewayEnabled() {
 		return Check{
@@ -195,6 +210,7 @@ func Preboot(cfg *config.Config) Report {
 	if cfg.EnableStealth {
 		checks = append(checks, Check{ID: "stealth", OK: true, Optional: true, Detail: "checked after node start"})
 	}
+	checks = append(checks, Check{ID: "drop", OK: true, Optional: true, Detail: "checked after node start"})
 	checks = append(checks, Check{ID: "control_plane", OK: true, Optional: true, Detail: "checked after node start"})
 
 	ok := true

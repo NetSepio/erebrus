@@ -34,9 +34,9 @@ type Config struct {
 	Mnemonic string
 
 	// gateway
-	GatewayURL           string
-	GatewayPeerMultiaddr string
-	P2PListenPort        string
+	GatewayURL            string
+	GatewayPeerMultiaddr  string
+	P2PListenPort         string
 	NodeID                string // canonical peer_id; persisted in SQLite when registered
 	NodeToken             string // gateway-issued PASETO for WS control plane
 	WalletChain           string // SOLANA | ETHEREUM (aliases sol/evm accepted) — gateway enrollment
@@ -82,6 +82,13 @@ type Config struct {
 	EnableAppHosting  bool
 	AppWildcardDomain string
 
+	// Drop storage
+	DropEnabled         bool
+	DropStorageMax      string
+	DropStorageMaxBytes int64
+	DropSwarmPort       string
+	DropWebUIEnabled    bool
+
 	// registrar
 	ChainRegistration string // off | solana
 
@@ -93,18 +100,18 @@ type Config struct {
 	DNSQueryLogs      bool
 
 	// deployment profile (standard | shield | sentinel)
-	ErebrusProfile  string
-	FirewallProvider string
-	FirewallDNSAddr  string
-	ShieldAdminURL   string
+	ErebrusProfile      string
+	FirewallProvider    string
+	FirewallDNSAddr     string
+	ShieldAdminURL      string
 	ShieldAdminUser     string
 	ShieldAdminPassword string
 	// ShieldUpstreamDNS is a comma-separated list of AdGuard upstream resolvers
 	// (UDP). Defaults to fast public DNS — avoid DoH here; VPN clients time out on
 	// slow cache-miss chains through the tunnel DNS forwarder.
 	ShieldUpstreamDNS string
-	SentinelAPIURL   string
-	SentinelImage    string
+	SentinelAPIURL    string
+	SentinelImage     string
 
 	// SentinelLicensed is set at runtime after license check (not from env).
 	SentinelLicensed bool
@@ -166,6 +173,10 @@ func Load() *Config {
 		StateDir:               env("STATE_DIR", "/var/lib/erebrus"),
 		EnableAppHosting:       boolEnv("ENABLE_APP_HOSTING", false),
 		AppWildcardDomain:      os.Getenv("APP_WILDCARD_DOMAIN"),
+		DropEnabled:            boolEnv("DROP_ENABLED", false),
+		DropStorageMax:         env("DROP_STORAGE_MAX", "10GB"),
+		DropSwarmPort:          env("DROP_SWARM_PORT", "4001"),
+		DropWebUIEnabled:       boolEnv("DROP_WEBUI_ENABLED", false),
 		ChainRegistration:      env("CHAIN_REGISTRATION", "off"),
 		PrivateDNSEnabled:      boolEnv("PRIVATE_DNS_ENABLED", false),
 		PrivateDNSDomain:       env("PRIVATE_DNS_DOMAIN", "ere"),
@@ -188,6 +199,7 @@ func Load() *Config {
 	}
 	c.VLESSPort = c.StealthTCPPort
 	c.Hysteria2Port = c.StealthUDPPort
+	c.DropStorageMaxBytes, _ = parseByteSize(c.DropStorageMax)
 	// The management peer API shares the HTTP listener. When it is bound to a
 	// non-loopback address it is reachable off-host (token-gated, fail-closed),
 	// so always surface that as a conscious decision — not just under the
@@ -235,6 +247,21 @@ func (c *Config) Validate() error {
 		c.Mode.Warnings = append(c.Mode.Warnings,
 			"WARNING: Public access mode production should expose stealth on 443/tcp and 443/udp (STEALTH_TCP_PORT/STEALTH_UDP_PORT) for best reachability.")
 	}
+	if c.DropEnabled {
+		if c.Mode.Deploy == DeployHost {
+			return fmt.Errorf("Drop requires container deployment in v1")
+		}
+		if c.DropStorageMaxBytes <= 0 {
+			return fmt.Errorf("DROP_STORAGE_MAX must be a positive byte size")
+		}
+		port, err := strconv.Atoi(c.DropSwarmPort)
+		if err != nil || port < 1 || port > 65535 {
+			return fmt.Errorf("DROP_SWARM_PORT must be a valid port")
+		}
+		if c.DropWebUIEnabled && c.Mode.IsPublic() {
+			return fmt.Errorf("DROP_WEBUI_ENABLED is allowed only for private or shared nodes")
+		}
+	}
 	return c.ValidateProfile()
 }
 
@@ -280,6 +307,19 @@ func (c *Config) VLESSPortInt() int { n, _ := strconv.Atoi(c.VLESSPort); return 
 
 // Hysteria2PortInt parses the Hysteria2 listen port.
 func (c *Config) Hysteria2PortInt() int { n, _ := strconv.Atoi(c.Hysteria2Port); return n }
+
+// DropSwarmPortInt parses the Kubo swarm port.
+func (c *Config) DropSwarmPortInt() int { n, _ := strconv.Atoi(c.DropSwarmPort); return n }
+
+// DropAcceptsPublicUploads reports whether the gateway may select this node for public Drop storage.
+func (c *Config) DropAcceptsPublicUploads() bool {
+	return c.DropEnabled && c.Mode.IsPublic()
+}
+
+// DropWebUIAvailable reports whether the private Kubo administration proxy is enabled.
+func (c *Config) DropWebUIAvailable() bool {
+	return c.DropEnabled && c.DropWebUIEnabled && !c.Mode.IsPublic()
+}
 
 // RealitySNI returns the primary SNI the REALITY handshake borrows.
 func (c *Config) RealitySNI() string {
@@ -329,6 +369,39 @@ func boolEnv(key string, def bool) bool {
 		return def
 	}
 	return b
+}
+
+func parseByteSize(value string) (int64, error) {
+	s := strings.ToUpper(strings.TrimSpace(value))
+	if s == "" {
+		return 0, fmt.Errorf("empty byte size")
+	}
+	units := []struct {
+		suffix string
+		scale  int64
+	}{
+		{"TB", 1_000_000_000_000},
+		{"GB", 1_000_000_000},
+		{"MB", 1_000_000},
+		{"KB", 1_000},
+		{"B", 1},
+	}
+	for _, unit := range units {
+		if !strings.HasSuffix(s, unit.suffix) {
+			continue
+		}
+		raw := strings.TrimSpace(strings.TrimSuffix(s, unit.suffix))
+		n, err := strconv.ParseInt(raw, 10, 64)
+		if err != nil || n <= 0 || n > (1<<63-1)/unit.scale {
+			return 0, fmt.Errorf("invalid byte size %q", value)
+		}
+		return n * unit.scale, nil
+	}
+	n, err := strconv.ParseInt(s, 10, 64)
+	if err != nil || n <= 0 {
+		return 0, fmt.Errorf("invalid byte size %q", value)
+	}
+	return n, nil
 }
 
 func splitCSV(s string) []string {
