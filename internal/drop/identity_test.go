@@ -34,6 +34,9 @@ func TestPrepareKuboIdentityFirstRunAndRecovery(t *testing.T) {
 	if info.Mode().Perm() != 0o600 {
 		t.Fatalf("private key mode = %o", info.Mode().Perm())
 	}
+	if _, err := os.Stat(filepath.Join(repo, identityReadyFile)); err != nil {
+		t.Fatalf("identity ready handoff: %v", err)
+	}
 
 	config := map[string]any{"Identity": map[string]string{
 		"PeerID": identity.PeerID, "PrivKey": identity.PrivKey,
@@ -59,6 +62,9 @@ func TestPrepareKuboIdentityRejectsConflict(t *testing.T) {
 	err := PrepareKuboIdentity(repo, "abandon abandon abandon abandon abandon abandon abandon abandon abandon abandon abandon about")
 	if !errors.Is(err, ErrIdentityConflict) {
 		t.Fatalf("error = %v, want identity conflict", err)
+	}
+	if _, err := os.Stat(filepath.Join(repo, identityReadyFile)); err != nil {
+		t.Fatalf("conflict ready handoff: %v", err)
 	}
 	if _, err := os.Stat(filepath.Join(repo, identityPrivateKeyFile)); !errors.Is(err, os.ErrNotExist) {
 		t.Fatalf("conflicting repo must not receive private key handoff, stat err=%v", err)

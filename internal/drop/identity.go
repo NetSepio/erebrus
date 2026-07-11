@@ -15,6 +15,7 @@ const (
 	DefaultKuboRepoPath    = "/var/lib/erebrus-kubo"
 	identityPeerIDFile     = ".erebrus-peer-id"
 	identityPrivateKeyFile = ".erebrus-private-key"
+	identityReadyFile      = ".erebrus-identity-ready"
 	identityConflictMarker = ".erebrus-identity-conflict"
 )
 
@@ -42,7 +43,10 @@ func PrepareKuboIdentity(repoPath, mnemonic string) error {
 	configPath := filepath.Join(repoPath, "config")
 	data, err := os.ReadFile(configPath)
 	if errors.Is(err, os.ErrNotExist) {
-		return atomicWrite(filepath.Join(repoPath, identityPrivateKeyFile), identity.PrivKey+"\n", 0o600)
+		if err := atomicWrite(filepath.Join(repoPath, identityPrivateKeyFile), identity.PrivKey+"\n", 0o600); err != nil {
+			return err
+		}
+		return atomicWrite(filepath.Join(repoPath, identityReadyFile), identity.PeerID+"\n", 0o600)
 	}
 	if err != nil {
 		return fmt.Errorf("read Kubo config: %w", err)
@@ -56,12 +60,15 @@ func PrepareKuboIdentity(repoPath, mnemonic string) error {
 		return fmt.Errorf("parse Kubo config: %w", err)
 	}
 	if config.Identity.PeerID != "" && config.Identity.PeerID != identity.PeerID {
+		if readyErr := atomicWrite(filepath.Join(repoPath, identityReadyFile), identity.PeerID+"\n", 0o600); readyErr != nil {
+			return readyErr
+		}
 		return ErrIdentityConflict
 	}
 	if err := os.Remove(filepath.Join(repoPath, identityPrivateKeyFile)); err != nil && !errors.Is(err, os.ErrNotExist) {
 		return fmt.Errorf("remove stale identity handoff: %w", err)
 	}
-	return nil
+	return atomicWrite(filepath.Join(repoPath, identityReadyFile), identity.PeerID+"\n", 0o600)
 }
 
 func atomicWrite(path, value string, mode os.FileMode) error {

@@ -14,6 +14,8 @@ func TestServiceRejectsOversizeAndFullReservationsBeforeRPC(t *testing.T) {
 	cfg.DropEnabled = true
 	cfg.DropStorageMaxBytes = 2_000_000_000
 	service := NewService(cfg, nil)
+	service.identityReady = true
+	service.setSnapshot(Snapshot{State: "active", StorageMaxBytes: 2_000_000_000})
 
 	_, err := service.Upload(context.Background(), AddRequest{
 		Body: strings.NewReader("x"), DeclaredSize: MaxObjectBytes + 1,
@@ -30,5 +32,27 @@ func TestServiceRejectsOversizeAndFullReservationsBeforeRPC(t *testing.T) {
 	})
 	if !errors.Is(err, ErrStorageFull) {
 		t.Fatalf("capacity error = %v", err)
+	}
+}
+
+func TestServiceRejectsOperationsBeforeIdentityAndHealthAreReady(t *testing.T) {
+	cfg := config.Load()
+	cfg.DropEnabled = true
+	cfg.DropStorageMaxBytes = 2_000_000_000
+	service := NewService(cfg, nil)
+
+	_, err := service.Upload(context.Background(), AddRequest{
+		Body: strings.NewReader("x"), DeclaredSize: 1,
+	})
+	if !errors.Is(err, ErrUnavailable) {
+		t.Fatalf("starting error = %v", err)
+	}
+
+	service.setSnapshot(Snapshot{State: "degraded", StorageMaxBytes: 2_000_000_000})
+	_, err = service.Upload(context.Background(), AddRequest{
+		Body: strings.NewReader("x"), DeclaredSize: 1,
+	})
+	if !errors.Is(err, ErrUnavailable) {
+		t.Fatalf("identity conflict error = %v", err)
 	}
 }

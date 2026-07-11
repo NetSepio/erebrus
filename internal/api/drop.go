@@ -148,6 +148,8 @@ func writeDropError(c *gin.Context, err error) {
 	switch {
 	case errors.Is(err, drop.ErrDisabled):
 		c.JSON(http.StatusServiceUnavailable, gin.H{"error": "Drop disabled"})
+	case errors.Is(err, drop.ErrUnavailable):
+		c.JSON(http.StatusServiceUnavailable, gin.H{"error": "Drop unavailable"})
 	case errors.Is(err, drop.ErrByteLimit):
 		c.JSON(http.StatusRequestEntityTooLarge, gin.H{"error": "stream exceeded byte limit"})
 	case errors.Is(err, drop.ErrStorageFull):

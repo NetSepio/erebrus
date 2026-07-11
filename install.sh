@@ -41,6 +41,10 @@ MIN_UP_MBPS="${MIN_UP_MBPS:-20}"
 DEPLOY="${EREBRUS_DEPLOY:-}"
 ACCESS="${EREBRUS_ACCESS:-}"
 PROFILE="${EREBRUS_PROFILE:-}"
+DROP="${DROP_ENABLED:-}"
+DROP_STORAGE_MAX="${DROP_STORAGE_MAX:-10GB}"
+DROP_SWARM_PORT="${DROP_SWARM_PORT:-4001}"
+DROP_WEBUI_ENABLED="${DROP_WEBUI_ENABLED:-false}"
 ASSUME_YES="${ASSUME_YES:-false}"
 SKIP_CHECKS="${SKIP_CHECKS:-false}"
 
@@ -100,6 +104,8 @@ while [[ $# -gt 0 ]]; do
     --mode|--deploy) DEPLOY="${2:-}"; shift 2 ;;
     --access) ACCESS="${2:-}"; shift 2 ;;
     --profile) PROFILE="${2:-}"; shift 2 ;;
+    --drop) DROP="true"; shift ;;
+    --no-drop) DROP="false"; shift ;;
     --docker|--container) DEPLOY="container"; shift ;;
     --host) DEPLOY="host"; shift ;;
     -y|--yes) ASSUME_YES=true; shift ;;
@@ -114,6 +120,8 @@ Usage: install.sh [options]
   --deploy container|host   Alias for --mode
   --access private|public          Gateway visibility (default: public)
   --profile standard|shield|sentinel  Deployment profile (default: standard)
+  --drop                    Enable the optional Kubo/IPFS Drop sidecar
+  --no-drop                 Disable Drop and preserve existing Kubo data
   --container | --docker    Shorthand for --mode container
   --host                    Shorthand for --mode host
   -y, --yes                 Non-interactive; accept defaults (pair with env vars)
@@ -124,6 +132,7 @@ Usage: install.sh [options]
 Key env overrides: EREBRUS_ACCESS, EREBRUS_DEPLOY, MNEMONIC, WG_ENDPOINT_HOST,
   NODE_NAME, REGION, ZONE (auto for US if unset), EREBRUS_IMAGE, EREBRUS_BUILD_LOCAL,
   GATEWAY_URL, NODE_API_TOKEN, ENABLE_STEALTH,
+  DROP_ENABLED, DROP_STORAGE_MAX, DROP_SWARM_PORT, DROP_WEBUI_ENABLED,
   REALITY_SERVER_NAMES, HYSTERIA2_OBFS_PASSWORD, ENABLE_APP_HOSTING,
   APP_WILDCARD_DOMAIN, INSTALL_DIR, MIN_DOWN_MBPS, MIN_UP_MBPS
 Linux only (x86_64/arm64). Needs a static public IP, bandwidth, and open ports.
@@ -390,6 +399,23 @@ choose_profile() {
   ok "Profile: $PROFILE"
 }
 
+choose_drop() {
+  if [[ -n "$DROP" ]]; then
+    case "$(echo "$DROP" | tr '[:upper:]' '[:lower:]')" in
+      1|true|yes|on) DROP="true" ;;
+      0|false|no|off) DROP="false" ;;
+      *) die "invalid DROP_ENABLED value: $DROP" ;;
+    esac
+  elif $ASSUME_YES || [[ -z "$TTY" ]]; then
+    DROP="false"
+  elif confirm "Enable Erebrus Drop (Kubo/IPFS storage)?" n; then
+    DROP="true"
+  else
+    DROP="false"
+  fi
+  ok "Drop: $([[ "$DROP" == "true" ]] && echo enabled || echo disabled)"
+}
+
 # config values
 NODE_NAME=""; REGION=""; ZONE=""; WG_ENDPOINT_HOST=""; MNEMONIC="${MNEMONIC:-}"
 NODE_API_TOKEN="${NODE_API_TOKEN:-}"; NODE_KEY="${NODE_KEY:-}"
@@ -547,6 +573,12 @@ PUBLIC_DOMAIN=${PUBLIC_DOMAIN}
 WILDCARD_DOMAIN=${WILDCARD_DOMAIN}
 PUBLIC_GATEWAY_ENABLED=${PUBLIC_GATEWAY_ENABLED}
 
+# Optional Drop/Kubo storage
+DROP_ENABLED=${DROP}
+DROP_STORAGE_MAX=${DROP_STORAGE_MAX}
+DROP_SWARM_PORT=${DROP_SWARM_PORT}
+DROP_WEBUI_ENABLED=${DROP_WEBUI_ENABLED}
+
 # Profile / firewall wiring
 $(profile_env_block)
 
@@ -605,6 +637,29 @@ install_compose_file() {
   run cp "$src" "$dest"
 }
 
+install_drop_files() {
+  local compose_src="" init_src=""
+  if [[ -f "$INSTALL_DIR/deploy/compose/drop.yml" ]]; then
+    compose_src="$INSTALL_DIR/deploy/compose/drop.yml"
+    init_src="$INSTALL_DIR/deploy/compose/kubo-init.sh"
+  elif [[ -f "$INSTALL_DIR/src/deploy/compose/drop.yml" ]]; then
+    compose_src="$INSTALL_DIR/src/deploy/compose/drop.yml"
+    init_src="$INSTALL_DIR/src/deploy/compose/kubo-init.sh"
+  fi
+  if [[ -n "$compose_src" && -f "$init_src" ]]; then
+    run cp "$compose_src" "$INSTALL_DIR/drop.yml"
+    run cp "$init_src" "$INSTALL_DIR/kubo-init.sh"
+    run chmod 755 "$INSTALL_DIR/kubo-init.sh"
+    return
+  fi
+  info "Fetching Drop Compose support…"
+  curl -fsSL "https://raw.githubusercontent.com/NetSepio/erebrus/${BRANCH}/deploy/compose/drop.yml" \
+    -o "$INSTALL_DIR/drop.yml" >>"$LOG_FILE" 2>&1 || die "failed to fetch deploy/compose/drop.yml"
+  curl -fsSL "https://raw.githubusercontent.com/NetSepio/erebrus/${BRANCH}/deploy/compose/kubo-init.sh" \
+    -o "$INSTALL_DIR/kubo-init.sh" >>"$LOG_FILE" 2>&1 || die "failed to fetch deploy/compose/kubo-init.sh"
+  run chmod 755 "$INSTALL_DIR/kubo-init.sh"
+}
+
 # ---------------------------------------------------------------------------
 # Firewall
 # ---------------------------------------------------------------------------
@@ -617,6 +672,10 @@ open_firewall() {
     run ufw allow "${STEALTH_TCP_PORT}/tcp" >>"$LOG_FILE" 2>&1 || true
     run ufw allow "${WG_PORT}/udp"    >>"$LOG_FILE" 2>&1 || true
     run ufw allow "${STEALTH_UDP_PORT}/udp"   >>"$LOG_FILE" 2>&1 || true
+    if [[ "$DROP" == "true" ]]; then
+      run ufw allow "${DROP_SWARM_PORT}/tcp" >>"$LOG_FILE" 2>&1 || true
+      run ufw allow "${DROP_SWARM_PORT}/udp" >>"$LOG_FILE" 2>&1 || true
+    fi
     for p in "${extra_tcp[@]}"; do run ufw allow "${p}/tcp" >>"$LOG_FILE" 2>&1 || true; done
     ok "ufw rules added."
   elif command -v firewall-cmd >/dev/null 2>&1; then
@@ -625,12 +684,17 @@ open_firewall() {
     run firewall-cmd --permanent --add-port="${STEALTH_TCP_PORT}/tcp" >>"$LOG_FILE" 2>&1 || true
     run firewall-cmd --permanent --add-port="${WG_PORT}/udp"    >>"$LOG_FILE" 2>&1 || true
     run firewall-cmd --permanent --add-port="${STEALTH_UDP_PORT}/udp"   >>"$LOG_FILE" 2>&1 || true
+    if [[ "$DROP" == "true" ]]; then
+      run firewall-cmd --permanent --add-port="${DROP_SWARM_PORT}/tcp" >>"$LOG_FILE" 2>&1 || true
+      run firewall-cmd --permanent --add-port="${DROP_SWARM_PORT}/udp" >>"$LOG_FILE" 2>&1 || true
+    fi
     for p in "${extra_tcp[@]}"; do run firewall-cmd --permanent --add-port="${p}/tcp" >>"$LOG_FILE" 2>&1 || true; done
     run firewall-cmd --reload >>"$LOG_FILE" 2>&1 || true
     ok "firewalld rules added."
   else
     warn "No ufw/firewalld detected. Ensure these are open in your cloud security group:"
     warn "  ${HTTP_PORT}/tcp, ${STEALTH_TCP_PORT}/tcp, ${WG_PORT}/udp, ${STEALTH_UDP_PORT}/udp ${extra_tcp:+(+ 80/tcp 443/tcp)}"
+    [[ "$DROP" == "true" ]] && warn "  Drop swarm: ${DROP_SWARM_PORT}/tcp and ${DROP_SWARM_PORT}/udp"
   fi
 }
 
@@ -679,14 +743,36 @@ install_docker_mode() {
     run mkdir -p "$INSTALL_DIR"
   fi
   install_compose_file "$INSTALL_DIR/docker-compose.yml"
+  [[ "$DROP" == "true" ]] && install_drop_files
 
   ensure_mnemonic
   write_env_file "$INSTALL_DIR/.env"
 
   info "Starting node via docker compose…"
-  local compose="docker compose"
-  docker compose version >/dev/null 2>&1 || compose="docker-compose"
-  ( cd "$INSTALL_DIR" && run $compose --env-file .env up -d >>"$LOG_FILE" 2>&1 ) || die "docker compose up failed"
+  local -a compose=(docker compose)
+  docker compose version >/dev/null 2>&1 || compose=(docker-compose)
+  if [[ "$DROP" == "true" ]]; then
+    ( cd "$INSTALL_DIR" && run "${compose[@]}" --env-file .env -f docker-compose.yml -f drop.yml up -d >>"$LOG_FILE" 2>&1 ) || die "docker compose up failed"
+    local kubo_id="" health="" i
+    for i in $(seq 1 30); do
+      kubo_id="$(cd "$INSTALL_DIR" && run "${compose[@]}" --env-file .env -f docker-compose.yml -f drop.yml ps -q kubo 2>/dev/null || true)"
+      if [[ -n "$kubo_id" ]]; then
+        health="$(run docker inspect --format '{{if .State.Health}}{{.State.Health.Status}}{{else}}{{.State.Status}}{{end}}' "$kubo_id" 2>/dev/null || true)"
+        [[ "$health" == "healthy" ]] && break
+      fi
+      sleep 2
+    done
+    if [[ "$health" == "healthy" ]]; then
+      ok "Drop Kubo sidecar is healthy."
+    else
+      warn "Drop Kubo sidecar is not healthy yet; VPN remains available."
+    fi
+  else
+    if [[ -f "$INSTALL_DIR/drop.yml" ]]; then
+      ( cd "$INSTALL_DIR" && run "${compose[@]}" --env-file .env -f docker-compose.yml -f drop.yml stop kubo >>"$LOG_FILE" 2>&1 ) || true
+    fi
+    ( cd "$INSTALL_DIR" && run "${compose[@]}" --env-file .env -f docker-compose.yml up -d >>"$LOG_FILE" 2>&1 ) || die "docker compose up failed"
+  fi
   open_firewall
   ok "Docker node started."
 }
@@ -807,6 +893,11 @@ validate_and_summary() {
   echo "  Stealth  : VLESS+REALITY :${STEALTH_TCP_PORT}/tcp · Hysteria2 :${STEALTH_UDP_PORT}/udp"
   echo "  Node API key: ${NODE_API_TOKEN}"
   echo "  Verify   : erebrus status"
+  if [[ "$DROP" == "true" ]]; then
+    echo "  Drop     : enabled (Kubo swarm ${DROP_SWARM_PORT}/tcp+udp)"
+  else
+    echo "  Drop     : disabled (existing Kubo data preserved)"
+  fi
   if [[ "$DEPLOY" == "container" ]]; then
     echo "  Manage   : cd $INSTALL_DIR && docker compose [logs -f|restart|down]"
     echo "  Config   : $INSTALL_DIR/.env"
@@ -833,6 +924,13 @@ main() {
   choose_deploy
   choose_access
   choose_profile
+  choose_drop
+  if [[ "$DEPLOY" == "host" && "$DROP" == "true" ]]; then
+    die "Drop v1 requires container deploy; use --mode container or --no-drop"
+  fi
+  if [[ "$DEPLOY" == "host" && "${PROFILE:-standard}" != "standard" ]]; then
+    die "shield/sentinel profiles require container deploy (--mode container)"
+  fi
   run_preflight
   gather_config
   case "$DEPLOY" in

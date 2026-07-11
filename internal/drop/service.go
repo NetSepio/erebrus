@@ -20,6 +20,7 @@ const (
 
 var (
 	ErrDisabled    = errors.New("Drop is disabled")
+	ErrUnavailable = errors.New("Drop is unavailable")
 	ErrStorageFull = errors.New("Drop storage reservation exceeds capacity")
 )
 
@@ -38,8 +39,9 @@ type Service struct {
 	client  *Client
 	metrics *telemetry.Metrics
 
-	mu       sync.RWMutex
-	snapshot Snapshot
+	mu            sync.RWMutex
+	snapshot      Snapshot
+	identityReady bool
 }
 
 // NewService creates the optional Drop runtime.
@@ -63,6 +65,9 @@ func (s *Service) Start(ctx context.Context) error {
 		s.setSnapshot(Snapshot{State: "degraded", StorageMaxBytes: s.cfg.DropStorageMaxBytes})
 		return err
 	}
+	s.mu.Lock()
+	s.identityReady = true
+	s.mu.Unlock()
 	go s.poll(ctx)
 	return nil
 }
@@ -81,12 +86,17 @@ func (s *Service) Enabled() bool { return s.cfg.DropEnabled }
 func (s *Service) AcceptsPublicUploads() bool { return s.cfg.DropAcceptsPublicUploads() }
 
 // WebUIAvailable reports whether the exact-purpose Kubo proxy may be used.
-func (s *Service) WebUIAvailable() bool { return s.cfg.DropWebUIAvailable() }
+func (s *Service) WebUIAvailable() bool {
+	return s.cfg.DropWebUIAvailable() && s.operational()
+}
 
 // Upload streams, pins, and verifies one reserved object.
 func (s *Service) Upload(ctx context.Context, in AddRequest) (AddResult, error) {
 	if !s.cfg.DropEnabled {
 		return AddResult{}, ErrDisabled
+	}
+	if !s.operational() {
+		return AddResult{}, ErrUnavailable
 	}
 	if in.DeclaredSize > MaxObjectBytes {
 		return AddResult{}, ErrByteLimit
@@ -115,6 +125,9 @@ func (s *Service) Read(ctx context.Context, value string) (io.ReadCloser, error)
 	if !s.cfg.DropEnabled {
 		return nil, ErrDisabled
 	}
+	if !s.operational() {
+		return nil, ErrUnavailable
+	}
 	body, err := s.client.Cat(ctx, value, MaxObjectBytes)
 	s.observeOperation("read", err)
 	return body, err
@@ -125,6 +138,9 @@ func (s *Service) PinStatus(ctx context.Context, value string) (bool, error) {
 	if !s.cfg.DropEnabled {
 		return false, ErrDisabled
 	}
+	if !s.operational() {
+		return false, ErrUnavailable
+	}
 	pinned, err := s.client.PinStatus(ctx, value)
 	s.observeOperation("pin_check", err)
 	return pinned, err
@@ -134,6 +150,9 @@ func (s *Service) PinStatus(ctx context.Context, value string) (bool, error) {
 func (s *Service) Unpin(ctx context.Context, value string) error {
 	if !s.cfg.DropEnabled {
 		return ErrDisabled
+	}
+	if !s.operational() {
+		return ErrUnavailable
 	}
 	err := s.client.Unpin(ctx, value)
 	s.observeOperation("unpin", err)
@@ -190,6 +209,20 @@ func (s *Service) setSnapshot(snapshot Snapshot) {
 	s.mu.Lock()
 	s.snapshot = snapshot
 	s.mu.Unlock()
+}
+
+func (s *Service) operational() bool {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+	if !s.identityReady {
+		return false
+	}
+	switch s.snapshot.State {
+	case "active", "degraded", "full":
+		return true
+	default:
+		return false
+	}
 }
 
 func (s *Service) observeOperation(operation string, err error) {
