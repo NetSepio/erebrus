@@ -104,12 +104,13 @@ type HelloAck struct {
 
 // Load is the node's coarse load snapshot.
 type Load struct {
-	WGPeers       int     `json:"wg_peers"`
-	ProxySessions int     `json:"proxy_sessions"`
-	CPUPct        float64 `json:"cpu_pct"`
-	MemPct        float64 `json:"mem_pct"`
-	RxBytes       int64   `json:"rx_bytes"`
-	TxBytes       int64   `json:"tx_bytes"`
+	WGPeersRegistered int     `json:"wg_peers_registered"`
+	WGPeersConnected  int     `json:"wg_peers_connected"`
+	ProxySessions     int     `json:"proxy_sessions"`
+	CPUPct            float64 `json:"cpu_pct"`
+	MemPct            float64 `json:"mem_pct"`
+	RxBytes           int64   `json:"rx_bytes"`
+	TxBytes           int64   `json:"tx_bytes"`
 }
 
 // Speedtest is the node's most recent self-measured throughput.
