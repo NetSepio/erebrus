@@ -60,7 +60,7 @@ func TestParseCanonicalHello(t *testing.T) {
 func TestHeartbeatAndUsageRoundTrip(t *testing.T) {
 	hb := Heartbeat{
 		TS: 1765584000, Status: "online",
-		Load:      Load{WGPeers: 42, ProxySessions: 7, CPUPct: 23.5, MemPct: 41.2, RxBytes: 123456789, TxBytes: 987654321},
+		Load:      Load{WGPeersRegistered: 42, WGPeersConnected: 40, ProxySessions: 7, CPUPct: 23.5, MemPct: 41.2, RxBytes: 123456789, TxBytes: 987654321},
 		Speedtest: Speedtest{DownloadMbps: 940.2, UploadMbps: 870.1, LatencyMs: 3.2, MeasuredAt: 1765580400},
 		Versions:  map[string]string{"node": "2.0.0", "singbox": "1.11.4"},
 	}
