@@ -77,8 +77,8 @@ func runStatusCLI(args []string) error {
 				Endpoint  string `json:"endpoint"`
 			} `json:"wireguard"`
 		} `json:"endpoints"`
-		Readiness readiness.Report `json:"readiness"`
-		Capabilities map[string]any `json:"capabilities"`
+		Readiness    readiness.Report `json:"readiness"`
+		Capabilities map[string]any   `json:"capabilities"`
 	}
 	if err := json.Unmarshal(body, &out); err != nil {
 		return err

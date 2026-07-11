@@ -35,7 +35,7 @@ const (
 // Legacy env/install aliases (deprecated).
 const (
 	legacyModeGateway = "gateway"
-	legacyModeDocker = "docker"
+	legacyModeDocker  = "docker"
 )
 
 // ModeSettings holds parsed access, deploy, and network profile.

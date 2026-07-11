@@ -20,13 +20,13 @@ var defaultShieldUpstreams = []string{"1.1.1.1", "1.0.0.1"}
 
 // SyncPayload mirrors gateway store.FirewallSyncPayload.
 type SyncPayload struct {
-	OrgID       string       `json:"org_id"`
-	NodeID      string       `json:"node_id"`
-	ServiceKind string       `json:"service_kind"`
-	Rules       []SyncRule   `json:"rules"`
-	Upstreams   []string     `json:"upstreams"`
-	Licensed    bool         `json:"licensed"`
-	ShieldAdmin string       `json:"shield_admin_url,omitempty"`
+	OrgID       string     `json:"org_id"`
+	NodeID      string     `json:"node_id"`
+	ServiceKind string     `json:"service_kind"`
+	Rules       []SyncRule `json:"rules"`
+	Upstreams   []string   `json:"upstreams"`
+	Licensed    bool       `json:"licensed"`
+	ShieldAdmin string     `json:"shield_admin_url,omitempty"`
 }
 
 // SyncRule is one gateway firewall rule.
@@ -40,8 +40,8 @@ type SyncRule struct {
 
 // Client applies firewall operations for the active profile.
 type Client struct {
-	cfg    *config.Config
-	http   *http.Client
+	cfg      *config.Config
+	http     *http.Client
 	licensed bool
 }
 

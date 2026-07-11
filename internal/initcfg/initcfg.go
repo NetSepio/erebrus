@@ -13,26 +13,26 @@ import (
 
 // Options is the input for generating an env file.
 type Options struct {
-	AccessMode      config.RuntimeMode
-	NetworkProfile  config.NetworkProfile
-	NodeName        string
-	Region          string
-	Zone            string
-	Mnemonic        string
-	NodeAPIToken    string
-	GatewayURL      string
-	PublicAddress   string
-	HTTPPort        string
-	EnableStealth   bool
-	StealthTCPPort  string
-	StealthUDPPort  string
-	EnableAppHosting bool
-	AppWildcardDomain string
-	PublicDomain    string
-	WildcardDomain  string
+	AccessMode           config.RuntimeMode
+	NetworkProfile       config.NetworkProfile
+	NodeName             string
+	Region               string
+	Zone                 string
+	Mnemonic             string
+	NodeAPIToken         string
+	GatewayURL           string
+	PublicAddress        string
+	HTTPPort             string
+	EnableStealth        bool
+	StealthTCPPort       string
+	StealthUDPPort       string
+	EnableAppHosting     bool
+	AppWildcardDomain    string
+	PublicDomain         string
+	WildcardDomain       string
 	PublicGatewayEnabled bool
-	StateDir        string
-	DefaultIface    string
+	StateDir             string
+	DefaultIface         string
 }
 
 // DefaultEnvPath is the standard bare-metal env file location.

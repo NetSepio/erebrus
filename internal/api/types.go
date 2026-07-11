@@ -90,17 +90,17 @@ type IdentityStatus struct {
 
 // StatusResponse is the public node status.
 type StatusResponse struct {
-	Version      string         `json:"version"`
-	NodeName     string         `json:"node_name"`
-	Region       string         `json:"region"`
-	Zone         string         `json:"zone,omitempty"`
-	Status       string         `json:"status"`
-	AccessMode   string         `json:"access_mode"`
-	PeerID       string         `json:"peer_id"` // deprecated: use identity.peer_id
-	DID          string         `json:"did"`     // deprecated: use identity.did
+	Version      string          `json:"version"`
+	NodeName     string          `json:"node_name"`
+	Region       string          `json:"region"`
+	Zone         string          `json:"zone,omitempty"`
+	Status       string          `json:"status"`
+	AccessMode   string          `json:"access_mode"`
+	PeerID       string          `json:"peer_id"` // deprecated: use identity.peer_id
+	DID          string          `json:"did"`     // deprecated: use identity.did
 	Identity     IdentityStatus  `json:"identity"`
 	Endpoints    EndpointsStatus `json:"endpoints"`
 	Capabilities map[string]any  `json:"capabilities"`
-	Protocols    []string       `json:"protocols"`
-	Readiness    any            `json:"readiness"`
+	Protocols    []string        `json:"protocols"`
+	Readiness    any             `json:"readiness"`
 }

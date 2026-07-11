@@ -32,24 +32,24 @@ type RegistrationInput struct {
 	RegistrationToken   string // EREBRUS_NODE_REGISTRATION_TOKEN (preferred)
 	OrgEnrollmentSecret string // deprecated alias for RegistrationToken
 	WalletChain         string
-	Mnemonic           string
-	PeerID             string
-	DID                string
-	Name               string
-	Region             string
-	Zone               string
-	APIBaseURL         string
-	NodeKey            string // optional; gateway mints if empty
-	AccessMode         string // public | private
-	DeploymentProfile  string // standard | shield | sentinel
+	Mnemonic            string
+	PeerID              string
+	DID                 string
+	Name                string
+	Region              string
+	Zone                string
+	APIBaseURL          string
+	NodeKey             string // optional; gateway mints if empty
+	AccessMode          string // public | private
+	DeploymentProfile   string // standard | shield | sentinel
 }
 
 // RegistrationResult holds the gateway-issued node credentials.
 type RegistrationResult struct {
-	NodeID            string
-	NodeToken         string
-	NodeKey           string
-	GatewayPublicKey  string
+	NodeID           string
+	NodeToken        string
+	NodeKey          string
+	GatewayPublicKey string
 }
 
 // Credentials is the persisted gateway registration state.
@@ -182,8 +182,8 @@ func Register(ctx context.Context, in RegistrationInput) (*RegistrationResult, e
 		"zone":               in.Zone,
 		"api_base_url":       in.APIBaseURL,
 		"node_key":           in.NodeKey,
-		"access_mode":         access,
-		"deployment_profile":  strings.TrimSpace(in.DeploymentProfile),
+		"access_mode":        access,
+		"deployment_profile": strings.TrimSpace(in.DeploymentProfile),
 	})
 	raw, status, err = postJSON(ctx, client, base+"/api/v2/nodes/register", step2)
 	if err != nil {

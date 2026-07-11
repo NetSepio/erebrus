@@ -15,19 +15,19 @@ import (
 
 func runInitCLI(args []string) error {
 	var (
-		access      = "public"
-		profile     = ""
-		publicAddr  = os.Getenv("WG_ENDPOINT_HOST")
-		gatewayURL  = envOr("GATEWAY_URL", "https://gateway.erebrus.io")
-		nodeName    = envOr("NODE_NAME", hostnameOr("erebrus-node"))
-		region      = envOr("REGION", "unknown")
-		zone        = envOr("ZONE", "")
-		mnemonic    = os.Getenv("MNEMONIC")
-		apiToken    = os.Getenv("NODE_API_TOKEN")
-		envPath     = initcfg.DefaultEnvPath
-		yes         = false
-		appHosting  = false
-		appDomain   = ""
+		access     = "public"
+		profile    = ""
+		publicAddr = os.Getenv("WG_ENDPOINT_HOST")
+		gatewayURL = envOr("GATEWAY_URL", "https://gateway.erebrus.io")
+		nodeName   = envOr("NODE_NAME", hostnameOr("erebrus-node"))
+		region     = envOr("REGION", "unknown")
+		zone       = envOr("ZONE", "")
+		mnemonic   = os.Getenv("MNEMONIC")
+		apiToken   = os.Getenv("NODE_API_TOKEN")
+		envPath    = initcfg.DefaultEnvPath
+		yes        = false
+		appHosting = false
+		appDomain  = ""
 	)
 
 	for i := 0; i < len(args); i++ {

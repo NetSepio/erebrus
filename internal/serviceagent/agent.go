@@ -21,7 +21,9 @@ type Agent struct {
 }
 
 // New constructs an Agent.
-func New(cfg *config.Config) *Agent { return &Agent{cfg: cfg, snapshot: map[string]string{"vpn": "active"}} }
+func New(cfg *config.Config) *Agent {
+	return &Agent{cfg: cfg, snapshot: map[string]string{"vpn": "active"}}
+}
 
 // Start runs periodic health checks until ctx is done.
 func (a *Agent) Start(ctx context.Context) {
