@@ -62,7 +62,12 @@ func TestHeartbeatAndUsageRoundTrip(t *testing.T) {
 		TS: 1765584000, Status: "online",
 		Load:      Load{WGPeersRegistered: 42, WGPeersConnected: 40, ProxySessions: 7, CPUPct: 23.5, MemPct: 41.2, RxBytes: 123456789, TxBytes: 987654321},
 		Speedtest: Speedtest{DownloadMbps: 940.2, UploadMbps: 870.1, LatencyMs: 3.2, MeasuredAt: 1765580400},
-		Versions:  map[string]string{"node": "2.0.0", "singbox": "1.11.4"},
+		Versions:  map[string]string{"node": "2.0.0", "singbox": "1.11.4", "kubo": "0.42.0"},
+		Services:  map[string]string{"vpn": "active", "drop": "active"},
+		Drop: &DropStatus{
+			State: "active", KuboVersion: "0.42.0", RepoSizeBytes: 1048576,
+			StorageMaxBytes: 10000000000, NumObjects: 12,
+		},
 	}
 	frame, err := wrap(TypeHeartbeat, hb)
 	if err != nil {
@@ -83,6 +88,12 @@ func TestHeartbeatAndUsageRoundTrip(t *testing.T) {
 		got.Speedtest.LatencyMs != 3.2 || got.Speedtest.MeasuredAt != 1765580400 {
 		t.Errorf("speedtest fields lost: %+v", got.Speedtest)
 	}
+	if got.Drop == nil || got.Drop.State != "active" || got.Drop.StorageMaxBytes != 10000000000 {
+		t.Errorf("drop status lost: %+v", got.Drop)
+	}
+	if got.Services["drop"] != "active" || got.Versions["kubo"] != "0.42.0" {
+		t.Errorf("drop service metadata lost: services=%v versions=%v", got.Services, got.Versions)
+	}
 
 	ur := UsageReport{TS: 1765584000, Peers: []PeerUsage{{PeerID: "c0a4f1de", RxBytesDelta: 1048576, TxBytesDelta: 8388608, LastHandshake: 1765583970}}}
 	frame, _ = wrap(TypeUsageReport, ur)
@@ -93,5 +104,31 @@ func TestHeartbeatAndUsageRoundTrip(t *testing.T) {
 	}
 	if len(gotUR.Peers) != 1 || gotUR.Peers[0].TxBytesDelta != 8388608 {
 		t.Errorf("usage peers wrong: %+v", gotUR.Peers)
+	}
+}
+
+func TestDropCapabilityRoundTrip(t *testing.T) {
+	h := Hello{
+		Capabilities: Capabilities{
+			Drop: &DropCapability{
+				Enabled: true, AcceptsPublicUploads: true, WebUIAvailable: false,
+			},
+		},
+	}
+	frame, err := wrap(TypeHello, h)
+	if err != nil {
+		t.Fatal(err)
+	}
+	var env Envelope
+	if err := json.Unmarshal(frame, &env); err != nil {
+		t.Fatal(err)
+	}
+	var got Hello
+	if err := json.Unmarshal(env.Data, &got); err != nil {
+		t.Fatal(err)
+	}
+	if got.Capabilities.Drop == nil || !got.Capabilities.Drop.Enabled ||
+		!got.Capabilities.Drop.AcceptsPublicUploads || got.Capabilities.Drop.WebUIAvailable {
+		t.Fatalf("drop capability = %+v", got.Capabilities.Drop)
 	}
 }
