@@ -1,7 +1,7 @@
 # Erebrus Node — Security & Data-Capture Audit (v2.0)
 
 _Scope: the `erebrus` node (this repo) and its trust boundaries with clients,
-the gateway, and the host. Last reviewed 2026-06-26 against the v2 codebase.
+the gateway, and the host. Last reviewed 2026-07-11 against the v2 codebase.
 This is an internal pre-release review, not a third-party pentest — an external
 audit is still recommended before a large public launch._
 
@@ -14,14 +14,19 @@ audit is still recommended before a large public launch._
                                                        │
                           HTTPS + WebSocket (control)  ▼
                                                     GATEWAY
+
+  gateway ── exact-purpose Drop API ──▶ NODE ── private RPC ──▶ KUBO
+                                                               │
+                                                  IPFS swarm ◀──┘
 ```
 
 | Boundary | Carries | Trust |
 |---|---|---|
 | client ↔ node (data plane) | the user's traffic | end-to-end via WireGuard keys; node is the exit |
-| gateway → node (`/api/v2/peers`) | provisioning + credential bundles | bearer `NODE_API_TOKEN` |
+| gateway → node (`/api/v2`) | provisioning, bundles, Drop streams | node key + gateway-issued PASETO |
 | node → gateway (WS) | identity, heartbeat, per-client byte deltas | node PASETO |
 | node ↔ host | SQLite DB, `config.env`, WG kernel iface | host root |
+| node ↔ Kubo | bounded object streams and admin RPC on the Compose network | exact-purpose node API; RPC not host-published |
 
 The node is the **exit point**: it necessarily sees the source (client) and can
 observe destination IPs of forwarded packets at the network layer. The design
@@ -37,8 +42,13 @@ goal is to **store and transmit as little of that as possible**.
 - **Node settings:** WG server private/public key, REALITY private/public key +
   short-id, VLESS UUID, Hysteria2 password, Hysteria2 self-signed cert + key.
 
+### Stored in optional Drop `kubo_data`
+- Kubo libp2p identity, repository metadata, blocks, and pins.
+- Object bytes supplied by the gateway. Drop's higher-level encryption policy is
+  gateway/client responsibility; Kubo stores the bytes it receives.
+
 ### NOT stored (by design)
-- No traffic content, destination IPs/domains, connection logs, or DNS queries.
+- No VPN traffic content, destination IPs/domains, connection logs, or DNS queries.
 - No per-flow records. The node keeps **no activity log**.
 
 ### Transmitted to the gateway (authenticated WS)
@@ -57,8 +67,9 @@ goal is to **store and transmit as little of that as possible**.
 
 ### Logs (slog JSON → stderr)
 - Node identity and operational warnings/errors only. Tokens, client keys, and
-  request bodies are **not** logged. Internal error strings are no longer echoed
-  to API clients (see F4).
+  request bodies are **not** logged. Drop upload bodies, CIDs, and the temporary
+  Kubo private-key handoff are not logged. Internal error strings are no longer
+  echoed to API clients (see F4).
 
 ### Third parties
 - **DNS** defaults to `1.1.1.1` (Cloudflare) → see F5.
@@ -79,6 +90,7 @@ roadmap work, or explicit acceptance.
 | F8 | 🟠 | No application-level rate limiting | Operator: reverse proxy / fail2ban / cloud UDP protection |
 | F10 | 🟡 | Shared node-wide carrier secret; partial rotation only | Roadmap: full carrier-secret rotation command |
 | F11 | 🟡 | Hysteria2 self-signed cert + client `insecure` | Accepted — inner WG payload stays confidential |
+| F12 | 🔴 | Publishing Kubo RPC or gateway grants unauthenticated administrative/content access | Compose keeps `5001`/`8080` internal; operator must not add host mappings |
 
 ### F3 — Plaintext node API (OPERATOR — top priority)
 `:9080` is plain HTTP. The `NODE_API_TOKEN` and full credential bundles
@@ -105,6 +117,8 @@ but a stolen static key lets an attacker impersonate the node going forward.
 **Mitigations in repo:** `STATE_DIR` is `0700`; the DB (+WAL/SHM) is now forced
 to `0600`; the installer writes `config.env` `0600`. **Operator:** use full-disk
 encryption; restrict host access; rotate the mnemonic ⇒ new node identity.
+Drop's Kubo identity and stored blocks live in `kubo_data`; use full-disk
+encryption and restrict Docker/host access to protect them.
 
 ### F7 — Public metrics/stats (BY DESIGN)
 `/metrics` (Prometheus) and `/api/v2/stats` (the dashboard's coarse aggregates:
@@ -132,12 +146,21 @@ Hy2 uses a self-signed cert; clients connect with `insecure`. An active MITM on
 node's WG public key from the bundle), so confidentiality holds. REALITY (the
 TCP carrier) resists MITM by design.
 
+### F12 — Kubo admin exposure (OPERATOR — never publish)
+Kubo RPC `5001` controls pins, configuration, and repository operations; gateway
+`8080` serves stored content. The supplied Compose files expose them only to the
+private Compose network and publish only swarm `4001/tcp+udp`. Do not add host
+port mappings for `5001` or `8080`. Use the authenticated node proxy for WebUI
+access.
+
 ### Resolved in codebase (no action)
 
 - **F1** — API auth no longer fails open when `NODE_API_TOKEN` is unset (release fails closed).
 - **F2** — Token compare uses `crypto/subtle.ConstantTimeCompare`.
 - **F4** — API errors are generic; detail logged server-side only.
 - **F9** — Stealth `direct` outbound pinned to `127.0.0.1:<wg-port>`; WG auth still required.
+- **Drop authorization** — every Drop route requires the node key plus a
+  node-targeted PASETO with the route's exact purpose; debug mode does not bypass it.
 - **SQL injection / command injection / IP races / peer name injection** — reviewed safe in v2.
 
 ---
@@ -147,8 +170,12 @@ TCP carrier) resists MITM by design.
 - [ ] Set a strong `NODE_API_TOKEN` (the installer generates 32 bytes) — never blank.
 - [ ] Do **not** expose `:9080` to the public internet: TLS-terminate it, or
       firewall it to the gateway only.
-- [ ] Open only what's needed: `51820/udp`, `8443/tcp`, `4443/udp` publicly.
+- [ ] Open only what's needed: `51820/udp`, `8443/tcp`, `4443/udp`, and Drop
+      `4001/tcp+udp` when enabled.
+- [ ] Never publish Kubo `5001` or `8080`; use the exact-purpose node proxy.
 - [ ] Enable full-disk encryption; keep `config.env` and `STATE_DIR` `0600/0700`.
+- [ ] Treat `kubo_data` as sensitive persistent storage; disable Drop without
+      `down -v` and remove the volume only as an explicit destructive action.
 - [ ] Run on a dedicated host/VM; minimise other services.
 - [ ] Consider a local DNS resolver (avoid the Cloudflare default).
 - [ ] Keep the OS + `wireguard` module patched; rebuild the image for sing-box CVEs.

@@ -25,6 +25,9 @@ curl -fsSL https://erebrus.io/install.sh | \
   MNEMONIC="..." WG_ENDPOINT_HOST="vpn.example.com" bash -s -- --mode docker --yes
 ```
 
+Add `--drop` to run the optional Kubo/IPFS storage sidecar. `--no-drop` stops
+Drop while preserving its volume. Drop v1 requires Docker.
+
 ## Ports
 
 | Port | Proto | Purpose |
@@ -33,10 +36,12 @@ curl -fsSL https://erebrus.io/install.sh | \
 | 51820 | udp | WireGuard fast path |
 | 8443 | tcp | VLESS + REALITY stealth carrier |
 | 4443 | udp | Hysteria2 stealth carrier |
+| 4001 | tcp + udp | Kubo swarm — **Drop only** |
 | 80, 443 | tcp | Caddy ingress — **host mode + App-Hosting only** |
 
 Open all of these in your cloud firewall / security group. UDP can't be probed
-remotely, so double-check 51820 and 4443.
+remotely, so double-check 51820, 4443, and Drop's 4001 when enabled. Kubo RPC
+`5001` and gateway `8080` are internal-only and must not be published.
 
 ## Configuration
 
@@ -71,6 +76,22 @@ host/systemd install supports `standard` profile only.
 
 Registration sends `deployment_profile` to the gateway; firewall rules sync via
 WS `sync_firewall` when an operator calls `POST .../firewall/sync` on the gateway.
+
+### Erebrus Drop
+
+Drop adds the same `deploy/compose/drop.yml` override to Standard, Shield, or
+Sentinel. The installer prompts for it, or accepts:
+
+```bash
+./install.sh --mode container --profile standard --drop
+./install.sh --mode container --profile shield --drop
+./install.sh --mode container --profile sentinel --drop
+```
+
+Kubo uses `ipfs/kubo:v0.42.0`, stores its repo in a persistent `kubo_data`
+volume, and receives a deterministic identity distinct from the Erebrus node
+PeerID. See [DROP.md](DROP.md) for APIs, metrics, upgrades, and destructive
+cleanup.
 
 ### Gateway registration
 
@@ -113,6 +134,16 @@ docker compose restart
 docker compose down
 ```
 
+For an installer-managed Drop node, include the override in direct Compose
+commands:
+
+```bash
+docker compose --env-file .env -f docker-compose.yml -f drop.yml ps
+docker compose --env-file .env -f docker-compose.yml -f drop.yml logs -f kubo
+```
+
+Do not use `down -v`; it deletes persistent node and Kubo volumes.
+
 **host**
 ```bash
 systemctl status erebrus
@@ -126,6 +157,10 @@ systemctl restart erebrus
 # Carriers advertised
 curl -s http://127.0.0.1:9080/api/v2/status | jq '.protocols, .capabilities.stealth'
 # → ["wireguard","vless-reality","hysteria2"]  and  true
+
+# Drop capability, service state, and optional readiness check
+curl -s http://127.0.0.1:9080/api/v2/status | \
+  jq '.capabilities.drop, .capabilities.services.drop, (.readiness.checks[] | select(.id == "drop"))'
 
 # Provision a peer and inspect the unified credential bundle
 TOKEN=<NODE_API_TOKEN>
@@ -162,3 +197,8 @@ installer prepares the host — Caddy + the wildcard domain.)
   `NET_ADMIN` it succeeds.
 - **Stealth ports not reachable** — confirm the cloud firewall allows 8443/tcp and
   4443/udp; `ss -tlnp | grep 8443` and `ss -ulnp | grep 4443` show them locally.
+- **Drop is `unreachable`** — inspect `docker compose ... logs kubo`. VPN
+  readiness remains independent and should stay available.
+- **Kubo identity conflict** — verify the node mnemonic belongs with the
+  existing `kubo_data` volume. Do not delete or replace the Kubo config
+  automatically; follow the recovery steps in [DROP.md](DROP.md).

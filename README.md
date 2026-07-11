@@ -11,12 +11,14 @@ For more details visit [erebrus.io](https://erebrus.io).
   - **VLESS + REALITY** (`:8443/tcp`) — presents as a real TLS session to a borrowed SNI.
   - **Hysteria2** (`:4443/udp`) — QUIC/HTTP3 with optional Salamander obfuscation.
 - libp2p identity + DID (`did:erebrus:<peerId>`) derived from a mnemonic.
+- Optional **Erebrus Drop** storage: a pinned Kubo/IPFS sidecar with a separate
+  mnemonic-derived libp2p identity and persistent local pins.
 - HTTP REST API (`/api/v2`) and Prometheus `/metrics`.
 - Optional App-Hosting: expose a VPN-connected app to the public internet (host mode).
 
 ## Install a node
 
-Linux only (x86_64 / arm64). A node needs a **static, internet-routable public IP**, real bandwidth, and open ports (`9080/tcp`, `51820/udp`, `8443/tcp`, `4443/udp`). The installer verifies all three.
+Linux only (x86_64 / arm64). A node needs a **static, internet-routable public IP**, real bandwidth, and open ports (`9080/tcp`, `51820/udp`, `8443/tcp`, `4443/udp`). Drop nodes additionally publish `4001/tcp` and `4001/udp`. The installer verifies the base node ports.
 
 ```bash
 curl -fsSL https://erebrus.io/install.sh | bash
@@ -31,8 +33,12 @@ Non-interactive example:
 
 ```bash
 curl -fsSL https://erebrus.io/install.sh | \
-  MNEMONIC="..." WG_ENDPOINT_HOST="vpn.example.com" bash -s -- --mode docker --yes
+  MNEMONIC="..." WG_ENDPOINT_HOST="vpn.example.com" bash -s -- --mode docker --drop --yes
 ```
+
+Drop is optional, works with the Standard, Shield, and Sentinel Docker profiles,
+and is not supported by host mode in v1. Use `--no-drop` to stop the sidecar
+without deleting its persistent data.
 
 ## Build from source
 
@@ -54,6 +60,9 @@ only public, coarse aggregates (`/api/v2/status`, `/api/v2/stats`).
 - [docs/NODE.md](docs/NODE.md) — running, configuring, and managing a node (ports, env reference, troubleshooting).
 - [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) — package layout and the stealth carrier topology.
 - [docs/SECURITY-AUDIT.md](docs/SECURITY-AUDIT.md) — data-capture inventory, threat model, and operator hardening.
+- [docs/DROP.md](docs/DROP.md) — Drop installation, private APIs, metrics, and safe storage operations.
 - [docs/node-api.openapi.yaml](docs/node-api.openapi.yaml) — the `/api/v2` REST contract.
 
-The REST surface lives under `/api/v2` (status, stats, peers CRUD, credentials); node status is public at `GET /api/v2/status`.
+The REST surface lives under `/api/v2` (status, stats, peers CRUD, credentials,
+and gateway-private Drop operations); node status is public at
+`GET /api/v2/status`.

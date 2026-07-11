@@ -45,6 +45,7 @@ DROP="${DROP_ENABLED:-}"
 DROP_STORAGE_MAX="${DROP_STORAGE_MAX:-10GB}"
 DROP_SWARM_PORT="${DROP_SWARM_PORT:-4001}"
 DROP_WEBUI_ENABLED="${DROP_WEBUI_ENABLED:-false}"
+DROP_STATE="disabled"
 ASSUME_YES="${ASSUME_YES:-false}"
 SKIP_CHECKS="${SKIP_CHECKS:-false}"
 
@@ -763,8 +764,10 @@ install_docker_mode() {
       sleep 2
     done
     if [[ "$health" == "healthy" ]]; then
+      DROP_STATE="active"
       ok "Drop Kubo sidecar is healthy."
     else
+      DROP_STATE="starting"
       warn "Drop Kubo sidecar is not healthy yet; VPN remains available."
     fi
   else
@@ -894,12 +897,16 @@ validate_and_summary() {
   echo "  Node API key: ${NODE_API_TOKEN}"
   echo "  Verify   : erebrus status"
   if [[ "$DROP" == "true" ]]; then
-    echo "  Drop     : enabled (Kubo swarm ${DROP_SWARM_PORT}/tcp+udp)"
+    echo "  Drop     : ${DROP_STATE} (Kubo swarm ${DROP_SWARM_PORT}/tcp+udp)"
   else
     echo "  Drop     : disabled (existing Kubo data preserved)"
   fi
   if [[ "$DEPLOY" == "container" ]]; then
-    echo "  Manage   : cd $INSTALL_DIR && docker compose [logs -f|restart|down]"
+    if [[ "$DROP" == "true" ]]; then
+      echo "  Manage   : cd $INSTALL_DIR && docker compose --env-file .env -f docker-compose.yml -f drop.yml [ps|logs -f|restart]"
+    else
+      echo "  Manage   : cd $INSTALL_DIR && docker compose [logs -f|restart|down]"
+    fi
     echo "  Config   : $INSTALL_DIR/.env"
   else
     echo "  Manage   : systemctl [status|restart|stop] erebrus ; journalctl -u erebrus -f"
