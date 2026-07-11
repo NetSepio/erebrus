@@ -13,6 +13,7 @@ import (
 	"github.com/NetSepio/erebrus/internal/registrar"
 	"github.com/NetSepio/erebrus/internal/serviceagent"
 	"github.com/NetSepio/erebrus/internal/speedtest"
+	"github.com/elastic/gosigar"
 )
 
 // GatewayBridge implements gatewayclient.SnapshotProvider and CommandHandler.
@@ -29,6 +30,8 @@ type GatewayBridge struct {
 	status string
 
 	lastUsage map[string]usageCounters
+	lastCPU   gosigar.Cpu
+	lastCPUAt time.Time
 }
 
 type usageCounters struct {
@@ -129,7 +132,7 @@ func (g *GatewayBridge) BuildHeartbeat(status string) gatewayclient.Heartbeat {
 		Load: gatewayclient.Load{
 			WGPeers:       len(peers),
 			ProxySessions: 0,
-			CPUPct:        0,
+			CPUPct:        g.cpuUsedPct(),
 			MemPct:        memUsedPct(),
 			RxBytes:       live.RxBytes,
 			TxBytes:       live.TxBytes,
@@ -310,4 +313,26 @@ func memUsedPct() float64 {
 		return 0
 	}
 	return float64(m.Alloc) / float64(m.Sys) * 100
+}
+
+func (g *GatewayBridge) cpuUsedPct() float64 {
+	var cur gosigar.Cpu
+	if err := cur.Get(); err != nil {
+		return 0
+	}
+	now := time.Now()
+	defer func() {
+		g.lastCPU = cur
+		g.lastCPUAt = now
+	}()
+
+	if g.lastCPUAt.IsZero() {
+		return 0
+	}
+	delta := cur.Delta(g.lastCPU)
+	total := delta.Total()
+	if total == 0 {
+		return 0
+	}
+	return float64(total-delta.Idle) / float64(total) * 100
 }
