@@ -13,7 +13,8 @@ import (
 	"github.com/NetSepio/erebrus/internal/registrar"
 	"github.com/NetSepio/erebrus/internal/serviceagent"
 	"github.com/NetSepio/erebrus/internal/speedtest"
-	"github.com/elastic/gosigar"
+	"github.com/shirou/gopsutil/v3/cpu"
+	"github.com/shirou/gopsutil/v3/mem"
 )
 
 // GatewayBridge implements gatewayclient.SnapshotProvider and CommandHandler.
@@ -30,8 +31,6 @@ type GatewayBridge struct {
 	status string
 
 	lastUsage map[string]usageCounters
-	lastCPU   gosigar.Cpu
-	lastCPUAt time.Time
 }
 
 type usageCounters struct {
@@ -297,42 +296,25 @@ func (g *GatewayBridge) HandleCommand(ctx context.Context, cmd gatewayclient.Com
 }
 
 func hostMemMB() int {
-	var m runtime.MemStats
-	runtime.ReadMemStats(&m)
-	// Coarse placeholder until host memory detection is added.
-	if m.Sys > 0 {
-		return int(m.Sys / (1024 * 1024))
+	vm, err := mem.VirtualMemory()
+	if err != nil {
+		return 0
 	}
-	return 0
+	return int(vm.Total / (1024 * 1024))
 }
 
 func memUsedPct() float64 {
-	var m runtime.MemStats
-	runtime.ReadMemStats(&m)
-	if m.Sys == 0 {
+	vm, err := mem.VirtualMemory()
+	if err != nil {
 		return 0
 	}
-	return float64(m.Alloc) / float64(m.Sys) * 100
+	return vm.UsedPercent
 }
 
 func (g *GatewayBridge) cpuUsedPct() float64 {
-	var cur gosigar.Cpu
-	if err := cur.Get(); err != nil {
+	pct, err := cpu.PercentWithContext(context.Background(), 0, false)
+	if err != nil || len(pct) == 0 {
 		return 0
 	}
-	now := time.Now()
-	defer func() {
-		g.lastCPU = cur
-		g.lastCPUAt = now
-	}()
-
-	if g.lastCPUAt.IsZero() {
-		return 0
-	}
-	delta := cur.Delta(g.lastCPU)
-	total := delta.Total()
-	if total == 0 {
-		return 0
-	}
-	return float64(total-delta.Idle) / float64(total) * 100
+	return pct[0]
 }
