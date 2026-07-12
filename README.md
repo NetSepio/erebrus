@@ -18,7 +18,10 @@ For more details visit [erebrus.io](https://erebrus.io).
 
 ## Install a node
 
-Linux only (x86_64 / arm64). A node needs a **static, internet-routable public IP**, real bandwidth, and open ports (`9080/tcp`, `51820/udp`, `8443/tcp`, `4443/udp`). Drop nodes additionally publish `4001/tcp+udp` for the IPFS swarm; `8080/tcp` direct CID retrieval is optional. The installer verifies the required TCP ports.
+Linux only (x86_64 / arm64). A node needs a **static, internet-routable public IP**, real bandwidth, and open ports (`9080/tcp`, `51820/udp`, `8443/tcp`, `4443/udp`). Drop nodes additionally publish `4001/tcp+udp` for the IPFS swarm; an
+optional TLS public CID gateway on `443/tcp` is configured by setting a DNS
+domain (`DROP_PUBLIC_GATEWAY_DOMAIN`). The installer verifies the required TCP
+ports.
 
 ```bash
 curl -fsSL https://erebrus.io/install.sh | bash
@@ -45,8 +48,9 @@ detected address; NAT port forwarding remains the operator's responsibility.
 Drop is optional, works with the Standard, Shield, and Sentinel Docker profiles,
 and is not supported by host mode in v1. Use `--no-drop` to stop the sidecar
 without deleting its persistent data. Direct unauthenticated CID retrieval on
-`8080/tcp` is a separate opt-in (`--drop-public-gateway`); otherwise files are
-accessed only through the Erebrus gateway.
+`https://<domain>/ipfs/<cid>` is a separate opt-in
+(`--drop-public-gateway-domain <domain>`); otherwise files are accessed only
+through the Erebrus gateway.
 
 ## Build from source
 
@@ -69,6 +73,7 @@ only public, coarse aggregates (`/api/v2/status`, `/api/v2/stats`).
 - [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) — package layout and the stealth carrier topology.
 - [docs/SECURITY-AUDIT.md](docs/SECURITY-AUDIT.md) — data-capture inventory, threat model, and operator hardening.
 - [docs/DROP.md](docs/DROP.md) — Drop installation, private APIs, metrics, and safe storage operations.
+- [docs/DROP-IMPLEMENTATION-CONTEXT.md](docs/DROP-IMPLEMENTATION-CONTEXT.md) — domain-based TLS public gateway design and implementation notes.
 - [docs/node-api.openapi.yaml](docs/node-api.openapi.yaml) — the `/api/v2` REST contract.
 
 The REST surface lives under `/api/v2` (status, stats, peers CRUD, credentials,

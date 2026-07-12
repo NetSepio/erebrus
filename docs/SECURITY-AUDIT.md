@@ -27,7 +27,7 @@ audit is still recommended before a large public launch._
 | node → gateway (WS) | identity, heartbeat, per-client byte deltas | node PASETO |
 | node ↔ host | SQLite DB, `config.env`, WG kernel iface | host root |
 | node ↔ Kubo | bounded object streams and admin RPC on the Compose network | exact-purpose node API; RPC not host-published |
-| internet → Kubo gateway (optional) | reads locally available blocks by CID on `8080/tcp` | explicit operator opt-in; public read-only gateway with remote fetching and routing API disabled |
+| internet → Kubo gateway (optional) | reads locally available blocks by CID on `https://<domain>/ipfs/<cid>` (443/tcp) | explicit operator opt-in; TLS terminated by Traefik; remote fetching and routing API disabled |
 
 The node is the **exit point**: it necessarily sees the source (client) and can
 observe destination IPs of forwarded packets at the network layer. The design
@@ -91,7 +91,7 @@ roadmap work, or explicit acceptance.
 | F8 | 🟠 | No application-level rate limiting | Operator: reverse proxy / fail2ban / cloud UDP protection |
 | F10 | 🟡 | Shared node-wide carrier secret; partial rotation only | Roadmap: full carrier-secret rotation command |
 | F11 | 🟡 | Hysteria2 self-signed cert + client `insecure` | Accepted — inner WG payload stays confidential |
-| F12 | 🔴 | Publishing Kubo admin RPC grants unauthenticated repository control | Compose keeps `5001` internal; operator must not add a host mapping |
+| F12 | 🔴 | Publishing Kubo admin RPC grants unauthenticated repository control | Compose keeps `5001` internal; raw Kubo `8080` is not host-published; operator must not add a host mapping |
 
 ### F3 — Plaintext node API (OPERATOR — top priority)
 `:9080` is plain HTTP. The `NODE_API_TOKEN` and full credential bundles
@@ -150,11 +150,13 @@ TCP carrier) resists MITM by design.
 ### F12 — Kubo admin exposure (OPERATOR — never publish)
 Kubo RPC `5001` controls pins, configuration, and repository operations. The
 supplied Compose files keep it on the private network and publish swarm
-`4001/tcp+udp`. The read-only CID gateway `8080/tcp` is a separate operator
-opt-in. It uses `Gateway.NoFetch=true`, disables DNSLink and the delegated
-`/routing/v1` API, and serves locally available blocks without turning the node
-into a recursive or routing gateway. Do not add a host mapping for `5001`; use
-the authenticated node proxy for WebUI access.
+`4001/tcp+udp`. The read-only CID gateway is exposed on `443/tcp` through a
+separate Traefik sidecar only when `DROP_PUBLIC_GATEWAY_DOMAIN` is configured.
+It proxies only `/ipfs/*` to the internal Kubo gateway, uses `Gateway.NoFetch=true`,
+disables DNSLink and the delegated `/routing/v1` API, and serves locally
+available blocks without turning the node into a recursive or routing gateway.
+Do not add a host mapping for `5001` or the raw Kubo gateway `8080`; use the
+authenticated node proxy for WebUI access.
 
 ### Resolved in codebase (no action)
 
@@ -175,9 +177,11 @@ the authenticated node proxy for WebUI access.
       firewall it to the gateway only.
 - [ ] Open only what's needed: `51820/udp`, `8443/tcp`, `4443/udp`, and Drop
       `4001/tcp+udp` when enabled.
-- [ ] Never publish Kubo admin RPC `5001`; use the exact-purpose node proxy.
-- [ ] Open Drop `8080/tcp` only when direct public CID retrieval is intended;
-      understand that anyone with a CID can request locally available content.
+- [ ] Never publish Kubo admin RPC `5001` or the raw Kubo gateway `8080`;
+      use the exact-purpose node proxy.
+- [ ] Open Drop `443/tcp` only when `DROP_PUBLIC_GATEWAY_DOMAIN` is configured
+      and DNS points to the node; understand that anyone with a CID can request
+      locally available content.
 - [ ] Keep `Gateway.ExposeRoutingAPI=false` and automatic Kubo GC enabled.
 - [ ] Enable full-disk encryption; keep `config.env` and `STATE_DIR` `0600/0700`.
 - [ ] Treat `kubo_data` as sensitive persistent storage; disable Drop without

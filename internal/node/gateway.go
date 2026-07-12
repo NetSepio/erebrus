@@ -186,8 +186,9 @@ func (g *GatewayBridge) dropCapability() *gatewayclient.DropCapability {
 		return nil
 	}
 	return &gatewayclient.DropCapability{
-		Enabled: g.drop.Enabled(), AcceptsPublicUploads: g.drop.AcceptsPublicUploads(),
-		PublicGatewayEnabled: g.drop.PublicGatewayAvailable(),
+		Enabled:              g.drop.Enabled(),
+		AcceptsPublicUploads: g.drop.AcceptsPublicUploads(),
+		PublicGatewayURL:     g.drop.PublicGatewayURL(),
 		WebUIAvailable:       g.drop.WebUIAvailable(),
 	}
 }

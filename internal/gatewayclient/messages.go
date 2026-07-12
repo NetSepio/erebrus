@@ -63,10 +63,10 @@ type Capabilities struct {
 
 // DropCapability advertises stable Drop feature flags.
 type DropCapability struct {
-	Enabled              bool `json:"enabled"`
-	AcceptsPublicUploads bool `json:"accepts_public_uploads"`
-	PublicGatewayEnabled bool `json:"public_gateway_enabled"`
-	WebUIAvailable       bool `json:"webui_available"`
+	Enabled              bool   `json:"enabled"`
+	AcceptsPublicUploads bool   `json:"accepts_public_uploads"`
+	PublicGatewayURL     string `json:"public_gateway_url,omitempty"`
+	WebUIAvailable       bool   `json:"webui_available"`
 }
 
 // Endpoints describes the connection endpoints clients dial.

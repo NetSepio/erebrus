@@ -4,7 +4,9 @@ package config
 
 import (
 	"fmt"
+	"net"
 	"os"
+	"regexp"
 	"strconv"
 	"strings"
 )
@@ -83,12 +85,12 @@ type Config struct {
 	AppWildcardDomain string
 
 	// Drop storage
-	DropEnabled         bool
-	DropStorageMax      string
-	DropStorageMaxBytes int64
-	DropSwarmPort       string
-	DropWebUIEnabled    bool
-	DropPublicGateway   bool
+	DropEnabled             bool
+	DropStorageMax          string
+	DropStorageMaxBytes     int64
+	DropSwarmPort           string
+	DropWebUIEnabled        bool
+	DropPublicGatewayDomain string
 
 	// registrar
 	ChainRegistration string // off | solana
@@ -125,75 +127,75 @@ func Load() *Config {
 		bindAddr = env("SERVER", "0.0.0.0")
 	}
 	c := &Config{
-		RunType:                env("RUNTYPE", "release"),
-		BindAddr:               bindAddr,
-		HTTPPort:               env("HTTP_PORT", "9080"),
-		UnsafePublicAPI:        boolEnv("UNSAFE_PUBLIC_API", false),
-		PublicDomain:           firstEnv("EREBRUS_DOMAIN", "PUBLIC_DOMAIN", ""),
-		WildcardDomain:         env("WILDCARD_DOMAIN", os.Getenv("EREBRUS_WILDCARD_DOMAIN")),
-		PublicGatewayEnabled:   boolEnv("PUBLIC_GATEWAY_ENABLED", boolEnv("EREBRUS_PUBLIC_GATEWAY", false)),
-		PublicHTTPPort:         env("PUBLIC_HTTP_PORT", "80"),
-		PublicHTTPSPort:        env("PUBLIC_HTTPS_PORT", "443"),
-		AutoTLS:                boolEnv("AUTO_TLS", true),
-		NodeName:               env("NODE_NAME", hostnameOr("erebrus-node")),
-		Region:                 env("REGION", "unknown"),
-		Zone:                   env("ZONE", ""),
-		Version:                Version,
-		Mnemonic:               os.Getenv("MNEMONIC"),
-		GatewayURL:             env("GATEWAY_URL", ""),
-		GatewayPeerMultiaddr:   env("GATEWAY_PEER_MULTIADDR", ""),
-		P2PListenPort:          env("P2P_LISTEN_PORT", "9002"),
-		NodeID:                 os.Getenv("NODE_ID"),
-		NodeToken:              os.Getenv("NODE_TOKEN"),
-		WalletChain:            env("WALLET_CHAIN", "SOLANA"),
-		NodeRegistrationToken:  firstEnv("EREBRUS_NODE_REGISTRATION_TOKEN", "EREBRUS_ORG_ENROLLMENT_SECRET", "ORG_ENROLLMENT_SECRET", ""),
-		APIPublicURL:           os.Getenv("API_PUBLIC_URL"),
-		GatewayAutoRegister:    boolEnv("GATEWAY_AUTO_REGISTER", true),
-		GatewayPublicKey:       os.Getenv("GATEWAY_PUBLIC_KEY"),
-		NodeKey:                firstEnv("NODE_KEY", "NODE_API_TOKEN", ""),
-		NodeAPIToken:           firstEnv("NODE_KEY", "NODE_API_TOKEN", ""),
-		WGConfDir:              env("WG_CONF_DIR", "/etc/wireguard"),
-		WGInterface:            normalizeInterface(env("WG_INTERFACE_NAME", "wg0")),
-		WGEndpointHost:         os.Getenv("WG_ENDPOINT_HOST"),
-		WGEndpointPort:         firstEnv("WG_PORT", "WG_ENDPOINT_PORT", "51820"),
-		StealthTCPPort:         firstEnv("STEALTH_TCP_PORT", "VLESS_PORT", "8443"),
-		StealthUDPPort:         firstEnv("STEALTH_UDP_PORT", "HYSTERIA2_PORT", "4443"),
-		WGIPv4Subnet:           env("WG_IPv4_SUBNET", "10.0.0.1/16"),
-		WGDNS:                  env("WG_DNS", "1.1.1.1"),
-		WGPostUp:               os.Getenv("WG_POST_UP"),
-		WGPostDown:             os.Getenv("WG_POST_DOWN"),
-		WGPreUp:                os.Getenv("WG_PRE_UP"),
-		WGPreDown:              os.Getenv("WG_PRE_DOWN"),
-		EnableStealth:          boolEnv("ENABLE_STEALTH", true),
-		VLESSPort:              "", // synced from StealthTCPPort below
-		Hysteria2Port:          "", // synced from StealthUDPPort below
-		RealityServerNames:     splitCSV(env("REALITY_SERVER_NAMES", "www.microsoft.com")),
-		RealityHandshakeServer: env("REALITY_HANDSHAKE_SERVER", ""),
-		Hysteria2ObfsPassword:  os.Getenv("HYSTERIA2_OBFS_PASSWORD"),
-		EnableTUIC:             boolEnv("ENABLE_TUIC", false),
-		StateDir:               env("STATE_DIR", "/var/lib/erebrus"),
-		EnableAppHosting:       boolEnv("ENABLE_APP_HOSTING", false),
-		AppWildcardDomain:      os.Getenv("APP_WILDCARD_DOMAIN"),
-		DropEnabled:            boolEnv("DROP_ENABLED", false),
-		DropStorageMax:         env("DROP_STORAGE_MAX", "10GB"),
-		DropSwarmPort:          env("DROP_SWARM_PORT", "4001"),
-		DropWebUIEnabled:       boolEnv("DROP_WEBUI_ENABLED", false),
-		DropPublicGateway:      boolEnv("DROP_PUBLIC_GATEWAY_ENABLED", false),
-		ChainRegistration:      env("CHAIN_REGISTRATION", "off"),
-		PrivateDNSEnabled:      boolEnv("PRIVATE_DNS_ENABLED", false),
-		PrivateDNSDomain:       env("PRIVATE_DNS_DOMAIN", "ere"),
-		PrivateDNSAddr:         os.Getenv("PRIVATE_DNS_ADDR"),
-		UpstreamDNS:            env("UPSTREAM_DNS", "1.1.1.1"),
-		DNSQueryLogs:           boolEnv("DNS_QUERY_LOGS", false),
-		ErebrusProfile:         env("EREBRUS_PROFILE", ProfileStandard),
-		FirewallProvider:       env("FIREWALL_PROVIDER", ""),
-		FirewallDNSAddr:        os.Getenv("FIREWALL_DNS_ADDR"),
-		ShieldAdminURL:         os.Getenv("SHIELD_ADMIN_URL"),
-		ShieldAdminUser:        env("SHIELD_ADMIN_USER", "admin"),
-		ShieldAdminPassword:    os.Getenv("SHIELD_ADMIN_PASSWORD"),
-		ShieldUpstreamDNS:      env("SHIELD_UPSTREAM_DNS", "1.1.1.1,1.0.0.1"),
-		SentinelAPIURL:         os.Getenv("SENTINEL_API_URL"),
-		SentinelImage:          env("SENTINEL_IMAGE", "ghcr.io/netsepio/erebrus-sentinel:latest"),
+		RunType:                 env("RUNTYPE", "release"),
+		BindAddr:                bindAddr,
+		HTTPPort:                env("HTTP_PORT", "9080"),
+		UnsafePublicAPI:         boolEnv("UNSAFE_PUBLIC_API", false),
+		PublicDomain:            firstEnv("EREBRUS_DOMAIN", "PUBLIC_DOMAIN", ""),
+		WildcardDomain:          env("WILDCARD_DOMAIN", os.Getenv("EREBRUS_WILDCARD_DOMAIN")),
+		PublicGatewayEnabled:    boolEnv("PUBLIC_GATEWAY_ENABLED", boolEnv("EREBRUS_PUBLIC_GATEWAY", false)),
+		PublicHTTPPort:          env("PUBLIC_HTTP_PORT", "80"),
+		PublicHTTPSPort:         env("PUBLIC_HTTPS_PORT", "443"),
+		AutoTLS:                 boolEnv("AUTO_TLS", true),
+		NodeName:                env("NODE_NAME", hostnameOr("erebrus-node")),
+		Region:                  env("REGION", "unknown"),
+		Zone:                    env("ZONE", ""),
+		Version:                 Version,
+		Mnemonic:                os.Getenv("MNEMONIC"),
+		GatewayURL:              env("GATEWAY_URL", ""),
+		GatewayPeerMultiaddr:    env("GATEWAY_PEER_MULTIADDR", ""),
+		P2PListenPort:           env("P2P_LISTEN_PORT", "9002"),
+		NodeID:                  os.Getenv("NODE_ID"),
+		NodeToken:               os.Getenv("NODE_TOKEN"),
+		WalletChain:             env("WALLET_CHAIN", "SOLANA"),
+		NodeRegistrationToken:   firstEnv("EREBRUS_NODE_REGISTRATION_TOKEN", "EREBRUS_ORG_ENROLLMENT_SECRET", "ORG_ENROLLMENT_SECRET", ""),
+		APIPublicURL:            os.Getenv("API_PUBLIC_URL"),
+		GatewayAutoRegister:     boolEnv("GATEWAY_AUTO_REGISTER", true),
+		GatewayPublicKey:        os.Getenv("GATEWAY_PUBLIC_KEY"),
+		NodeKey:                 firstEnv("NODE_KEY", "NODE_API_TOKEN", ""),
+		NodeAPIToken:            firstEnv("NODE_KEY", "NODE_API_TOKEN", ""),
+		WGConfDir:               env("WG_CONF_DIR", "/etc/wireguard"),
+		WGInterface:             normalizeInterface(env("WG_INTERFACE_NAME", "wg0")),
+		WGEndpointHost:          os.Getenv("WG_ENDPOINT_HOST"),
+		WGEndpointPort:          firstEnv("WG_PORT", "WG_ENDPOINT_PORT", "51820"),
+		StealthTCPPort:          firstEnv("STEALTH_TCP_PORT", "VLESS_PORT", "8443"),
+		StealthUDPPort:          firstEnv("STEALTH_UDP_PORT", "HYSTERIA2_PORT", "4443"),
+		WGIPv4Subnet:            env("WG_IPv4_SUBNET", "10.0.0.1/16"),
+		WGDNS:                   env("WG_DNS", "1.1.1.1"),
+		WGPostUp:                os.Getenv("WG_POST_UP"),
+		WGPostDown:              os.Getenv("WG_POST_DOWN"),
+		WGPreUp:                 os.Getenv("WG_PRE_UP"),
+		WGPreDown:               os.Getenv("WG_PRE_DOWN"),
+		EnableStealth:           boolEnv("ENABLE_STEALTH", true),
+		VLESSPort:               "", // synced from StealthTCPPort below
+		Hysteria2Port:           "", // synced from StealthUDPPort below
+		RealityServerNames:      splitCSV(env("REALITY_SERVER_NAMES", "www.microsoft.com")),
+		RealityHandshakeServer:  env("REALITY_HANDSHAKE_SERVER", ""),
+		Hysteria2ObfsPassword:   os.Getenv("HYSTERIA2_OBFS_PASSWORD"),
+		EnableTUIC:              boolEnv("ENABLE_TUIC", false),
+		StateDir:                env("STATE_DIR", "/var/lib/erebrus"),
+		EnableAppHosting:        boolEnv("ENABLE_APP_HOSTING", false),
+		AppWildcardDomain:       os.Getenv("APP_WILDCARD_DOMAIN"),
+		DropEnabled:             boolEnv("DROP_ENABLED", false),
+		DropStorageMax:          env("DROP_STORAGE_MAX", "10GB"),
+		DropSwarmPort:           env("DROP_SWARM_PORT", "4001"),
+		DropWebUIEnabled:        boolEnv("DROP_WEBUI_ENABLED", false),
+		DropPublicGatewayDomain: env("DROP_PUBLIC_GATEWAY_DOMAIN", ""),
+		ChainRegistration:       env("CHAIN_REGISTRATION", "off"),
+		PrivateDNSEnabled:       boolEnv("PRIVATE_DNS_ENABLED", false),
+		PrivateDNSDomain:        env("PRIVATE_DNS_DOMAIN", "ere"),
+		PrivateDNSAddr:          os.Getenv("PRIVATE_DNS_ADDR"),
+		UpstreamDNS:             env("UPSTREAM_DNS", "1.1.1.1"),
+		DNSQueryLogs:            boolEnv("DNS_QUERY_LOGS", false),
+		ErebrusProfile:          env("EREBRUS_PROFILE", ProfileStandard),
+		FirewallProvider:        env("FIREWALL_PROVIDER", ""),
+		FirewallDNSAddr:         os.Getenv("FIREWALL_DNS_ADDR"),
+		ShieldAdminURL:          os.Getenv("SHIELD_ADMIN_URL"),
+		ShieldAdminUser:         env("SHIELD_ADMIN_USER", "admin"),
+		ShieldAdminPassword:     os.Getenv("SHIELD_ADMIN_PASSWORD"),
+		ShieldUpstreamDNS:       env("SHIELD_UPSTREAM_DNS", "1.1.1.1,1.0.0.1"),
+		SentinelAPIURL:          os.Getenv("SENTINEL_API_URL"),
+		SentinelImage:           env("SENTINEL_IMAGE", "ghcr.io/netsepio/erebrus-sentinel:latest"),
 	}
 	c.ApplyProfileDefaults()
 	if mode, err := ParseModeSettingsFromEnv(); err == nil {
@@ -263,6 +265,13 @@ func (c *Config) Validate() error {
 		if c.DropWebUIEnabled && c.Mode.IsPublic() {
 			return fmt.Errorf("DROP_WEBUI_ENABLED is allowed only for private or shared nodes")
 		}
+		if c.DropPublicGatewayDomain != "" {
+			normalized, err := normalizePublicGatewayDomain(c.DropPublicGatewayDomain)
+			if err != nil {
+				return fmt.Errorf("invalid DROP_PUBLIC_GATEWAY_DOMAIN: %w", err)
+			}
+			c.DropPublicGatewayDomain = normalized
+		}
 	}
 	return c.ValidateProfile()
 }
@@ -318,9 +327,11 @@ func (c *Config) DropAcceptsPublicUploads() bool {
 	return c.DropEnabled && c.Mode.IsPublic()
 }
 
-// DropPublicGatewayAvailable reports whether direct unauthenticated CID retrieval is enabled.
-func (c *Config) DropPublicGatewayAvailable() bool {
-	return c.DropEnabled && c.DropPublicGateway
+// DropPublicGatewayURL returns the canonical HTTPS URL for the configured public
+// CID gateway domain. It returns an empty string when no domain is configured
+// or when the domain is invalid.
+func (c *Config) DropPublicGatewayURL() string {
+	return publicGatewayURL(c.DropPublicGatewayDomain)
 }
 
 // DropWebUIAvailable reports whether the private Kubo administration proxy is enabled.
@@ -435,4 +446,47 @@ func hostnameOr(def string) string {
 		return h
 	}
 	return def
+}
+
+// publicGatewayURL constructs the canonical HTTPS base URL for a public CID
+// gateway domain. It returns the empty string for empty or invalid domains.
+func publicGatewayURL(domain string) string {
+	domain, err := normalizePublicGatewayDomain(domain)
+	if err != nil || domain == "" {
+		return ""
+	}
+	return "https://" + domain
+}
+
+// normalizePublicGatewayDomain validates and normalizes a drop public gateway
+// domain. It rejects schemes, ports, paths, query fragments, credentials,
+// localhost, and IP literals.
+func normalizePublicGatewayDomain(domain string) (string, error) {
+	domain = strings.TrimSpace(domain)
+	domain = strings.TrimSuffix(domain, ".")
+	if domain == "" {
+		return "", nil
+	}
+	if strings.ContainsAny(domain, ":/?#@") || strings.Contains(domain, "..") {
+		return "", fmt.Errorf("domain must not include a scheme, port, path, query, credentials, or empty labels")
+	}
+	if strings.EqualFold(domain, "localhost") {
+		return "", fmt.Errorf("domain must not be localhost")
+	}
+	if net.ParseIP(domain) != nil {
+		return "", fmt.Errorf("domain must not be an IP literal")
+	}
+	if !isValidDNSHost(domain) {
+		return "", fmt.Errorf("domain must be a valid DNS hostname")
+	}
+	return strings.ToLower(domain), nil
+}
+
+var dnsHostRe = regexp.MustCompile(`^[a-zA-Z0-9]([a-zA-Z0-9-]{0,61}[a-zA-Z0-9])?(\.[a-zA-Z0-9]([a-zA-Z0-9-]{0,61}[a-zA-Z0-9])?)*$`)
+
+func isValidDNSHost(domain string) bool {
+	if len(domain) > 253 {
+		return false
+	}
+	return dnsHostRe.MatchString(domain)
 }

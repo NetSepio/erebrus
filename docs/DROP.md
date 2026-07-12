@@ -13,7 +13,7 @@ The interactive installer asks:
 
 ```text
 Enable Erebrus Drop (Kubo/IPFS storage)? [y/N]
-Allow public CID retrieval directly from this node on 8080/tcp? [y/N]
+Public CID gateway domain (leave empty to disable; DNS must point to this node):
 ```
 
 The public CID gateway defaults off. With it disabled, uploads, reads, pin
@@ -26,7 +26,7 @@ For unattended installs:
 ./install.sh --mode container --profile standard --drop --yes
 ./install.sh --mode container --profile shield --drop --yes
 ./install.sh --mode container --profile sentinel --drop --yes
-./install.sh --mode container --profile standard --drop --drop-public-gateway --yes
+./install.sh --mode container --profile standard --drop --drop-public-gateway-domain drop.example.com --yes
 ```
 
 The only operator-facing settings are:
@@ -36,32 +36,43 @@ DROP_ENABLED=false
 DROP_STORAGE_MAX=10GB
 DROP_SWARM_PORT=4001
 DROP_WEBUI_ENABLED=false
-DROP_PUBLIC_GATEWAY_ENABLED=false
+DROP_PUBLIC_GATEWAY_DOMAIN=
 ```
 
 `DROP_WEBUI_ENABLED=true` is valid only for private nodes. Kubo uses fixed
 defaults: service `kubo`, private RPC `http://kubo:5001`, CID gateway
-`8080/tcp`, repo path `/var/lib/erebrus-kubo` in the node, and image
-`ipfs/kubo:v0.42.0`. Port `8080` is host-published only when
-`DROP_PUBLIC_GATEWAY_ENABLED=true`.
+`8080/tcp` inside the private Compose network, repo path `/var/lib/erebrus-kubo`
+in the node, and image `ipfs/kubo:v0.42.0`. The raw Kubo `8080` and `5001`
+ports are never host-published.
+
+When `DROP_PUBLIC_GATEWAY_DOMAIN` is set to a valid DNS name (e.g.
+`drop.example.com`) that points to the node, a pinned Traefik sidecar is
+started. It terminates TLS on `443/tcp`, obtains a certificate via TLS-ALPN-01
+ACME, and proxies only `/ipfs/*` to the internal Kubo gateway. The public
+retrieval URL is:
+
+```text
+https://<DROP_PUBLIC_GATEWAY_DOMAIN>/ipfs/<cid>
+```
 
 Before creating the Kubo container, the installer opens and externally probes
-`DROP_SWARM_PORT/tcp`. It also opens and probes `8080/tcp` when direct public
-CID retrieval is selected. A confirmed TCP failure aborts the install unless
-the operator explicitly uses `--skip-checks`. UDP cannot be reliably probed, so
-the installer requires the operator to verify `DROP_SWARM_PORT/udp` in the host
-and cloud firewalls.
+`DROP_SWARM_PORT/tcp`. It also opens and probes `443/tcp` when a public gateway
+domain is configured. The installer additionally verifies that the domain
+resolves to the node's public IP when a DNS lookup tool is available. A
+confirmed TCP failure aborts the install unless the operator explicitly uses
+`--skip-checks`. UDP cannot be reliably probed, so the installer requires the
+operator to verify `DROP_SWARM_PORT/udp` in the host and cloud firewalls.
 
-For repository development:
+For repository development with Drop private:
 
 ```bash
 DROP_ENABLED=true docker compose --profile drop up -d
 ```
 
-This keeps direct CID access private. To publish `8080/tcp`:
+To also enable the TLS public gateway:
 
 ```bash
-DROP_ENABLED=true DROP_PUBLIC_GATEWAY_ENABLED=true docker compose \
+DROP_ENABLED=true DROP_PUBLIC_GATEWAY_DOMAIN=drop.example.com docker compose \
   -f docker-compose.yml \
   -f deploy/compose/drop-public-gateway.yml \
   --profile drop up -d
@@ -73,21 +84,20 @@ Installer-managed deployments use the optional override:
 docker compose --env-file .env -f docker-compose.yml -f drop.yml up -d
 ```
 
-When public CID retrieval is enabled, append
-`-f drop-public-gateway.yml`.
+When a public gateway domain is configured, append `-f drop-public-gateway.yml`.
 
 ## Network and identity safety
 
 - Publish `DROP_SWARM_PORT` as both TCP and UDP.
-- Publish gateway `8080/tcp` only after the operator explicitly enables public
-  direct CID retrieval.
-- Never publish Kubo admin RPC `5001`.
+- Publish the public CID gateway only on `443/tcp` through the Traefik sidecar
+  when `DROP_PUBLIC_GATEWAY_DOMAIN` is configured.
+- Never publish the raw Kubo gateway `8080/tcp` or Kubo admin RPC `5001/tcp`.
 - The node is the only caller of Kubo admin RPC.
 - Kubo gateway `NoFetch` is enabled so the read-only public gateway serves
   locally available blocks instead of acting as an unrestricted recursive
   gateway.
-- Kubo gateway DNSLink and `/routing/v1` exposure are disabled. Public port
-  `8080` is limited to gateway content handling and does not expose the Kubo
+- Kubo gateway DNSLink and `/routing/v1` exposure are disabled. Public access is
+  limited to `https://<domain>/ipfs/<cid>` and does not expose the Kubo
   delegated-routing service.
 - Kubo receives a deterministic libp2p identity derived from hardened child
   `m/1'` and domain `erebrus/drop/kubo/v1`.
@@ -100,15 +110,16 @@ When public CID retrieval is enabled, append
   Drop operations unavailable.
 - Kubo anonymous telemetry is disabled in the supplied Compose definitions.
 
-When `DROP_PUBLIC_GATEWAY_ENABLED=true`, pinned content is available directly
-by CID without Erebrus authentication:
+When `DROP_PUBLIC_GATEWAY_DOMAIN` is configured and the HTTPS gateway is
+reachable, pinned content is available directly by CID without Erebrus
+authentication:
 
 ```text
-http://<node-public-ip>:8080/ipfs/<cid>
+https://<DROP_PUBLIC_GATEWAY_DOMAIN>/ipfs/<cid>
 ```
 
-This path is public by design. Keep the option disabled when every read must
-pass through Erebrus gateway authorization.
+This path is public by design. Leave `DROP_PUBLIC_GATEWAY_DOMAIN` empty when
+every read must pass through Erebrus gateway authorization.
 
 ## Persistence, disable, and removal
 
@@ -158,7 +169,7 @@ Public `GET /api/v2/status` includes:
     "drop": {
       "enabled": true,
       "accepts_public_uploads": true,
-      "public_gateway_enabled": false,
+      "public_gateway_url": "https://drop.example.com",
       "webui_available": false
     },
     "services": {
@@ -178,6 +189,10 @@ Public `GET /api/v2/status` includes:
   }
 }
 ```
+
+`public_gateway_url` is omitted when the public gateway is disabled or not yet
+reachable. The `public_gateway_url` field is populated only when the domain is
+configured and a periodic HTTPS reachability probe succeeds with valid TLS.
 
 Drop states are:
 
@@ -246,8 +261,8 @@ upload IDs, authorization values, private keys, or organization data.
 ```bash
 docker compose --env-file .env -f docker-compose.yml -f drop.yml ps
 docker compose --env-file .env -f docker-compose.yml -f drop.yml logs -f kubo
-# Only when DROP_PUBLIC_GATEWAY_ENABLED=true:
-curl -I "http://127.0.0.1:8080/ipfs/<cid>"
+# Only when DROP_PUBLIC_GATEWAY_DOMAIN is set:
+curl -I "https://<DROP_PUBLIC_GATEWAY_DOMAIN>/ipfs/<cid>"
 curl -s http://127.0.0.1:9080/api/v2/status | \
   jq '.capabilities.drop, .capabilities.services.drop, (.readiness.checks[] | select(.id == "drop"))'
 ```
@@ -259,3 +274,7 @@ curl -s http://127.0.0.1:9080/api/v2/status | \
   reclaim it, or increase `DROP_STORAGE_MAX` and recreate Kubo.
 - `degraded` with an identity conflict: verify the mnemonic and volume pairing;
   the node will not overwrite the existing Kubo identity.
+- `public_gateway_url` empty when a domain is configured: check that DNS points
+  to the node, that `443/tcp` is reachable, and that Traefik obtained a
+  certificate from Let's Encrypt. Traefik logs: `docker compose --env-file .env
+  -f docker-compose.yml -f drop.yml -f drop-public-gateway.yml logs -f traefik`.

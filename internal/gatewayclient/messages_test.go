@@ -2,6 +2,7 @@ package gatewayclient
 
 import (
 	"encoding/json"
+	"strings"
 	"testing"
 )
 
@@ -111,7 +112,7 @@ func TestDropCapabilityRoundTrip(t *testing.T) {
 	h := Hello{
 		Capabilities: Capabilities{
 			Drop: &DropCapability{
-				Enabled: true, AcceptsPublicUploads: true, PublicGatewayEnabled: true,
+				Enabled: true, AcceptsPublicUploads: true, PublicGatewayURL: "https://drop.example.com",
 				WebUIAvailable: false,
 			},
 		},
@@ -129,8 +130,26 @@ func TestDropCapabilityRoundTrip(t *testing.T) {
 		t.Fatal(err)
 	}
 	if got.Capabilities.Drop == nil || !got.Capabilities.Drop.Enabled ||
-		!got.Capabilities.Drop.AcceptsPublicUploads || !got.Capabilities.Drop.PublicGatewayEnabled ||
+		!got.Capabilities.Drop.AcceptsPublicUploads ||
+		got.Capabilities.Drop.PublicGatewayURL != "https://drop.example.com" ||
 		got.Capabilities.Drop.WebUIAvailable {
 		t.Fatalf("drop capability = %+v", got.Capabilities.Drop)
+	}
+}
+
+func TestDropCapabilityPublicGatewayURLOmitEmpty(t *testing.T) {
+	h := Hello{
+		Capabilities: Capabilities{
+			Drop: &DropCapability{
+				Enabled: true, AcceptsPublicUploads: true, WebUIAvailable: false,
+			},
+		},
+	}
+	frame, err := wrap(TypeHello, h)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if strings.Contains(string(frame), "public_gateway_url") {
+		t.Fatalf("public_gateway_url should be omitted when empty: %s", string(frame))
 	}
 }
