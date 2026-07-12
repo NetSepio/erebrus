@@ -22,7 +22,10 @@ Non-interactive:
 
 ```bash
 curl -fsSL https://erebrus.io/install.sh | \
-  MNEMONIC="..." WG_ENDPOINT_HOST="vpn.example.com" bash -s -- --mode docker --yes
+  MNEMONIC="..." \
+  WG_ENDPOINT_HOST="vpn.example.com" \
+  EREBRUS_NODE_REGISTRATION_TOKEN="ere_reg_..." \
+  bash -s -- --mode docker --yes
 ```
 
 Add `--drop` to run the optional Kubo/IPFS storage sidecar. `--no-drop` stops

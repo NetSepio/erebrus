@@ -29,7 +29,9 @@ Public bare-metal nodes use stealth on **443/tcp** and **443/udp**.
 
 ```bash
 curl -fsSL https://raw.githubusercontent.com/NetSepio/erebrus/v2/install.sh | \
+  MNEMONIC="..." \
   WG_ENDPOINT_HOST="<public-ip>" \
+  EREBRUS_NODE_REGISTRATION_TOKEN="ere_reg_..." \
   bash -s -- --mode docker --drop --yes
 ```
 
