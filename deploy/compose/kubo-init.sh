@@ -43,6 +43,7 @@ fi
 
 ipfs config Addresses.API /ip4/0.0.0.0/tcp/5001
 ipfs config Addresses.Gateway /ip4/0.0.0.0/tcp/8080
+ipfs config --json Gateway.NoFetch true
 ipfs config Datastore.StorageMax "${DROP_STORAGE_MAX:-10GB}"
 rm -f "$private_file" "$conflict_file"
 touch "$managed_file"

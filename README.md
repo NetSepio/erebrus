@@ -18,7 +18,7 @@ For more details visit [erebrus.io](https://erebrus.io).
 
 ## Install a node
 
-Linux only (x86_64 / arm64). A node needs a **static, internet-routable public IP**, real bandwidth, and open ports (`9080/tcp`, `51820/udp`, `8443/tcp`, `4443/udp`). Drop nodes additionally publish `4001/tcp` and `4001/udp`. The installer verifies the base node ports.
+Linux only (x86_64 / arm64). A node needs a **static, internet-routable public IP**, real bandwidth, and open ports (`9080/tcp`, `51820/udp`, `8443/tcp`, `4443/udp`). Drop nodes additionally publish `8080/tcp` for CID retrieval and `4001/tcp+udp` for the IPFS swarm. The installer verifies the required TCP ports.
 
 ```bash
 curl -fsSL https://erebrus.io/install.sh | bash

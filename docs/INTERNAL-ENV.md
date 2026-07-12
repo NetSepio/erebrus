@@ -31,7 +31,8 @@ End operators should use `erebrus status`, not this document.
 | `DROP_SWARM_PORT` | Published Kubo TCP/UDP swarm port, default `4001` |
 | `DROP_WEBUI_ENABLED` | Enable the exact-purpose private WebUI proxy |
 
-Kubo RPC URL, RPC/gateway ports, service name, and image version are fixed
-application/Compose defaults rather than environment settings.
+Kubo RPC URL, private RPC port `5001`, public gateway port `8080`, service name,
+and image version are fixed application/Compose defaults rather than
+environment settings.
 
 See [`.env.example`](../.env.example) for the full internal template.

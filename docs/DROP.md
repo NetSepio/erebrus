@@ -33,8 +33,16 @@ DROP_WEBUI_ENABLED=false
 ```
 
 `DROP_WEBUI_ENABLED=true` is valid only for private nodes. Kubo uses fixed
-internal defaults: service `kubo`, RPC `http://kubo:5001`, gateway `8080`, repo
-path `/var/lib/erebrus-kubo` in the node, and image `ipfs/kubo:v0.42.0`.
+defaults: service `kubo`, private RPC `http://kubo:5001`, public gateway
+`8080/tcp`, repo path `/var/lib/erebrus-kubo` in the node, and image
+`ipfs/kubo:v0.42.0`.
+
+Before creating the Kubo container, the installer opens the Drop rules in UFW
+or firewalld and externally probes `8080/tcp` and `DROP_SWARM_PORT/tcp` with
+temporary listeners. A confirmed TCP failure aborts the install unless the
+operator explicitly uses `--skip-checks`. UDP cannot be reliably probed, so the
+installer requires the operator to verify `DROP_SWARM_PORT/udp` in the host and
+cloud firewalls.
 
 For repository development:
 
@@ -50,9 +58,12 @@ docker compose --env-file .env -f docker-compose.yml -f drop.yml up -d
 
 ## Network and identity safety
 
-- Publish `DROP_SWARM_PORT` as both TCP and UDP.
-- Never publish Kubo RPC `5001` or gateway `8080`.
+- Publish gateway `8080/tcp` and `DROP_SWARM_PORT` as both TCP and UDP.
+- Never publish Kubo admin RPC `5001`.
 - The node is the only caller of Kubo admin RPC.
+- Kubo gateway `NoFetch` is enabled so the read-only public gateway serves
+  locally available blocks instead of acting as an unrestricted recursive
+  gateway.
 - Kubo receives a deterministic libp2p identity derived from hardened child
   `m/1'` and domain `erebrus/drop/kubo/v1`.
 - The Kubo PeerID is intentionally different from the Erebrus node PeerID.
@@ -63,6 +74,12 @@ docker compose --env-file .env -f docker-compose.yml -f drop.yml up -d
   `.erebrus-identity-conflict`, leaves the existing config unchanged, and keeps
   Drop operations unavailable.
 - Kubo anonymous telemetry is disabled in the supplied Compose definitions.
+
+Pinned content is available directly by CID:
+
+```text
+http://<node-public-ip>:8080/ipfs/<cid>
+```
 
 ## Persistence, disable, and removal
 
@@ -192,6 +209,7 @@ upload IDs, authorization values, private keys, or organization data.
 ```bash
 docker compose --env-file .env -f docker-compose.yml -f drop.yml ps
 docker compose --env-file .env -f docker-compose.yml -f drop.yml logs -f kubo
+curl -I "http://127.0.0.1:8080/ipfs/<cid>"
 curl -s http://127.0.0.1:9080/api/v2/status | \
   jq '.capabilities.drop, .capabilities.services.drop, (.readiness.checks[] | select(.id == "drop"))'
 ```

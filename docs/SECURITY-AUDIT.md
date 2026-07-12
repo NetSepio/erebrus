@@ -27,6 +27,7 @@ audit is still recommended before a large public launch._
 | node → gateway (WS) | identity, heartbeat, per-client byte deltas | node PASETO |
 | node ↔ host | SQLite DB, `config.env`, WG kernel iface | host root |
 | node ↔ Kubo | bounded object streams and admin RPC on the Compose network | exact-purpose node API; RPC not host-published |
+| internet → Kubo gateway | reads locally available blocks by CID on `8080/tcp` | public read-only gateway with remote fetching disabled |
 
 The node is the **exit point**: it necessarily sees the source (client) and can
 observe destination IPs of forwarded packets at the network layer. The design
@@ -90,7 +91,7 @@ roadmap work, or explicit acceptance.
 | F8 | 🟠 | No application-level rate limiting | Operator: reverse proxy / fail2ban / cloud UDP protection |
 | F10 | 🟡 | Shared node-wide carrier secret; partial rotation only | Roadmap: full carrier-secret rotation command |
 | F11 | 🟡 | Hysteria2 self-signed cert + client `insecure` | Accepted — inner WG payload stays confidential |
-| F12 | 🔴 | Publishing Kubo RPC or gateway grants unauthenticated administrative/content access | Compose keeps `5001`/`8080` internal; operator must not add host mappings |
+| F12 | 🔴 | Publishing Kubo admin RPC grants unauthenticated repository control | Compose keeps `5001` internal; operator must not add a host mapping |
 
 ### F3 — Plaintext node API (OPERATOR — top priority)
 `:9080` is plain HTTP. The `NODE_API_TOKEN` and full credential bundles
@@ -147,11 +148,12 @@ node's WG public key from the bundle), so confidentiality holds. REALITY (the
 TCP carrier) resists MITM by design.
 
 ### F12 — Kubo admin exposure (OPERATOR — never publish)
-Kubo RPC `5001` controls pins, configuration, and repository operations; gateway
-`8080` serves stored content. The supplied Compose files expose them only to the
-private Compose network and publish only swarm `4001/tcp+udp`. Do not add host
-port mappings for `5001` or `8080`. Use the authenticated node proxy for WebUI
-access.
+Kubo RPC `5001` controls pins, configuration, and repository operations. The
+supplied Compose files keep it on the private network and publish only the
+read-only CID gateway `8080/tcp` plus swarm `4001/tcp+udp`. The gateway has
+`Gateway.NoFetch=true`, limiting it to locally available blocks instead of
+turning the node into an unrestricted recursive gateway. Do not add a host
+mapping for `5001`; use the authenticated node proxy for WebUI access.
 
 ### Resolved in codebase (no action)
 
@@ -172,7 +174,9 @@ access.
       firewall it to the gateway only.
 - [ ] Open only what's needed: `51820/udp`, `8443/tcp`, `4443/udp`, and Drop
       `4001/tcp+udp` when enabled.
-- [ ] Never publish Kubo `5001` or `8080`; use the exact-purpose node proxy.
+- [ ] Never publish Kubo admin RPC `5001`; use the exact-purpose node proxy.
+- [ ] Open Drop `8080/tcp` only when direct public CID retrieval is intended;
+      understand that anyone with a CID can request locally available content.
 - [ ] Enable full-disk encryption; keep `config.env` and `STATE_DIR` `0600/0700`.
 - [ ] Treat `kubo_data` as sensitive persistent storage; disable Drop without
       `down -v` and remove the volume only as an explicit destructive action.

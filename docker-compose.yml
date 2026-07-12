@@ -110,9 +110,9 @@ services:
     ports:
       - "${DROP_SWARM_PORT:-4001}:4001/tcp"
       - "${DROP_SWARM_PORT:-4001}:4001/udp"
+      - "8080:8080/tcp"
     expose:
       - "5001"
-      - "8080"
     volumes:
       - kubo_data:/data/ipfs
       - ./deploy/compose/kubo-init.sh:/container-init.d/010-erebrus-identity.sh:ro

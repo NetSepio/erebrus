@@ -9,6 +9,9 @@ info:
     bearer token except /api/v2/status and /metrics. Drop routes additionally
     require X-Erebrus-Node-Key and an exact-purpose token.
 
+    When Drop is enabled, direct CID reads use the separate public Kubo gateway
+    at `http://<node-ip>:8080/ipfs/<cid>`. Kubo admin RPC `5001` remains private.
+
     FROZEN (v2.0): additive changes only. See ../../../erebrus-gateway/docs/v2/ws-protocol.md
     for the WebSocket control plane.
 servers:

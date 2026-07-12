@@ -20,6 +20,7 @@ Deployment profile (`EREBRUS_NETWORK_PROFILE`) is separate: `bridge` for Docker,
 | 51820 | udp |
 | 8443 | tcp |
 | 4443 | udp |
+| 8080 | tcp (Drop CID gateway only) |
 | 4001 | tcp + udp (Drop only) |
 
 Public bare-metal nodes use stealth on **443/tcp** and **443/udp**.
@@ -32,8 +33,9 @@ curl -fsSL https://raw.githubusercontent.com/NetSepio/erebrus/v2/install.sh | \
   bash -s -- --mode docker --drop --yes
 ```
 
-Omit `--drop` or pass `--no-drop` for VPN-only deployment. Drop never publishes
-Kubo RPC `5001` or gateway `8080`.
+Omit `--drop` or pass `--no-drop` for VPN-only deployment. Drop publishes the
+read-only Kubo gateway on `8080/tcp` and swarm on `4001/tcp+udp`; admin RPC
+`5001` remains private.
 
 ## Install (bare metal)
 

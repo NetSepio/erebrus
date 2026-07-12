@@ -45,6 +45,7 @@ DROP="${DROP_ENABLED:-}"
 DROP_STORAGE_MAX="${DROP_STORAGE_MAX:-10GB}"
 DROP_SWARM_PORT="${DROP_SWARM_PORT:-4001}"
 DROP_WEBUI_ENABLED="${DROP_WEBUI_ENABLED:-false}"
+DROP_GATEWAY_PORT=8080
 DROP_STATE="disabled"
 ASSUME_YES="${ASSUME_YES:-false}"
 SKIP_CHECKS="${SKIP_CHECKS:-false}"
@@ -254,14 +255,13 @@ check_bandwidth() {
 # Actively verify a TCP port is reachable FROM THE INTERNET: bind a temporary
 # listener, then ask check-host.net (multiple external probes) to connect.
 check_inbound_tcp() {
-  local port="$1" label="$2"
+  local port="$1" label="$2" required="${3:-false}"
   command -v python3 >/dev/null 2>&1 || { warn "python3 missing; skipping $label inbound check"; return; }
+  local lpid=""
   if ss -lnt 2>/dev/null | awk '{print $4}' | grep -qE "[:.]${port}\$"; then
-    warn "Port $port already in use locally; skipping inbound reachability check."
-    return
-  fi
-
-  python3 - "$port" >>"$LOG_FILE" 2>&1 <<'PY' &
+    info "$label ($port/tcp) is already listening locally; checking external reachability."
+  else
+    python3 - "$port" >>"$LOG_FILE" 2>&1 <<'PY' &
 import socket, sys, time
 p=int(sys.argv[1]); s=socket.socket(); s.setsockopt(socket.SOL_SOCKET,socket.SO_REUSEADDR,1)
 s.bind(("0.0.0.0",p)); s.listen(8); s.settimeout(25); t=time.time()
@@ -271,8 +271,9 @@ while time.time()-t < 25:
     except Exception:
         break
 PY
-  local lpid=$!
-  sleep 1
+    lpid=$!
+    sleep 1
+  fi
 
   local rid res
   rid="$(curl -fsS --max-time 10 -H 'Accept: application/json' \
@@ -280,12 +281,13 @@ PY
         | python3 -c 'import sys,json;print(json.load(sys.stdin).get("request_id",""))' 2>/dev/null || true)"
   if [[ -z "$rid" ]]; then
     warn "$label ($port/tcp): external prober unavailable — could not auto-verify. Ensure the port is open."
-    kill "$lpid" 2>/dev/null || true; wait "$lpid" 2>/dev/null || true; return
+    [[ -n "$lpid" ]] && { kill "$lpid" 2>/dev/null || true; wait "$lpid" 2>/dev/null || true; }
+    return
   fi
   sleep 7
   res="$(curl -fsS --max-time 10 -H 'Accept: application/json' \
         "https://check-host.net/check-result/${rid}" 2>/dev/null || true)"
-  kill "$lpid" 2>/dev/null || true; wait "$lpid" 2>/dev/null || true
+  [[ -n "$lpid" ]] && { kill "$lpid" 2>/dev/null || true; wait "$lpid" 2>/dev/null || true; }
 
   local connected
   connected="$(echo "$res" | python3 -c '
@@ -304,7 +306,26 @@ print(hit)
   else
     err "$label ($port/tcp) NOT reachable from the internet."
     warn "Open it in your firewall/security-group (and NAT it if applicable)."
+    [[ "$required" == "true" ]] && die "aborted: required port $port not reachable"
     confirm "Continue anyway?" n || die "aborted: required port $port not reachable"
+  fi
+}
+
+prepare_drop_firewall() {
+  [[ "$DROP" == "true" ]] || return
+  if command -v ufw >/dev/null 2>&1 && run ufw status >/dev/null 2>&1; then
+    info "Opening Drop ports via ufw before reachability checks…"
+    run ufw allow "${DROP_GATEWAY_PORT}/tcp" >>"$LOG_FILE" 2>&1 || true
+    run ufw allow "${DROP_SWARM_PORT}/tcp" >>"$LOG_FILE" 2>&1 || true
+    run ufw allow "${DROP_SWARM_PORT}/udp" >>"$LOG_FILE" 2>&1 || true
+  elif command -v firewall-cmd >/dev/null 2>&1; then
+    info "Opening Drop ports via firewalld before reachability checks…"
+    run firewall-cmd --permanent --add-port="${DROP_GATEWAY_PORT}/tcp" >>"$LOG_FILE" 2>&1 || true
+    run firewall-cmd --permanent --add-port="${DROP_SWARM_PORT}/tcp" >>"$LOG_FILE" 2>&1 || true
+    run firewall-cmd --permanent --add-port="${DROP_SWARM_PORT}/udp" >>"$LOG_FILE" 2>&1 || true
+    run firewall-cmd --reload >>"$LOG_FILE" 2>&1 || true
+  else
+    warn "No ufw/firewalld detected; open Drop ports in the host and cloud firewalls."
   fi
 }
 
@@ -319,7 +340,12 @@ run_preflight() {
   info "Checking inbound port reachability…"
   check_inbound_tcp "$HTTP_PORT" "REST API"
   check_inbound_tcp "$STEALTH_TCP_PORT" "VLESS+REALITY carrier"
+  if [[ "$DROP" == "true" ]]; then
+    check_inbound_tcp "$DROP_GATEWAY_PORT" "Kubo public gateway" true
+    check_inbound_tcp "$DROP_SWARM_PORT" "Kubo swarm" true
+  fi
   warn "UDP ports $WG_PORT (WireGuard) and $STEALTH_UDP_PORT (Hysteria2) can't be probed reliably —"
+  [[ "$DROP" == "true" ]] && warn "the same applies to Drop swarm ${DROP_SWARM_PORT}/udp."
   warn "make sure they're open; the installer will add firewall rules where it can."
 }
 
@@ -674,6 +700,7 @@ open_firewall() {
     run ufw allow "${WG_PORT}/udp"    >>"$LOG_FILE" 2>&1 || true
     run ufw allow "${STEALTH_UDP_PORT}/udp"   >>"$LOG_FILE" 2>&1 || true
     if [[ "$DROP" == "true" ]]; then
+      run ufw allow "${DROP_GATEWAY_PORT}/tcp" >>"$LOG_FILE" 2>&1 || true
       run ufw allow "${DROP_SWARM_PORT}/tcp" >>"$LOG_FILE" 2>&1 || true
       run ufw allow "${DROP_SWARM_PORT}/udp" >>"$LOG_FILE" 2>&1 || true
     fi
@@ -686,6 +713,7 @@ open_firewall() {
     run firewall-cmd --permanent --add-port="${WG_PORT}/udp"    >>"$LOG_FILE" 2>&1 || true
     run firewall-cmd --permanent --add-port="${STEALTH_UDP_PORT}/udp"   >>"$LOG_FILE" 2>&1 || true
     if [[ "$DROP" == "true" ]]; then
+      run firewall-cmd --permanent --add-port="${DROP_GATEWAY_PORT}/tcp" >>"$LOG_FILE" 2>&1 || true
       run firewall-cmd --permanent --add-port="${DROP_SWARM_PORT}/tcp" >>"$LOG_FILE" 2>&1 || true
       run firewall-cmd --permanent --add-port="${DROP_SWARM_PORT}/udp" >>"$LOG_FILE" 2>&1 || true
     fi
@@ -695,7 +723,7 @@ open_firewall() {
   else
     warn "No ufw/firewalld detected. Ensure these are open in your cloud security group:"
     warn "  ${HTTP_PORT}/tcp, ${STEALTH_TCP_PORT}/tcp, ${WG_PORT}/udp, ${STEALTH_UDP_PORT}/udp ${extra_tcp:+(+ 80/tcp 443/tcp)}"
-    [[ "$DROP" == "true" ]] && warn "  Drop swarm: ${DROP_SWARM_PORT}/tcp and ${DROP_SWARM_PORT}/udp"
+    [[ "$DROP" == "true" ]] && warn "  Drop gateway: ${DROP_GATEWAY_PORT}/tcp; swarm: ${DROP_SWARM_PORT}/tcp and ${DROP_SWARM_PORT}/udp"
   fi
 }
 
@@ -766,6 +794,12 @@ install_docker_mode() {
     if [[ "$health" == "healthy" ]]; then
       DROP_STATE="active"
       ok "Drop Kubo sidecar is healthy."
+      if curl -sS --max-time 5 -o /dev/null "http://127.0.0.1:${DROP_GATEWAY_PORT}/"; then
+        ok "Drop public gateway is listening on ${DROP_GATEWAY_PORT}/tcp."
+      else
+        DROP_STATE="degraded"
+        warn "Drop public gateway is not reachable locally on ${DROP_GATEWAY_PORT}/tcp."
+      fi
     else
       DROP_STATE="starting"
       warn "Drop Kubo sidecar is not healthy yet; VPN remains available."
@@ -897,7 +931,7 @@ validate_and_summary() {
   echo "  Node API key: ${NODE_API_TOKEN}"
   echo "  Verify   : erebrus status"
   if [[ "$DROP" == "true" ]]; then
-    echo "  Drop     : ${DROP_STATE} (Kubo swarm ${DROP_SWARM_PORT}/tcp+udp)"
+    echo "  Drop     : ${DROP_STATE} (gateway ${DROP_GATEWAY_PORT}/tcp; swarm ${DROP_SWARM_PORT}/tcp+udp)"
   else
     echo "  Drop     : disabled (existing Kubo data preserved)"
   fi
@@ -938,6 +972,7 @@ main() {
   if [[ "$DEPLOY" == "host" && "${PROFILE:-standard}" != "standard" ]]; then
     die "shield/sentinel profiles require container deploy (--mode container)"
   fi
+  prepare_drop_firewall
   run_preflight
   gather_config
   case "$DEPLOY" in

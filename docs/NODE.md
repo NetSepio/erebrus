@@ -36,12 +36,14 @@ Drop while preserving its volume. Drop v1 requires Docker.
 | 51820 | udp | WireGuard fast path |
 | 8443 | tcp | VLESS + REALITY stealth carrier |
 | 4443 | udp | Hysteria2 stealth carrier |
+| 8080 | tcp | Kubo CID gateway — **Drop only** |
 | 4001 | tcp + udp | Kubo swarm — **Drop only** |
 | 80, 443 | tcp | Caddy ingress — **host mode + App-Hosting only** |
 
 Open all of these in your cloud firewall / security group. UDP can't be probed
-remotely, so double-check 51820, 4443, and Drop's 4001 when enabled. Kubo RPC
-`5001` and gateway `8080` are internal-only and must not be published.
+remotely, so double-check 51820, 4443, and Drop's 4001/udp when enabled. The
+installer probes `8080/tcp` and `4001/tcp`. Kubo admin RPC `5001` is
+internal-only and must not be published.
 
 ## Configuration
 
