@@ -10,9 +10,8 @@ import (
 type RuntimeMode string
 
 const (
-	ModePrivate RuntimeMode = "private" // operator devices only
-	ModeShared  RuntimeMode = "shared"  // wallet allowlist on gateway
-	ModePublic  RuntimeMode = "public"  // open directory; host earnings (future)
+	ModePrivate RuntimeMode = "private" // operator + org members; not in public directory
+	ModePublic  RuntimeMode = "public"  // listed in public directory
 )
 
 // DeployMode is how the node process is run on the machine.
@@ -40,7 +39,7 @@ const (
 
 // ModeSettings holds parsed access, deploy, and network profile.
 type ModeSettings struct {
-	RuntimeMode    RuntimeMode // access: private | shared | public
+	RuntimeMode    RuntimeMode // access: private | public
 	Deploy         DeployMode  // container | host
 	NetworkProfile NetworkProfile
 	Warnings       []string
@@ -55,7 +54,7 @@ func ParseModeSettings(accessRaw, deployRaw, profileRaw string) (ModeSettings, e
 
 	var warnings []string
 
-	// Legacy: EREBRUS_MODE used to mean access (private/shared/public/gateway).
+	// Legacy: EREBRUS_MODE used to mean access (private/public/gateway).
 	if accessRaw == "" && isAccessToken(deployRaw) {
 		warnings = append(warnings, fmt.Sprintf(
 			"WARNING: EREBRUS_MODE=%q is deprecated for access. Use EREBRUS_ACCESS=%s and EREBRUS_MODE=container|host for deploy.",
@@ -110,7 +109,7 @@ func ParseModeSettingsFromEnv() (ModeSettings, error) {
 
 func isAccessToken(s string) bool {
 	switch s {
-	case "", string(ModePrivate), string(ModeShared), string(ModePublic), legacyModeGateway:
+	case "", string(ModePrivate), string(ModePublic), legacyModeGateway:
 		return s != ""
 	default:
 		return false
@@ -130,10 +129,6 @@ func parseAccess(raw string) (RuntimeMode, []string, error) {
 	case "":
 		return ModePublic, warnings, nil
 	case string(ModePrivate):
-		return ModePrivate, warnings, nil
-	case string(ModeShared):
-		warnings = append(warnings,
-			"WARNING: EREBRUS_ACCESS=shared is deprecated; org membership now controls private node access. Treating as private.")
 		return ModePrivate, warnings, nil
 	case string(ModePublic):
 		return ModePublic, warnings, nil
@@ -181,9 +176,6 @@ func parseNetworkProfile(raw string, deploy DeployMode) (NetworkProfile, []strin
 
 // IsPrivate reports whether only the operator and their devices may use the node.
 func (m ModeSettings) IsPrivate() bool { return m.RuntimeMode == ModePrivate }
-
-// IsShared reports whether access is limited to a gateway wallet allowlist.
-func (m ModeSettings) IsShared() bool { return m.RuntimeMode == ModeShared }
 
 // IsPublic reports whether the node is open to entitled network users.
 func (m ModeSettings) IsPublic() bool { return m.RuntimeMode == ModePublic }

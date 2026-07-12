@@ -1,13 +1,13 @@
 #!/usr/bin/env bash
 #
-# Erebrus v2 node installer  —  curl -fsSL https://erebrus.io/install.sh | bash
+# Erebrus v2 node installer — curl -fsSL https://erebrus.io/install.sh | bash
 #
 # Deploy mode (how the node runs):
 #   container (default) — Docker compose; WireGuard + stealth carriers in a container.
 #   host                — bare metal via systemd; supports App-Hosting + wildcard DNS.
 #
 # Access mode (who can use the node — independent of deploy):
-#   private (default) | shared | public
+#   private | public
 #   All nodes register with the gateway using their access type.
 #
 # Linux only (x86_64 / arm64). A node needs a STATIC, internet-routable public
@@ -38,10 +38,11 @@ MIN_DOWN_MBPS="${MIN_DOWN_MBPS:-50}"
 MIN_UP_MBPS="${MIN_UP_MBPS:-20}"
 
 # Behaviour toggles
-DEPLOY="${EREBRUS_DEPLOY:-}"
-ACCESS="${EREBRUS_ACCESS:-}"
-PROFILE="${EREBRUS_PROFILE:-}"
-DROP="${DROP_ENABLED:-}"
+DEPLOY="${EREBRUS_DEPLOY:-container}"
+ACCESS="${EREBRUS_ACCESS:-${ACCESS:-}}"
+PROFILE="${EREBRUS_PROFILE:-standard}"
+DROP="${DROP_ENABLED:-false}"
+INTERACTIVE="${INTERACTIVE:-false}"
 DROP_STORAGE_MAX="${DROP_STORAGE_MAX:-10GB}"
 DROP_SWARM_PORT="${DROP_SWARM_PORT:-4001}"
 DROP_WEBUI_ENABLED="${DROP_WEBUI_ENABLED:-false}"
@@ -125,34 +126,41 @@ while [[ $# -gt 0 ]]; do
     --docker|--container) DEPLOY="container"; shift ;;
     --host) DEPLOY="host"; shift ;;
     -y|--yes) ASSUME_YES=true; shift ;;
+    --interactive) INTERACTIVE=true; shift ;;
     --skip-checks) SKIP_CHECKS=true; shift ;;
     --branch) BRANCH="${2:-}"; shift 2 ;;
     -h|--help)
       cat <<'USAGE'
 Erebrus v2 node installer
 
+Minimal unattended install (container + standard profile; everything else derived):
+
+  MNEMONIC="..." \
+  EREBRUS_ACCESS=public \
+  EREBRUS_NODE_REGISTRATION_TOKEN="ere_reg_..." \
+  bash install.sh --yes --skip-checks
+
+Optional: --drop, --drop-public-gateway-domain <domain>, INSTALL_DIR, WG_ENDPOINT_HOST,
+  NODE_NAME, EREBRUS_IMAGE, REGION, ZONE.
+
 Usage: install.sh [options]
-  --mode container|host     Deploy mode (container = Docker; host = bare metal)
+  --mode container|host     Deploy mode (default: container)
   --deploy container|host   Alias for --mode
-  --access private|public          Gateway visibility (default: public)
+  --access private|public          Gateway visibility (required unless EREBRUS_ACCESS is set)
   --profile standard|shield|sentinel  Deployment profile (default: standard)
   --drop                    Enable the optional Kubo/IPFS Drop sidecar
   --no-drop                 Disable Drop and preserve existing Kubo data
-  --drop-public-gateway-domain <domain>  Enable public CID reads via https://<domain>/ipfs/<cid> (DNS must point to this node)
+  --drop-public-gateway-domain <domain>  Enable public CID reads via https://<domain>/ipfs/<cid>
   --container | --docker    Shorthand for --mode container
   --host                    Shorthand for --mode host
-  -y, --yes                 Non-interactive; accept defaults (pair with env vars)
+  -y, --yes                 Non-interactive (required inputs must be set)
+  --interactive             Prompt for deploy/profile/drop (legacy wizard)
   --skip-checks             Skip static-IP / bandwidth / port preflight
   --branch <name>           Source branch to build from (default: main)
   -h, --help                This help
 
-Key env overrides: EREBRUS_ACCESS, EREBRUS_DEPLOY, MNEMONIC, WG_ENDPOINT_HOST,
-  NODE_NAME, REGION, ZONE (auto for US if unset), EREBRUS_IMAGE, EREBRUS_BUILD_LOCAL,
-  GATEWAY_URL, NODE_API_TOKEN, ENABLE_STEALTH,
-  DROP_ENABLED, DROP_STORAGE_MAX, DROP_SWARM_PORT, DROP_WEBUI_ENABLED,
-  DROP_PUBLIC_GATEWAY_DOMAIN,
-  REALITY_SERVER_NAMES, HYSTERIA2_OBFS_PASSWORD, ENABLE_APP_HOSTING,
-  APP_WILDCARD_DOMAIN, INSTALL_DIR, MIN_DOWN_MBPS, MIN_UP_MBPS
+Required env: MNEMONIC, EREBRUS_ACCESS (or ACCESS), EREBRUS_NODE_REGISTRATION_TOKEN
+Derived: public IP/region/zone, node name, gateway URL, API token (preserved on reinstall).
 Linux only (x86_64/arm64). Needs a static public IP, bandwidth, and open ports.
 USAGE
       exit 0 ;;
@@ -406,6 +414,7 @@ normalize_deploy() {
 choose_deploy() {
   DEPLOY="$(normalize_deploy "$DEPLOY")"
   [[ -n "$DEPLOY" ]] && { ok "Deploy mode: $DEPLOY"; return; }
+  $INTERACTIVE || { DEPLOY="container"; ok "Deploy mode: $DEPLOY"; return; }
   echo
   echo -e "${C_BOLD}Choose deploy mode:${C_RESET}"
   echo "  1) container — Docker compose (VPN + stealth). Recommended."
@@ -419,41 +428,45 @@ choose_deploy() {
   ok "Deploy mode: $DEPLOY"
 }
 
+normalize_access() {
+  case "$(echo "$1" | tr '[:upper:]' '[:lower:]')" in
+    private|public) echo "$(echo "$1" | tr '[:upper:]' '[:lower:]')" ;;
+    *) die "invalid access mode: $1 (use private or public)" ;;
+  esac
+}
+
 choose_access() {
-  ACCESS="${ACCESS:-private}"
-  ACCESS="$(echo "$ACCESS" | tr '[:upper:]' '[:lower:]')"
-  [[ -n "$ACCESS" && "$ASSUME_YES" == "true" ]] && { ok "Access mode: $ACCESS"; return; }
-  if [[ -n "$ACCESS" && "$ACCESS" != "private" ]]; then
+  local raw="${ACCESS:-${EREBRUS_ACCESS:-}}"
+  if [[ -n "$raw" ]]; then
+    ACCESS="$(normalize_access "$raw")"
     ok "Access mode: $ACCESS"
     return
   fi
-  if $ASSUME_YES; then
-    ACCESS="private"
-    ok "Access mode: $ACCESS"
-    return
+  if $ASSUME_YES || [[ -z "$TTY" ]]; then
+    die "EREBRUS_ACCESS (or ACCESS) is required — set private or public"
   fi
   echo
   echo -e "${C_BOLD}Choose access mode:${C_RESET}"
-  echo "  1) private — your devices only (default)"
-  echo "  2) shared  — friends via wallet allowlist on gateway"
-  echo "  3) public  — open to entitled users on the network"
-  local c; ask c "Selection [1/2/3]" "1"
+  echo "  1) private — your devices and org members only"
+  echo "  2) public  — listed on the network for entitled users"
+  local c; ask c "Selection [1/2]" "1"
   case "$c" in
     1|private) ACCESS="private" ;;
-    2|shared)  ACCESS="shared" ;;
-    3|public)  ACCESS="public" ;;
+    2|public)  ACCESS="public" ;;
     *) die "invalid selection: $c" ;;
   esac
   ok "Access mode: $ACCESS"
 }
 
 choose_profile() {
+  PROFILE="${PROFILE:-standard}"
   if [[ -n "$PROFILE" ]]; then
     case "$PROFILE" in
       standard|shield|sentinel) ok "Profile: $PROFILE"; return ;;
       *) die "invalid profile: $PROFILE (use standard, shield, or sentinel)" ;;
     esac
   fi
+  $INTERACTIVE || { PROFILE="standard"; ok "Profile: $PROFILE"; return; }
   echo
   echo -e "${C_BOLD}Choose deployment profile:${C_RESET}"
   echo "  1) Erebrus — VPN node only (default)"
@@ -476,7 +489,7 @@ choose_drop() {
       0|false|no|off) DROP="false" ;;
       *) die "invalid DROP_ENABLED value: $DROP" ;;
     esac
-  elif $ASSUME_YES || [[ -z "$TTY" ]]; then
+  elif $ASSUME_YES || [[ -z "$TTY" ]] || ! $INTERACTIVE; then
     DROP="false"
   elif confirm "Enable Erebrus Drop (Kubo/IPFS storage)?" n; then
     DROP="true"
@@ -523,6 +536,49 @@ EREBRUS_BIN=""  # path/way to invoke binary for genmnemonic
 
 rand_token() { head -c 24 /dev/urandom | base64 | tr -d '/+=' | head -c 32; }
 
+read_env_value() {
+  local f="$1" key="$2"
+  grep -m1 "^${key}=" "$f" 2>/dev/null | sed "s/^${key}=//" | tr -d '\r' || true
+}
+
+load_existing_env_values() {
+  local f="$INSTALL_DIR/.env"
+  [[ -f "$f" ]] || return 0
+  info "Loading existing values from $f"
+  MNEMONIC="${MNEMONIC:-$(read_env_value "$f" MNEMONIC)}"
+  ACCESS="${ACCESS:-${EREBRUS_ACCESS:-$(read_env_value "$f" EREBRUS_ACCESS)}}"
+  EREBRUS_NODE_REGISTRATION_TOKEN="${EREBRUS_NODE_REGISTRATION_TOKEN:-$(read_env_value "$f" EREBRUS_NODE_REGISTRATION_TOKEN)}"
+  NODE_NAME="${NODE_NAME:-$(read_env_value "$f" NODE_NAME)}"
+  WG_ENDPOINT_HOST="${WG_ENDPOINT_HOST:-$(read_env_value "$f" WG_ENDPOINT_HOST)}"
+  REGION="${REGION:-$(read_env_value "$f" REGION)}"
+  ZONE="${ZONE:-$(read_env_value "$f" ZONE)}"
+  NODE_API_TOKEN="${NODE_API_TOKEN:-$(read_env_value "$f" NODE_API_TOKEN)}"
+  NODE_KEY="${NODE_KEY:-$(read_env_value "$f" NODE_KEY)}"
+}
+
+ensure_required_inputs() {
+  load_existing_env_values
+  choose_access
+
+  if [[ -z "${EREBRUS_NODE_REGISTRATION_TOKEN:-}" ]]; then
+    if [[ -n "$TTY" ]] && ! $ASSUME_YES; then
+      ask EREBRUS_NODE_REGISTRATION_TOKEN "Node registration token (ere_reg_*)" ""
+    else
+      die "EREBRUS_NODE_REGISTRATION_TOKEN is required"
+    fi
+  fi
+  [[ -n "$EREBRUS_NODE_REGISTRATION_TOKEN" ]] || die "EREBRUS_NODE_REGISTRATION_TOKEN is required"
+
+  if [[ -z "${MNEMONIC:-}" ]]; then
+    if [[ -n "$TTY" ]] && ! $ASSUME_YES; then
+      ask MNEMONIC "Node mnemonic (12 words)" ""
+    else
+      die "MNEMONIC is required"
+    fi
+  fi
+  [[ -n "$MNEMONIC" ]] || die "MNEMONIC is required"
+}
+
 # For US nodes, derive east/west from ipinfo longitude when ZONE is unset.
 detect_zone() {
   [[ -n "${ZONE:-}" ]] && return
@@ -545,12 +601,22 @@ gather_config() {
   REGION="${REGION:-$(curl -fsS --max-time 6 https://ipinfo.io/country 2>/dev/null | tr -d '[:space:]' || echo unknown)}"
   detect_zone
   [[ -n "${ZONE:-}" ]] && ok "Auto-detected zone: ${ZONE} (US east/west from geo)"
-  ask NODE_NAME "Node name" "${NODE_NAME:-erebrus-$(hostname -s 2>/dev/null || echo node)}"
-  ask ZONE "Zone (optional — e.g. east, west, us-east)" "${ZONE:-}"
-  ask WG_ENDPOINT_HOST "Public endpoint host (IP or domain clients dial)" "${WG_ENDPOINT_HOST:-$PUBLIC_IP}"
-  ask GATEWAY_URL "Gateway URL" "$GATEWAY_URL"
-  ask EREBRUS_NODE_REGISTRATION_TOKEN "Node registration token (ere_reg_* from org owner/admin)" "${EREBRUS_NODE_REGISTRATION_TOKEN:-}"
+
+  NODE_NAME="${NODE_NAME:-erebrus-$(hostname -s 2>/dev/null || echo node)}"
+  WG_ENDPOINT_HOST="${WG_ENDPOINT_HOST:-$PUBLIC_IP}"
+  GATEWAY_URL="${GATEWAY_URL:-https://gateway.erebrus.io}"
   [[ -n "$NODE_API_TOKEN" ]] || NODE_API_TOKEN="$(rand_token)"
+
+  if $INTERACTIVE && [[ -n "$TTY" ]] && ! $ASSUME_YES; then
+    ask NODE_NAME "Node name" "$NODE_NAME"
+    ask ZONE "Zone (optional — e.g. east, west, us-east)" "${ZONE:-}"
+    ask WG_ENDPOINT_HOST "Public endpoint host (IP or domain clients dial)" "$WG_ENDPOINT_HOST"
+    ask GATEWAY_URL "Gateway URL" "$GATEWAY_URL"
+  else
+    ok "Node name: $NODE_NAME"
+    ok "Endpoint host: $WG_ENDPOINT_HOST"
+    ok "Gateway: $GATEWAY_URL"
+  fi
 
   case "$DEPLOY" in
     container)
@@ -1061,8 +1127,10 @@ main() {
   banner
   require_root
   detect_platform
+  DEPLOY="$(normalize_deploy "${DEPLOY:-container}")"
+  PROFILE="${PROFILE:-standard}"
   choose_deploy
-  choose_access
+  ensure_required_inputs
   choose_profile
   choose_drop
   if [[ "$DEPLOY" == "host" && "$DROP" == "true" ]]; then

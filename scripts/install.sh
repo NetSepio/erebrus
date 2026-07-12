@@ -9,4 +9,4 @@ if [[ -f "$ROOT_INSTALLER" ]]; then
 fi
 
 BRANCH="${EREBRUS_BRANCH:-main}"
-exec bash <(curl -fsSL "https://raw.githubusercontent.com/NetSepio/erebrus/${BRANCH}/install.sh") "$@"
+exec bash <(curl -fsSL "https://erebrus.io/install.sh") "$@"

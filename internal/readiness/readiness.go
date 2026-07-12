@@ -223,13 +223,11 @@ func Preboot(cfg *config.Config) Report {
 	return Report{OK: ok, Checks: checks, Warnings: append([]string{}, cfg.Mode.Warnings...)}
 }
 
-// AccessModeLabel returns the access mode name for display (Private, Shared, Public).
+// AccessModeLabel returns the access mode name for display (Private, Public).
 func AccessModeLabel(mode config.RuntimeMode) string {
 	switch mode {
 	case config.ModePrivate:
 		return "Private"
-	case config.ModeShared:
-		return "Shared"
 	case config.ModePublic:
 		return "Public"
 	default:
@@ -241,9 +239,7 @@ func AccessModeLabel(mode config.RuntimeMode) string {
 func AccessModeHint(mode config.RuntimeMode) string {
 	switch mode {
 	case config.ModePrivate:
-		return "Only your own devices can use this node."
-	case config.ModeShared:
-		return "Only wallets you invite can connect."
+		return "Only your org and devices can use this node."
 	case config.ModePublic:
 		return "Listed on the network for users to connect."
 	default:

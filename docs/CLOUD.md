@@ -6,9 +6,8 @@ Operators do **not** hand-edit `.env` files. Use the installer or `erebrus init`
 
 | Mode | Who can connect |
 |------|-----------------|
-| **private** | You and your devices only |
-| **shared** | You plus wallet addresses you allow on the gateway |
-| **public** | Entitled network users (host earnings via gateway — future) |
+| **private** | You, your devices, and org members (not listed publicly) |
+| **public** | Entitled network users (listed in the public directory) |
 
 Deployment profile (`EREBRUS_NETWORK_PROFILE`) is separate: `bridge` for Docker, `host-network` for bare metal.
 
@@ -28,10 +27,11 @@ Public bare-metal nodes use stealth on **443/tcp** and **443/udp**.
 ## Install (docker)
 
 ```bash
-curl -fsSL https://raw.githubusercontent.com/NetSepio/erebrus/v2/install.sh | \
+curl -fsSL https://erebrus.io/install.sh | \
   MNEMONIC="..." \
+  EREBRUS_ACCESS=public \
   EREBRUS_NODE_REGISTRATION_TOKEN="ere_reg_..." \
-  bash -s -- --mode docker --drop --yes
+  bash -s -- --yes --skip-checks
 ```
 
 The installer detects the public IP for `WG_ENDPOINT_HOST`. Set it explicitly

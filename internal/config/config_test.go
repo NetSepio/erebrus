@@ -18,19 +18,10 @@ func TestParseModeDefaults(t *testing.T) {
 	}
 }
 
-func TestParseAccessSharedDeprecated(t *testing.T) {
-	m, err := ParseModeSettings("shared", "container", "bridge")
-	if err != nil {
-		t.Fatal(err)
-	}
-	if !m.IsPrivate() || m.Deploy != DeployContainer || m.NetworkProfile != NetworkBridge {
-		t.Fatalf("got access=%s deploy=%s profile=%s", m.RuntimeMode, m.Deploy, m.NetworkProfile)
-	}
-	if len(m.Warnings) == 0 || !strings.Contains(m.Warnings[0], "deprecated") {
-		t.Fatalf("expected shared deprecation warning, got %v", m.Warnings)
-	}
-	if m.GatewayAccessMode() != "private" {
-		t.Fatalf("gateway access = %q, want private", m.GatewayAccessMode())
+func TestParseAccessSharedRejected(t *testing.T) {
+	_, err := ParseModeSettings("shared", "container", "bridge")
+	if err == nil || !strings.Contains(err.Error(), "private or public") {
+		t.Fatalf("expected shared access error, got %v", err)
 	}
 }
 
@@ -204,7 +195,7 @@ func TestDropValidation(t *testing.T) {
 	c = Load()
 	c.Mnemonic = "test"
 	c.WGEndpointHost = "203.0.113.1"
-	if err := c.Validate(); err == nil || !strings.Contains(err.Error(), "private or shared") {
+	if err := c.Validate(); err == nil || !strings.Contains(err.Error(), "private nodes") {
 		t.Fatalf("expected public WebUI error, got %v", err)
 	}
 }

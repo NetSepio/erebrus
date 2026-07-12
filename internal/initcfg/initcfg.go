@@ -160,8 +160,6 @@ func ParseAccessMode(s string) (config.RuntimeMode, error) {
 		return config.ModePublic, nil
 	case "private":
 		return config.ModePrivate, nil
-	case "shared":
-		return config.ModePrivate, nil
 	case "public", "gateway":
 		return config.ModePublic, nil
 	default:

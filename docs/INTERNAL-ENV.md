@@ -14,6 +14,7 @@ End operators should use `erebrus status`, not this document.
 | Variable | Purpose |
 |----------|---------|
 | `MNEMONIC` | Node identity (12-word phrase) |
+| `EREBRUS_ACCESS` | `private` or `public` (gateway directory visibility) |
 | `WG_ENDPOINT_HOST` | Public address clients dial |
 
 ## Release-only

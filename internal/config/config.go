@@ -263,7 +263,7 @@ func (c *Config) Validate() error {
 			return fmt.Errorf("DROP_SWARM_PORT must be a valid port")
 		}
 		if c.DropWebUIEnabled && c.Mode.IsPublic() {
-			return fmt.Errorf("DROP_WEBUI_ENABLED is allowed only for private or shared nodes")
+			return fmt.Errorf("DROP_WEBUI_ENABLED is allowed only for private nodes")
 		}
 		if c.DropPublicGatewayDomain != "" {
 			normalized, err := normalizePublicGatewayDomain(c.DropPublicGatewayDomain)

@@ -60,6 +60,15 @@ Full reference: [`.env.example`](../.env.example). The only required values are
 `MNEMONIC` (the node identity — back it up) and `WG_ENDPOINT_HOST`. The installer
 generates a `MNEMONIC` and `NODE_API_TOKEN` for you if unset.
 
+### Access modes (`EREBRUS_ACCESS`)
+
+| Mode | Who can connect |
+|------|-----------------|
+| **private** | Your devices and org members only (not listed in the public directory) |
+| **public** | Entitled network users (listed in the public directory) |
+
+Set via `EREBRUS_ACCESS=private` or `EREBRUS_ACCESS=public`.
+
 ### Region and zone (for multi-node directories)
 
 | Variable | Purpose | Example |
