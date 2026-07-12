@@ -30,9 +30,10 @@ End operators should use `erebrus status`, not this document.
 | `DROP_STORAGE_MAX` | Kubo repository storage limit, default `10GB` |
 | `DROP_SWARM_PORT` | Published Kubo TCP/UDP swarm port, default `4001` |
 | `DROP_WEBUI_ENABLED` | Enable the exact-purpose private WebUI proxy |
+| `DROP_PUBLIC_GATEWAY_ENABLED` | Publish unauthenticated direct CID reads on `8080/tcp`; default `false` |
 
-Kubo RPC URL, private RPC port `5001`, public gateway port `8080`, service name,
-and image version are fixed application/Compose defaults rather than
-environment settings.
+Kubo RPC URL, private RPC port `5001`, CID gateway port `8080`, service name,
+and image version are fixed application/Compose defaults. The environment
+setting controls whether the fixed gateway port is host-published.
 
 See [`.env.example`](../.env.example) for the full internal template.

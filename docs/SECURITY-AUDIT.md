@@ -27,7 +27,7 @@ audit is still recommended before a large public launch._
 | node → gateway (WS) | identity, heartbeat, per-client byte deltas | node PASETO |
 | node ↔ host | SQLite DB, `config.env`, WG kernel iface | host root |
 | node ↔ Kubo | bounded object streams and admin RPC on the Compose network | exact-purpose node API; RPC not host-published |
-| internet → Kubo gateway | reads locally available blocks by CID on `8080/tcp` | public read-only gateway with remote fetching disabled |
+| internet → Kubo gateway (optional) | reads locally available blocks by CID on `8080/tcp` | explicit operator opt-in; public read-only gateway with remote fetching and routing API disabled |
 
 The node is the **exit point**: it necessarily sees the source (client) and can
 observe destination IPs of forwarded packets at the network layer. The design
@@ -149,11 +149,12 @@ TCP carrier) resists MITM by design.
 
 ### F12 — Kubo admin exposure (OPERATOR — never publish)
 Kubo RPC `5001` controls pins, configuration, and repository operations. The
-supplied Compose files keep it on the private network and publish only the
-read-only CID gateway `8080/tcp` plus swarm `4001/tcp+udp`. The gateway has
-`Gateway.NoFetch=true`, limiting it to locally available blocks instead of
-turning the node into an unrestricted recursive gateway. Do not add a host
-mapping for `5001`; use the authenticated node proxy for WebUI access.
+supplied Compose files keep it on the private network and publish swarm
+`4001/tcp+udp`. The read-only CID gateway `8080/tcp` is a separate operator
+opt-in. It uses `Gateway.NoFetch=true`, disables DNSLink and the delegated
+`/routing/v1` API, and serves locally available blocks without turning the node
+into a recursive or routing gateway. Do not add a host mapping for `5001`; use
+the authenticated node proxy for WebUI access.
 
 ### Resolved in codebase (no action)
 
@@ -177,6 +178,7 @@ mapping for `5001`; use the authenticated node proxy for WebUI access.
 - [ ] Never publish Kubo admin RPC `5001`; use the exact-purpose node proxy.
 - [ ] Open Drop `8080/tcp` only when direct public CID retrieval is intended;
       understand that anyone with a CID can request locally available content.
+- [ ] Keep `Gateway.ExposeRoutingAPI=false` and automatic Kubo GC enabled.
 - [ ] Enable full-disk encryption; keep `config.env` and `STATE_DIR` `0600/0700`.
 - [ ] Treat `kubo_data` as sensitive persistent storage; disable Drop without
       `down -v` and remove the volume only as an explicit destructive action.

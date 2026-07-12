@@ -308,10 +308,13 @@ components:
           $ref: "#/components/schemas/DropCapability"
     DropCapability:
       type: object
-      required: [enabled, accepts_public_uploads, webui_available]
+      required: [enabled, accepts_public_uploads, public_gateway_enabled, webui_available]
       properties:
         enabled: { type: boolean }
         accepts_public_uploads: { type: boolean }
+        public_gateway_enabled:
+          type: boolean
+          description: Whether unauthenticated direct CID reads are host-published on 8080/tcp
         webui_available: { type: boolean }
     DropStatus:
       type: object

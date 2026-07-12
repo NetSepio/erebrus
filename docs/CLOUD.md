@@ -33,9 +33,9 @@ curl -fsSL https://raw.githubusercontent.com/NetSepio/erebrus/v2/install.sh | \
   bash -s -- --mode docker --drop --yes
 ```
 
-Omit `--drop` or pass `--no-drop` for VPN-only deployment. Drop publishes the
-read-only Kubo gateway on `8080/tcp` and swarm on `4001/tcp+udp`; admin RPC
-`5001` remains private.
+Omit `--drop` or pass `--no-drop` for VPN-only deployment. Drop publishes swarm
+on `4001/tcp+udp`; add `--drop-public-gateway` only when unauthenticated direct
+CID retrieval on `8080/tcp` is intended. Admin RPC `5001` remains private.
 
 ## Install (bare metal)
 

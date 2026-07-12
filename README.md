@@ -18,7 +18,7 @@ For more details visit [erebrus.io](https://erebrus.io).
 
 ## Install a node
 
-Linux only (x86_64 / arm64). A node needs a **static, internet-routable public IP**, real bandwidth, and open ports (`9080/tcp`, `51820/udp`, `8443/tcp`, `4443/udp`). Drop nodes additionally publish `8080/tcp` for CID retrieval and `4001/tcp+udp` for the IPFS swarm. The installer verifies the required TCP ports.
+Linux only (x86_64 / arm64). A node needs a **static, internet-routable public IP**, real bandwidth, and open ports (`9080/tcp`, `51820/udp`, `8443/tcp`, `4443/udp`). Drop nodes additionally publish `4001/tcp+udp` for the IPFS swarm; `8080/tcp` direct CID retrieval is optional. The installer verifies the required TCP ports.
 
 ```bash
 curl -fsSL https://erebrus.io/install.sh | bash
@@ -38,7 +38,9 @@ curl -fsSL https://erebrus.io/install.sh | \
 
 Drop is optional, works with the Standard, Shield, and Sentinel Docker profiles,
 and is not supported by host mode in v1. Use `--no-drop` to stop the sidecar
-without deleting its persistent data.
+without deleting its persistent data. Direct unauthenticated CID retrieval on
+`8080/tcp` is a separate opt-in (`--drop-public-gateway`); otherwise files are
+accessed only through the Erebrus gateway.
 
 ## Build from source
 

@@ -28,6 +28,7 @@ an optional `capabilities.drop` object and a coarse `services.drop` state:
       "drop": {
         "enabled": true,
         "accepts_public_uploads": true,
+        "public_gateway_enabled": false,
         "webui_available": false
       }
     },
@@ -40,6 +41,9 @@ an optional `capabilities.drop` object and a coarse `services.drop` state:
 ```
 
 `capabilities.drop` is omitted by nodes that do not implement Drop.
+`public_gateway_enabled` reports whether direct unauthenticated
+`http://<node-ip>:8080/ipfs/<cid>` reads are host-published. When false, file
+operations remain available through the authenticated Erebrus gateway.
 
 ## Node heartbeat
 

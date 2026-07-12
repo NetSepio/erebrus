@@ -36,14 +36,16 @@ Drop while preserving its volume. Drop v1 requires Docker.
 | 51820 | udp | WireGuard fast path |
 | 8443 | tcp | VLESS + REALITY stealth carrier |
 | 4443 | udp | Hysteria2 stealth carrier |
-| 8080 | tcp | Kubo CID gateway — **Drop only** |
+| 8080 | tcp | Optional public Kubo CID gateway — **Drop + explicit opt-in only** |
 | 4001 | tcp + udp | Kubo swarm — **Drop only** |
 | 80, 443 | tcp | Caddy ingress — **host mode + App-Hosting only** |
 
-Open all of these in your cloud firewall / security group. UDP can't be probed
-remotely, so double-check 51820, 4443, and Drop's 4001/udp when enabled. The
-installer probes `8080/tcp` and `4001/tcp`. Kubo admin RPC `5001` is
-internal-only and must not be published.
+Open the ports required by the selected features in your cloud firewall /
+security group; keep optional `8080/tcp` closed unless public CID retrieval is
+selected. UDP can't be probed remotely, so double-check 51820, 4443, and Drop's
+4001/udp when enabled. The installer probes `4001/tcp`, plus `8080/tcp` when
+public CID retrieval is selected. Kubo admin RPC `5001` is internal-only and
+must not be published.
 
 ## Configuration
 
@@ -88,12 +90,15 @@ Sentinel. The installer prompts for it, or accepts:
 ./install.sh --mode container --profile standard --drop
 ./install.sh --mode container --profile shield --drop
 ./install.sh --mode container --profile sentinel --drop
+./install.sh --mode container --profile standard --drop --drop-public-gateway
 ```
 
 Kubo uses `ipfs/kubo:v0.42.0`, stores its repo in a persistent `kubo_data`
 volume, and receives a deterministic identity distinct from the Erebrus node
-PeerID. See [DROP.md](DROP.md) for APIs, metrics, upgrades, and destructive
-cleanup.
+PeerID. Direct CID retrieval on `8080/tcp` defaults off; without the public
+gateway override, files are uploaded and read only through the authenticated
+Erebrus gateway. See [DROP.md](DROP.md) for APIs, metrics, upgrades, and
+destructive cleanup.
 
 ### Gateway registration
 
@@ -143,6 +148,9 @@ commands:
 docker compose --env-file .env -f docker-compose.yml -f drop.yml ps
 docker compose --env-file .env -f docker-compose.yml -f drop.yml logs -f kubo
 ```
+
+Append `-f drop-public-gateway.yml` when direct public CID retrieval was
+enabled during installation.
 
 Do not use `down -v`; it deletes persistent node and Kubo volumes.
 

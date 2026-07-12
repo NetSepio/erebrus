@@ -53,12 +53,13 @@ WireGuard inside the chosen carrier.
 ```text
 gateway ── node-private API ──▶ erebrus-node ── internal RPC :5001 ──▶ kubo
                                                                    │
-internet ◀── CID gateway :8080/tcp ───────────────────────────────┤
+internet ◀── optional CID gateway :8080/tcp ──────────────────────┤
 internet ◀── swarm :4001/tcp+udp ─────────────────────────────────┘
 ```
 
-The read-only CID gateway and swarm listeners are host-published. Kubo admin RPC
-stays on the Compose network. The shared `kubo_data` volume is mounted at
+The swarm listener is host-published. The read-only CID gateway is published
+only after explicit operator opt-in, while Kubo admin RPC stays on the Compose
+network. The shared `kubo_data` volume is mounted at
 `/var/lib/erebrus-kubo` in the node for the identity handoff and `/data/ipfs` in
 Kubo for the repository. Drop health is reported separately and is an optional
 readiness check.
