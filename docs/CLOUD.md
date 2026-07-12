@@ -30,10 +30,12 @@ Public bare-metal nodes use stealth on **443/tcp** and **443/udp**.
 ```bash
 curl -fsSL https://raw.githubusercontent.com/NetSepio/erebrus/v2/install.sh | \
   MNEMONIC="..." \
-  WG_ENDPOINT_HOST="<public-ip>" \
   EREBRUS_NODE_REGISTRATION_TOKEN="ere_reg_..." \
   bash -s -- --mode docker --drop --yes
 ```
+
+The installer detects the public IP for `WG_ENDPOINT_HOST`. Set it explicitly
+only when the node should advertise a DNS name or a different public address.
 
 Omit `--drop` or pass `--no-drop` for VPN-only deployment. Drop publishes swarm
 on `4001/tcp+udp`; add `--drop-public-gateway` only when unauthenticated direct

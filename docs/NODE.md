@@ -23,10 +23,13 @@ Non-interactive:
 ```bash
 curl -fsSL https://erebrus.io/install.sh | \
   MNEMONIC="..." \
-  WG_ENDPOINT_HOST="vpn.example.com" \
   EREBRUS_NODE_REGISTRATION_TOKEN="ere_reg_..." \
   bash -s -- --mode docker --yes
 ```
+
+The installer detects the public IP and uses it as `WG_ENDPOINT_HOST`. Set the
+variable explicitly only to advertise a DNS name or override the detected
+address; hosts behind NAT still require port forwarding.
 
 Add `--drop` to run the optional Kubo/IPFS storage sidecar. `--no-drop` stops
 Drop while preserving its volume. Drop v1 requires Docker.

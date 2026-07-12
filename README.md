@@ -34,10 +34,13 @@ Non-interactive example:
 ```bash
 curl -fsSL https://erebrus.io/install.sh | \
   MNEMONIC="..." \
-  WG_ENDPOINT_HOST="vpn.example.com" \
   EREBRUS_NODE_REGISTRATION_TOKEN="ere_reg_..." \
   bash -s -- --mode docker --drop --yes
 ```
+
+The installer detects the public IP and uses it as `WG_ENDPOINT_HOST`. Set
+`WG_ENDPOINT_HOST` explicitly only to advertise a DNS name or override the
+detected address; NAT port forwarding remains the operator's responsibility.
 
 Drop is optional, works with the Standard, Shield, and Sentinel Docker profiles,
 and is not supported by host mode in v1. Use `--no-drop` to stop the sidecar
