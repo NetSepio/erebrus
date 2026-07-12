@@ -8,6 +8,7 @@ package p2p
 
 import (
 	"crypto/sha256"
+	"encoding/base64"
 	"fmt"
 
 	"github.com/libp2p/go-libp2p/core/crypto"
@@ -18,6 +19,14 @@ import (
 
 // DIDPrefix is the Erebrus DID method prefix.
 const DIDPrefix = "did:erebrus:"
+
+const kuboIdentityDomain = "erebrus/drop/kubo/v1"
+
+// KuboIdentity is the deterministic libp2p identity written into Kubo's config.
+type KuboIdentity struct {
+	PeerID  string
+	PrivKey string
+}
 
 // deterministicReader yields the same fixed seed bytes on every Read, used to
 // make libp2p key generation deterministic from the mnemonic-derived seed.
@@ -50,6 +59,43 @@ func DeriveIdentity(mnemonic string) (crypto.PrivKey, error) {
 		return nil, fmt.Errorf("libp2p key: %w", err)
 	}
 	return priv, nil
+}
+
+// DeriveKuboIdentity derives a Kubo-compatible identity independently from the
+// Erebrus node identity.
+func DeriveKuboIdentity(mnemonic string) (*KuboIdentity, error) {
+	if mnemonic == "" {
+		return nil, fmt.Errorf("mnemonic is empty")
+	}
+	seed := bip39.NewSeed(mnemonic, "")
+	masterKey, err := bip32.NewMasterKey(seed)
+	if err != nil {
+		return nil, fmt.Errorf("master key: %w", err)
+	}
+	childKey, err := masterKey.NewChildKey(bip32.FirstHardenedChild + 1)
+	if err != nil {
+		return nil, fmt.Errorf("child key: %w", err)
+	}
+	material := make([]byte, 0, len(kuboIdentityDomain)+len(childKey.Key))
+	material = append(material, kuboIdentityDomain...)
+	material = append(material, childKey.Key...)
+	hashed := sha256.Sum256(material)
+	priv, _, err := crypto.GenerateKeyPairWithReader(crypto.Ed25519, 256, &deterministicReader{seed: hashed[:]})
+	if err != nil {
+		return nil, fmt.Errorf("libp2p key: %w", err)
+	}
+	peerID, err := peer.IDFromPrivateKey(priv)
+	if err != nil {
+		return nil, fmt.Errorf("peer ID: %w", err)
+	}
+	encoded, err := crypto.MarshalPrivateKey(priv)
+	if err != nil {
+		return nil, fmt.Errorf("marshal private key: %w", err)
+	}
+	return &KuboIdentity{
+		PeerID:  peerID.String(),
+		PrivKey: base64.StdEncoding.EncodeToString(encoded),
+	}, nil
 }
 
 // GenerateMnemonic returns a fresh 12-word BIP39 mnemonic (128 bits entropy),

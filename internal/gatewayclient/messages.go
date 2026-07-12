@@ -20,10 +20,10 @@ const (
 
 // Command actions (v2.0).
 const (
-	ActionDrain         = "drain"
-	ActionUndrain       = "undrain"
-	ActionRotateReality = "rotate_reality"
-	ActionResyncPeers   = "resync_peers"
+	ActionDrain                    = "drain"
+	ActionUndrain                  = "undrain"
+	ActionRotateReality            = "rotate_reality"
+	ActionResyncPeers              = "resync_peers"
 	ActionSyncApps                 = "sync_apps"
 	ActionSyncFirewall             = "sync_firewall"
 	ActionRestartFirewall          = "restart_firewall"
@@ -55,9 +55,18 @@ type Spec struct {
 
 // Capabilities advertises optional node features.
 type Capabilities struct {
-	AccessMode     string `json:"access_mode,omitempty"` // private | shared | public
-	AppHosting     bool   `json:"app_hosting"`
-	WildcardDomain string `json:"wildcard_domain"`
+	AccessMode     string          `json:"access_mode,omitempty"` // private | shared | public
+	AppHosting     bool            `json:"app_hosting"`
+	WildcardDomain string          `json:"wildcard_domain"`
+	Drop           *DropCapability `json:"drop,omitempty"`
+}
+
+// DropCapability advertises stable Drop feature flags.
+type DropCapability struct {
+	Enabled              bool `json:"enabled"`
+	AcceptsPublicUploads bool `json:"accepts_public_uploads"`
+	PublicGatewayEnabled bool `json:"public_gateway_enabled"`
+	WebUIAvailable       bool `json:"webui_available"`
 }
 
 // Endpoints describes the connection endpoints clients dial.
@@ -129,6 +138,16 @@ type Heartbeat struct {
 	Speedtest Speedtest         `json:"speedtest"`
 	Versions  map[string]string `json:"versions"`
 	Services  map[string]string `json:"services,omitempty"`
+	Drop      *DropStatus       `json:"drop,omitempty"`
+}
+
+// DropStatus reports Kubo health and capacity to the gateway.
+type DropStatus struct {
+	State           string `json:"state"`
+	KuboVersion     string `json:"kubo_version"`
+	RepoSizeBytes   int64  `json:"repo_size_bytes"`
+	StorageMaxBytes int64  `json:"storage_max_bytes"`
+	NumObjects      int64  `json:"num_objects"`
 }
 
 // PeerUsage is one client's traffic delta in a usage_report.

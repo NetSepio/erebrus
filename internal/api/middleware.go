@@ -17,12 +17,16 @@ var warnOnce sync.Once
 // short-lived PASETO (Authorization) plus the per-node key (X-Erebrus-Node-Key).
 // Debug mode still accepts the legacy bearer node key in Authorization.
 func (s *Server) gatewayAuth() gin.HandlerFunc {
+	return s.gatewayAuthForPurpose("")
+}
+
+func (s *Server) gatewayAuthForPurpose(purpose string) gin.HandlerFunc {
 	nodeKey := s.cfg.EffectiveNodeKey()
 	gwPub := s.cfg.GatewayPublicKey
 	debug := s.cfg.RunType == "debug"
 	return func(c *gin.Context) {
 		if nodeKey == "" {
-			if debug {
+			if debug && purpose == "" {
 				warnOnce.Do(func() {
 					slog.Warn("NODE_KEY not set — peer API is UNAUTHENTICATED (debug only)")
 				})
@@ -41,7 +45,13 @@ func (s *Server) gatewayAuth() gin.HandlerFunc {
 		headerKey := strings.TrimSpace(c.GetHeader("X-Erebrus-Node-Key"))
 
 		if gwPub != "" && bearer != "" && headerKey != "" {
-			if _, err := gatewayauth.VerifyGatewayCall(bearer, gwPub, s.cfg.NodeID); err == nil {
+			var err error
+			if purpose == "" {
+				_, err = gatewayauth.VerifyGatewayCall(bearer, gwPub, s.cfg.NodeID)
+			} else {
+				_, err = gatewayauth.VerifyGatewayCallPurpose(bearer, gwPub, s.cfg.NodeID, purpose)
+			}
+			if err == nil {
 				if subtle.ConstantTimeCompare([]byte(headerKey), []byte(nodeKey)) == 1 {
 					c.Next()
 					return
@@ -50,7 +60,7 @@ func (s *Server) gatewayAuth() gin.HandlerFunc {
 		}
 
 		// Debug fallback: legacy single bearer (NODE_API_TOKEN style).
-		if debug && bearer != "" && subtle.ConstantTimeCompare([]byte(bearer), []byte(nodeKey)) == 1 {
+		if purpose == "" && debug && bearer != "" && subtle.ConstantTimeCompare([]byte(bearer), []byte(nodeKey)) == 1 {
 			c.Next()
 			return
 		}

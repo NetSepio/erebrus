@@ -6,7 +6,11 @@ info:
     REST API served by every Erebrus VPN node. The only intended caller is the
     Erebrus gateway (and node-local tooling); end users never talk to a node
     directly. All /api/v2 routes require a gateway-issued, node-scoped PASETO
-    bearer token except /api/v2/status and /metrics.
+    bearer token except /api/v2/status and /metrics. Drop routes additionally
+    require X-Erebrus-Node-Key and an exact-purpose token.
+
+    When Drop is enabled, direct CID reads use the separate public Kubo gateway
+    at `http://<node-ip>:8080/ipfs/<cid>`. Kubo admin RPC `5001` remains private.
 
     FROZEN (v2.0): additive changes only. See ../../../erebrus-gateway/docs/v2/ws-protocol.md
     for the WebSocket control plane.
@@ -40,6 +44,8 @@ paths:
                   protocols:
                     type: array
                     items: { type: string, enum: [wireguard, vless_reality, hysteria2] }
+                  readiness:
+                    $ref: "#/components/schemas/Readiness"
           description: Node identity and advertised protocols. No secrets, no peer data.
   /api/v2/stats:
     get:
@@ -75,6 +81,139 @@ paths:
       security: []
       responses:
         "200": { description: Prometheus text exposition format }
+  /api/v2/drop/status:
+    get:
+      summary: Drop health and repository capacity
+      description: Requires a token with exact purpose `drop_status`.
+      security:
+        - dropPurpose: []
+          nodeKey: []
+      responses:
+        "200":
+          description: Current Drop state
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/DropStatus" }
+        "401": { $ref: "#/components/responses/DropUnauthorized" }
+        "503": { description: Drop is unavailable }
+  /api/v2/drop/uploads/{upload_id}:
+    parameters:
+      - { name: upload_id, in: path, required: true, schema: { type: string }, description: Gateway-generated idempotency and audit identifier }
+    put:
+      summary: Stream an object to Kubo and recursively pin it
+      description: |
+        Requires exact purpose `drop_upload`. The body is streamed and limited
+        while being read; the node does not buffer the complete object. The v1
+        per-object maximum is 1,000,000,000 bytes.
+      security:
+        - dropPurpose: []
+          nodeKey: []
+      parameters:
+        - { name: X-Erebrus-Declared-Size, in: header, required: true, schema: { type: integer, format: int64, minimum: 0, maximum: 1000000000 } }
+        - { name: X-Erebrus-SHA256, in: header, required: false, schema: { type: string, pattern: "^[0-9A-Fa-f]{64}$" }, description: Optional expected SHA-256 digest }
+      requestBody:
+        required: true
+        content:
+          application/octet-stream:
+            schema: { type: string, format: binary }
+      responses:
+        "200":
+          description: Object added and pinned
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [cid, size_bytes, pinned]
+                properties:
+                  cid: { $ref: "#/components/schemas/CID" }
+                  size_bytes: { type: integer, format: int64 }
+                  pinned: { type: boolean, enum: [true] }
+        "401": { $ref: "#/components/responses/DropUnauthorized" }
+        "413": { description: Declared or streamed bytes exceed the limit }
+        "422": { description: Declared size or SHA-256 verification failed }
+        "507": { description: Drop storage reservation exceeds capacity }
+  /api/v2/drop/objects/{cid}:
+    parameters:
+      - { name: cid, in: path, required: true, schema: { $ref: "#/components/schemas/CID" } }
+    get:
+      summary: Stream one Drop object
+      description: Requires exact purpose `drop_read`. Response bytes are streamed and bounded to the v1 object limit.
+      security:
+        - dropPurpose: []
+          nodeKey: []
+      responses:
+        "200":
+          description: Object bytes
+          content:
+            application/octet-stream:
+              schema: { type: string, format: binary }
+        "400": { description: Invalid CID }
+        "401": { $ref: "#/components/responses/DropUnauthorized" }
+        "413": { description: Kubo stream exceeds the object limit }
+        "502": { description: Generic Drop operation failure }
+  /api/v2/drop/pins/{cid}:
+    parameters:
+      - { name: cid, in: path, required: true, schema: { $ref: "#/components/schemas/CID" } }
+    get:
+      summary: Check recursive pin state
+      description: Requires exact purpose `drop_pin_check`.
+      security:
+        - dropPurpose: []
+          nodeKey: []
+      responses:
+        "200":
+          description: Pin state
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [cid, pinned]
+                properties:
+                  cid: { $ref: "#/components/schemas/CID" }
+                  pinned: { type: boolean }
+        "400": { description: Invalid CID }
+        "401": { $ref: "#/components/responses/DropUnauthorized" }
+        "502": { description: Generic Drop operation failure }
+    delete:
+      summary: Remove a recursive pin
+      description: Requires exact purpose `drop_unpin`. Absence is treated idempotently.
+      security:
+        - dropPurpose: []
+          nodeKey: []
+      responses:
+        "204": { description: Pin absent or removed }
+        "400": { description: Invalid CID }
+        "401": { $ref: "#/components/responses/DropUnauthorized" }
+        "502": { description: Generic Drop operation failure }
+  /api/v2/drop/webui:
+    get:
+      summary: Private Kubo WebUI entry point
+      description: Requires exact purpose `drop_webui` and DROP_WEBUI_ENABLED on a private node.
+      security:
+        - dropPurpose: []
+          nodeKey: []
+      responses:
+        "200": { description: Proxied WebUI response }
+        "401": { $ref: "#/components/responses/DropUnauthorized" }
+        "404": { description: Drop WebUI is disabled or unavailable }
+        "502": { description: Kubo WebUI is unavailable }
+  /api/v2/drop/webui/{path}:
+    parameters:
+      - { name: path, in: path, required: true, schema: { type: string }, description: Kubo WebUI path }
+    get:
+      summary: Private Kubo WebUI proxy
+      description: |
+        Requires exact purpose `drop_webui` and DROP_WEBUI_ENABLED on a private
+        node. Authorization, node-key, Origin, and Referer headers are removed
+        before proxying to Kubo.
+      security:
+        - dropPurpose: []
+          nodeKey: []
+      responses:
+        "200": { description: Proxied WebUI response }
+        "401": { $ref: "#/components/responses/DropUnauthorized" }
+        "404": { description: Drop WebUI is disabled or unavailable }
+        "502": { description: Kubo WebUI is unavailable }
   /api/v2/peers:
     get:
       summary: List provisioned peers (ids and metadata only, no credentials)
@@ -142,12 +281,73 @@ components:
       type: http
       scheme: bearer
       description: Node-scoped PASETO issued by the gateway at node registration.
+    dropPurpose:
+      type: http
+      scheme: bearer
+      description: Gateway-issued PASETO targeted to this node with the exact Drop route purpose.
+    nodeKey:
+      type: apiKey
+      in: header
+      name: X-Erebrus-Node-Key
+      description: Per-node key required in addition to the exact-purpose bearer token.
+  responses:
+    DropUnauthorized:
+      description: Missing/invalid node key or bearer token, including target or exact-purpose mismatch
   schemas:
     Capabilities:
       type: object
       properties:
         app_hosting: { type: boolean }
         wildcard_domain: { type: string, example: "*.node-sg-1.erebrus.network" }
+        services:
+          type: object
+          additionalProperties:
+            type: string
+          description: Coarse service states; the `drop` value uses the DropStatus state enum.
+        drop:
+          $ref: "#/components/schemas/DropCapability"
+    DropCapability:
+      type: object
+      required: [enabled, accepts_public_uploads, public_gateway_enabled, webui_available]
+      properties:
+        enabled: { type: boolean }
+        accepts_public_uploads: { type: boolean }
+        public_gateway_enabled:
+          type: boolean
+          description: Whether unauthenticated direct CID reads are host-published on 8080/tcp
+        webui_available: { type: boolean }
+    DropStatus:
+      type: object
+      required: [state, repo_size_bytes, storage_max_bytes, num_objects]
+      properties:
+        state: { type: string, enum: [disabled, starting, active, degraded, full, unreachable] }
+        kubo_version: { type: string, example: "0.42.0" }
+        repo_size_bytes: { type: integer, format: int64, minimum: 0 }
+        storage_max_bytes: { type: integer, format: int64, minimum: 0 }
+        num_objects: { type: integer, format: int64, minimum: 0 }
+    Readiness:
+      type: object
+      required: [ok, checks]
+      properties:
+        ok: { type: boolean, description: VPN readiness; optional Drop failures do not change this value }
+        checks:
+          type: array
+          items: { $ref: "#/components/schemas/ReadinessCheck" }
+        warnings:
+          type: array
+          items: { type: string }
+    ReadinessCheck:
+      type: object
+      required: [id, ok]
+      properties:
+        id: { type: string }
+        ok: { type: boolean }
+        detail: { type: string }
+        optional: { type: boolean }
+    CID:
+      type: string
+      description: Valid CIDv0 or CIDv1 accepted by go-cid
+      example: bafkreidy534f3mmy722yr73zat5nd65m22zbbir5vnmytafwu42bnnx4t4
     PeerInfo:
       type: object
       properties:

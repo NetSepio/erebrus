@@ -46,12 +46,12 @@ type Client struct {
 	cmds   CommandHandler
 	status func() string
 
-	mu            sync.Mutex
-	heartbeatSec  int
-	lastUsage     map[string]peerCounters
-	onReconnect   func()
-	refreshToken  func(context.Context) (string, error)
-	connected     atomic.Bool
+	mu           sync.Mutex
+	heartbeatSec int
+	lastUsage    map[string]peerCounters
+	onReconnect  func()
+	refreshToken func(context.Context) (string, error)
+	connected    atomic.Bool
 }
 
 type peerCounters struct {

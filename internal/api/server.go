@@ -11,6 +11,7 @@ import (
 	"strconv"
 
 	"github.com/NetSepio/erebrus/internal/config"
+	"github.com/NetSepio/erebrus/internal/drop"
 	"github.com/NetSepio/erebrus/internal/readiness"
 	"github.com/NetSepio/erebrus/internal/wallet"
 	"github.com/gin-gonic/gin"
@@ -44,10 +45,11 @@ type Server struct {
 	prov Provisioner
 	id   Identity
 	// status reflects drain state ("online" | "draining"); Phase 2 toggles it.
-	status           string
+	status             string
 	readinessFn        func() readiness.Input
 	wireGuardPublicKey func() string
 	serviceSnapshotFn  func() map[string]string
+	drop               *drop.Service
 }
 
 // NewServer builds the API server.
@@ -68,6 +70,11 @@ func (s *Server) SetWireGuardPublicKeyProvider(fn func() string) {
 // SetServiceSnapshot supplies attached service health for /api/v2/status.
 func (s *Server) SetServiceSnapshot(fn func() map[string]string) {
 	s.serviceSnapshotFn = fn
+}
+
+// SetDropService enables the optional exact-purpose Drop API.
+func (s *Server) SetDropService(service *drop.Service) {
+	s.drop = service
 }
 
 // SetStatus updates the public status field (online | draining).
@@ -105,6 +112,16 @@ func (s *Server) Router() *gin.Engine {
 		authed.PUT("/peers/:id", s.handlePutPeer)
 		authed.DELETE("/peers/:id", s.handleDeletePeer)
 		authed.GET("/peers/:id/credentials", s.handleCredentials)
+	}
+	if s.drop != nil {
+		dropAPI := v2.Group("/drop")
+		dropAPI.GET("/status", s.gatewayAuthForPurpose("drop_status"), s.handleDropStatus)
+		dropAPI.PUT("/uploads/:upload_id", s.gatewayAuthForPurpose("drop_upload"), s.handleDropUpload)
+		dropAPI.GET("/objects/:cid", s.gatewayAuthForPurpose("drop_read"), s.handleDropRead)
+		dropAPI.GET("/pins/:cid", s.gatewayAuthForPurpose("drop_pin_check"), s.handleDropPinStatus)
+		dropAPI.DELETE("/pins/:cid", s.gatewayAuthForPurpose("drop_unpin"), s.handleDropUnpin)
+		dropAPI.Any("/webui", s.gatewayAuthForPurpose("drop_webui"), s.handleDropWebUI)
+		dropAPI.Any("/webui/*path", s.gatewayAuthForPurpose("drop_webui"), s.handleDropWebUI)
 	}
 	return r
 }
@@ -177,6 +194,7 @@ func (s *Server) handleStatus(c *gin.Context) {
 			"stealth":            s.cfg.EnableStealth,
 			"public_api_url":     readiness.PublicAPIURL(s.cfg),
 			"services":           s.servicesSnapshot(),
+			"drop":               s.publicDropCapability(),
 		},
 		Protocols: protocols,
 		Readiness: rep,
@@ -184,10 +202,32 @@ func (s *Server) handleStatus(c *gin.Context) {
 }
 
 func (s *Server) servicesSnapshot() map[string]string {
+	services := map[string]string{"vpn": "active"}
 	if s.serviceSnapshotFn != nil {
-		return s.serviceSnapshotFn()
+		services = s.serviceSnapshotFn()
 	}
-	return map[string]string{"vpn": "active"}
+	out := make(map[string]string, len(services)+1)
+	for name, state := range services {
+		out[name] = state
+	}
+	if s.drop != nil {
+		out["drop"] = s.drop.Snapshot().State
+	}
+	return out
+}
+
+func (s *Server) publicDropCapability() map[string]bool {
+	if s.drop == nil {
+		return map[string]bool{
+			"enabled": false, "accepts_public_uploads": false,
+			"public_gateway_enabled": false, "webui_available": false,
+		}
+	}
+	return map[string]bool{
+		"enabled": s.drop.Enabled(), "accepts_public_uploads": s.drop.AcceptsPublicUploads(),
+		"public_gateway_enabled": s.drop.PublicGatewayAvailable(),
+		"webui_available":        s.drop.WebUIAvailable(),
+	}
 }
 
 func (s *Server) handleStats(c *gin.Context) {

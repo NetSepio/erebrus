@@ -1,7 +1,8 @@
 # Node architecture (v2)
 
-The node is a single Go binary (`cmd/erebrus`) plus a SQLite state file. It has no
-external service dependencies at runtime.
+The VPN node is a single Go binary (`cmd/erebrus`) plus a SQLite state file.
+Drop deployments add an optional Kubo sidecar on the same private Compose
+network; VPN startup and readiness do not depend on Kubo.
 
 ## Packages
 
@@ -12,6 +13,7 @@ external service dependencies at runtime.
 | `internal/wg` | WireGuard server: keypair, interface/peer config rendering, live sync via `wgctrl`. |
 | `internal/stealth` | Embedded sing-box: VLESS+REALITY and Hysteria2 carriers + client profile/URI generation. |
 | `internal/p2p` | libp2p identity + DID derived from the mnemonic; DHT advertise. |
+| `internal/drop` | Bounded Kubo RPC client, deterministic sidecar identity handoff, health, and capacity state. |
 | `internal/registrar` | On-chain registration interface (no-op in v2.0; Solana later). |
 | `internal/node` | Core service tying store + wg + stealth together; builds credential bundles. |
 | `internal/api` | Gin REST surface under `/api/v2` + Prometheus `/metrics`. |
@@ -45,6 +47,22 @@ Key properties:
 The credential bundle a client receives therefore contains the WireGuard config
 **and** the carrier share URIs + a complete sing-box client profile that nests
 WireGuard inside the chosen carrier.
+
+## Drop topology
+
+```text
+gateway ── node-private API ──▶ erebrus-node ── internal RPC :5001 ──▶ kubo
+                                                                   │
+internet ◀── optional CID gateway :8080/tcp ──────────────────────┤
+internet ◀── swarm :4001/tcp+udp ─────────────────────────────────┘
+```
+
+The swarm listener is host-published. The read-only CID gateway is published
+only after explicit operator opt-in, while Kubo admin RPC stays on the Compose
+network. The shared `kubo_data` volume is mounted at
+`/var/lib/erebrus-kubo` in the node for the identity handoff and `/data/ipfs` in
+Kubo for the repository. Drop health is reported separately and is an optional
+readiness check.
 
 ## Build tag
 

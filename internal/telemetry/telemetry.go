@@ -23,11 +23,15 @@ func InitLogger(debug bool) {
 
 // Metrics holds the node's Prometheus collectors.
 type Metrics struct {
-	WGPeers           prometheus.Gauge
-	ProxySessions     prometheus.Gauge
-	SingboxRebuilds   prometheus.Counter
-	PeerProvisioned   prometheus.Counter
-	PeerDeprovisioned prometheus.Counter
+	WGPeers            prometheus.Gauge
+	ProxySessions      prometheus.Gauge
+	SingboxRebuilds    prometheus.Counter
+	PeerProvisioned    prometheus.Counter
+	PeerDeprovisioned  prometheus.Counter
+	DropUploads        *prometheus.CounterVec
+	DropUploadBytes    *prometheus.CounterVec
+	DropDownloadBytes  *prometheus.CounterVec
+	DropNodeOperations *prometheus.CounterVec
 }
 
 // NewMetrics registers and returns the node metrics on the default registry.
@@ -48,5 +52,17 @@ func NewMetrics() *Metrics {
 		PeerDeprovisioned: promauto.NewCounter(prometheus.CounterOpts{
 			Name: "erebrus_peer_deprovisioned_total", Help: "Peers removed.",
 		}),
+		DropUploads: promauto.NewCounterVec(prometheus.CounterOpts{
+			Name: "drop_uploads_total", Help: "Drop uploads by result and scope.",
+		}, []string{"result", "scope"}),
+		DropUploadBytes: promauto.NewCounterVec(prometheus.CounterOpts{
+			Name: "drop_upload_bytes_total", Help: "Drop upload bytes by scope.",
+		}, []string{"scope"}),
+		DropDownloadBytes: promauto.NewCounterVec(prometheus.CounterOpts{
+			Name: "drop_download_bytes_total", Help: "Drop download bytes by scope.",
+		}, []string{"scope"}),
+		DropNodeOperations: promauto.NewCounterVec(prometheus.CounterOpts{
+			Name: "drop_node_operations_total", Help: "Drop node operations by operation and result.",
+		}, []string{"operation", "result"}),
 	}
 }

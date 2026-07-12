@@ -22,8 +22,17 @@ Non-interactive:
 
 ```bash
 curl -fsSL https://erebrus.io/install.sh | \
-  MNEMONIC="..." WG_ENDPOINT_HOST="vpn.example.com" bash -s -- --mode docker --yes
+  MNEMONIC="..." \
+  EREBRUS_NODE_REGISTRATION_TOKEN="ere_reg_..." \
+  bash -s -- --mode docker --yes
 ```
+
+The installer detects the public IP and uses it as `WG_ENDPOINT_HOST`. Set the
+variable explicitly only to advertise a DNS name or override the detected
+address; hosts behind NAT still require port forwarding.
+
+Add `--drop` to run the optional Kubo/IPFS storage sidecar. `--no-drop` stops
+Drop while preserving its volume. Drop v1 requires Docker.
 
 ## Ports
 
@@ -33,10 +42,16 @@ curl -fsSL https://erebrus.io/install.sh | \
 | 51820 | udp | WireGuard fast path |
 | 8443 | tcp | VLESS + REALITY stealth carrier |
 | 4443 | udp | Hysteria2 stealth carrier |
+| 8080 | tcp | Optional public Kubo CID gateway — **Drop + explicit opt-in only** |
+| 4001 | tcp + udp | Kubo swarm — **Drop only** |
 | 80, 443 | tcp | Caddy ingress — **host mode + App-Hosting only** |
 
-Open all of these in your cloud firewall / security group. UDP can't be probed
-remotely, so double-check 51820 and 4443.
+Open the ports required by the selected features in your cloud firewall /
+security group; keep optional `8080/tcp` closed unless public CID retrieval is
+selected. UDP can't be probed remotely, so double-check 51820, 4443, and Drop's
+4001/udp when enabled. The installer probes `4001/tcp`, plus `8080/tcp` when
+public CID retrieval is selected. Kubo admin RPC `5001` is internal-only and
+must not be published.
 
 ## Configuration
 
@@ -71,6 +86,25 @@ host/systemd install supports `standard` profile only.
 
 Registration sends `deployment_profile` to the gateway; firewall rules sync via
 WS `sync_firewall` when an operator calls `POST .../firewall/sync` on the gateway.
+
+### Erebrus Drop
+
+Drop adds the same `deploy/compose/drop.yml` override to Standard, Shield, or
+Sentinel. The installer prompts for it, or accepts:
+
+```bash
+./install.sh --mode container --profile standard --drop
+./install.sh --mode container --profile shield --drop
+./install.sh --mode container --profile sentinel --drop
+./install.sh --mode container --profile standard --drop --drop-public-gateway
+```
+
+Kubo uses `ipfs/kubo:v0.42.0`, stores its repo in a persistent `kubo_data`
+volume, and receives a deterministic identity distinct from the Erebrus node
+PeerID. Direct CID retrieval on `8080/tcp` defaults off; without the public
+gateway override, files are uploaded and read only through the authenticated
+Erebrus gateway. See [DROP.md](DROP.md) for APIs, metrics, upgrades, and
+destructive cleanup.
 
 ### Gateway registration
 
@@ -113,6 +147,19 @@ docker compose restart
 docker compose down
 ```
 
+For an installer-managed Drop node, include the override in direct Compose
+commands:
+
+```bash
+docker compose --env-file .env -f docker-compose.yml -f drop.yml ps
+docker compose --env-file .env -f docker-compose.yml -f drop.yml logs -f kubo
+```
+
+Append `-f drop-public-gateway.yml` when direct public CID retrieval was
+enabled during installation.
+
+Do not use `down -v`; it deletes persistent node and Kubo volumes.
+
 **host**
 ```bash
 systemctl status erebrus
@@ -126,6 +173,10 @@ systemctl restart erebrus
 # Carriers advertised
 curl -s http://127.0.0.1:9080/api/v2/status | jq '.protocols, .capabilities.stealth'
 # → ["wireguard","vless-reality","hysteria2"]  and  true
+
+# Drop capability, service state, and optional readiness check
+curl -s http://127.0.0.1:9080/api/v2/status | \
+  jq '.capabilities.drop, .capabilities.services.drop, (.readiness.checks[] | select(.id == "drop"))'
 
 # Provision a peer and inspect the unified credential bundle
 TOKEN=<NODE_API_TOKEN>
@@ -162,3 +213,8 @@ installer prepares the host — Caddy + the wildcard domain.)
   `NET_ADMIN` it succeeds.
 - **Stealth ports not reachable** — confirm the cloud firewall allows 8443/tcp and
   4443/udp; `ss -tlnp | grep 8443` and `ss -ulnp | grep 4443` show them locally.
+- **Drop is `unreachable`** — inspect `docker compose ... logs kubo`. VPN
+  readiness remains independent and should stay available.
+- **Kubo identity conflict** — verify the node mnemonic belongs with the
+  existing `kubo_data` volume. Do not delete or replace the Kubo config
+  automatically; follow the recovery steps in [DROP.md](DROP.md).

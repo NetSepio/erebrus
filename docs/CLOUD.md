@@ -20,6 +20,8 @@ Deployment profile (`EREBRUS_NETWORK_PROFILE`) is separate: `bridge` for Docker,
 | 51820 | udp |
 | 8443 | tcp |
 | 4443 | udp |
+| 8080 | tcp (Drop CID gateway only) |
+| 4001 | tcp + udp (Drop only) |
 
 Public bare-metal nodes use stealth on **443/tcp** and **443/udp**.
 
@@ -27,9 +29,17 @@ Public bare-metal nodes use stealth on **443/tcp** and **443/udp**.
 
 ```bash
 curl -fsSL https://raw.githubusercontent.com/NetSepio/erebrus/v2/install.sh | \
-  WG_ENDPOINT_HOST="<public-ip>" \
-  bash -s -- --mode docker --yes
+  MNEMONIC="..." \
+  EREBRUS_NODE_REGISTRATION_TOKEN="ere_reg_..." \
+  bash -s -- --mode docker --drop --yes
 ```
+
+The installer detects the public IP for `WG_ENDPOINT_HOST`. Set it explicitly
+only when the node should advertise a DNS name or a different public address.
+
+Omit `--drop` or pass `--no-drop` for VPN-only deployment. Drop publishes swarm
+on `4001/tcp+udp`; add `--drop-public-gateway` only when unauthenticated direct
+CID retrieval on `8080/tcp` is intended. Admin RPC `5001` remains private.
 
 ## Install (bare metal)
 

@@ -1,0 +1,55 @@
+services:
+  erebrus-node:
+    environment:
+      DROP_ENABLED: "true"
+      DROP_STORAGE_MAX: "${DROP_STORAGE_MAX:-10GB}"
+      DROP_SWARM_PORT: "${DROP_SWARM_PORT:-4001}"
+      DROP_WEBUI_ENABLED: "${DROP_WEBUI_ENABLED:-false}"
+      DROP_PUBLIC_GATEWAY_ENABLED: "${DROP_PUBLIC_GATEWAY_ENABLED:-false}"
+    volumes:
+      - kubo_data:/var/lib/erebrus-kubo
+
+  kubo:
+    image: ipfs/kubo:v0.42.0
+    restart: unless-stopped
+    depends_on:
+      erebrus-node:
+        condition: service_started
+    entrypoint: ["/bin/sh", "-ec"]
+    command:
+      - |
+        until [ -s /data/ipfs/.erebrus-identity-ready ]; do sleep 1; done
+        chown "$(id -u ipfs):$(id -g ipfs)" /data/ipfs/.erebrus-*
+        chmod 600 /data/ipfs/.erebrus-*
+        exec /sbin/tini -- /usr/local/bin/start_ipfs daemon --migrate=true --enable-gc --agent-version-suffix=erebrus-drop
+    environment:
+      DROP_STORAGE_MAX: "${DROP_STORAGE_MAX:-10GB}"
+      IPFS_TELEMETRY: "off"
+    ports:
+      - "${DROP_SWARM_PORT:-4001}:4001/tcp"
+      - "${DROP_SWARM_PORT:-4001}:4001/udp"
+    expose:
+      - "5001"
+    volumes:
+      - kubo_data:/data/ipfs
+      - ./kubo-init.sh:/container-init.d/010-erebrus-identity.sh:ro
+    healthcheck:
+      test: ["CMD", "ipfs", "diag", "healthy"]
+      interval: 10s
+      timeout: 5s
+      retries: 6
+      start_period: 30s
+    stop_grace_period: 2m
+    pids_limit: 512
+    ulimits:
+      nofile:
+        soft: 65536
+        hard: 65536
+    logging:
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "3"
+
+volumes:
+  kubo_data:

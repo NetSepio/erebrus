@@ -13,6 +13,7 @@ import (
 	"github.com/NetSepio/erebrus/internal/api"
 	"github.com/NetSepio/erebrus/internal/config"
 	dnspkg "github.com/NetSepio/erebrus/internal/dns"
+	"github.com/NetSepio/erebrus/internal/drop"
 	"github.com/NetSepio/erebrus/internal/edge"
 	"github.com/NetSepio/erebrus/internal/firewall"
 	"github.com/NetSepio/erebrus/internal/gatewayclient"
@@ -61,6 +62,10 @@ func Run(cfg *config.Config) error {
 	defer st.Close()
 
 	metrics := telemetry.NewMetrics()
+	dropService := drop.NewService(cfg, metrics)
+	if err := dropService.Start(ctx); err != nil {
+		slog.Warn("Drop initialization failed; VPN remains available", "err", err)
+	}
 
 	wgm := wg.New(cfg, st, wg.NewController())
 	wgErr := wgm.Init(ctx)
@@ -148,6 +153,7 @@ func Run(cfg *config.Config) error {
 
 	svc := node.New(cfg, st, wgm, stealthMgr, metrics)
 	apiServer := api.NewServer(cfg, svc, api.Identity{PeerID: peerID, DID: did})
+	apiServer.SetDropService(dropService)
 	apiServer.SetWireGuardPublicKeyProvider(wgm.ServerPublicKey)
 	svc.SetAPIStatusHook(apiServer.SetStatus)
 
@@ -227,7 +233,7 @@ func Run(cfg *config.Config) error {
 		if nodeID != "" && nodeToken != "" {
 			speedtestCache := speedtest.NewCache()
 			speedtestCache.Start(ctx)
-			bridge := node.NewGatewayBridge(svc, peerID, did, nodeID, speedtestCache, agent, fwClient)
+			bridge := node.NewGatewayBridge(svc, peerID, did, nodeID, speedtestCache, agent, fwClient, dropService)
 			gwClient = gatewayclient.New(cfg.GatewayURL, nodeID, nodeToken, bridge, bridge, bridge.Status)
 			refreshKey := cfg.EffectiveNodeKey()
 			gwClient.SetTokenRefresher(func(ctx context.Context) (string, error) {
@@ -284,6 +290,7 @@ func Run(cfg *config.Config) error {
 		return readiness.Input{
 			Cfg: cfg, IdentityConfigured: true, GatewayRegistered: gwReg, GatewayConnected: gwConn,
 			WireGuardOK: wgOK, StealthListening: stealthOK, FirewallOK: fwOK, FirewallDetail: fwDetail,
+			DropState: dropService.Snapshot().State,
 		}
 	})
 	apiServer.SetServiceSnapshot(agent.Snapshot)

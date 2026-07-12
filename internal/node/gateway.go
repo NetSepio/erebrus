@@ -8,6 +8,7 @@ import (
 	"sync"
 	"time"
 
+	droppkg "github.com/NetSepio/erebrus/internal/drop"
 	"github.com/NetSepio/erebrus/internal/firewall"
 	"github.com/NetSepio/erebrus/internal/gatewayclient"
 	"github.com/NetSepio/erebrus/internal/registrar"
@@ -26,6 +27,7 @@ type GatewayBridge struct {
 	speedtest *speedtest.Cache
 	agent     *serviceagent.Agent
 	fw        *firewall.Client
+	drop      *droppkg.Service
 
 	mu     sync.RWMutex
 	status string
@@ -39,7 +41,7 @@ type usageCounters struct {
 }
 
 // NewGatewayBridge wires the node service to the gateway control plane.
-func NewGatewayBridge(svc *Service, peerID, did, nodeID string, speedtestCache *speedtest.Cache, agent *serviceagent.Agent, fw *firewall.Client) *GatewayBridge {
+func NewGatewayBridge(svc *Service, peerID, did, nodeID string, speedtestCache *speedtest.Cache, agent *serviceagent.Agent, fw *firewall.Client, dropService *droppkg.Service) *GatewayBridge {
 	return &GatewayBridge{
 		svc:       svc,
 		peerID:    peerID,
@@ -48,6 +50,7 @@ func NewGatewayBridge(svc *Service, peerID, did, nodeID string, speedtestCache *
 		speedtest: speedtestCache,
 		agent:     agent,
 		fw:        fw,
+		drop:      dropService,
 		status:    "online",
 		lastUsage: map[string]usageCounters{},
 	}
@@ -115,6 +118,7 @@ func (g *GatewayBridge) BuildHello(_ string) gatewayclient.Hello {
 			AccessMode:     cfg.Mode.GatewayAccessMode(),
 			AppHosting:     cfg.EnableAppHosting,
 			WildcardDomain: cfg.AppWildcardDomain,
+			Drop:           g.dropCapability(),
 		},
 		Endpoints:         eps,
 		DeploymentProfile: cfg.ErebrusProfile,
@@ -125,6 +129,22 @@ func (g *GatewayBridge) BuildHello(_ string) gatewayclient.Hello {
 func (g *GatewayBridge) BuildHeartbeat(status string) gatewayclient.Heartbeat {
 	live := g.svc.wg.Stats()
 	peers, _ := g.svc.st.ListPeers(context.Background())
+	versions := map[string]string{
+		"node":    g.svc.cfg.Version,
+		"singbox": "1.11.15",
+	}
+	var dropStatus *gatewayclient.DropStatus
+	if g.drop != nil {
+		snapshot := g.drop.Snapshot()
+		dropStatus = &gatewayclient.DropStatus{
+			State: snapshot.State, KuboVersion: snapshot.KuboVersion,
+			RepoSizeBytes: snapshot.RepoSizeBytes, StorageMaxBytes: snapshot.StorageMaxBytes,
+			NumObjects: snapshot.NumObjects,
+		}
+		if snapshot.KuboVersion != "" {
+			versions["kubo"] = snapshot.KuboVersion
+		}
+	}
 	return gatewayclient.Heartbeat{
 		TS:     time.Now().Unix(),
 		Status: status,
@@ -138,19 +158,38 @@ func (g *GatewayBridge) BuildHeartbeat(status string) gatewayclient.Heartbeat {
 			TxBytes:           live.TxBytes,
 		},
 		Speedtest: g.cachedSpeedtest(),
-		Versions: map[string]string{
-			"node":    g.svc.cfg.Version,
-			"singbox": "1.11.15",
-		},
-		Services: g.serviceSnapshot(),
+		Versions:  versions,
+		Services:  g.serviceSnapshot(),
+		Drop:      dropStatus,
 	}
 }
 
 func (g *GatewayBridge) serviceSnapshot() map[string]string {
+	services := map[string]string{"vpn": "active"}
 	if g.agent == nil {
-		return map[string]string{"vpn": "active"}
+		if g.drop != nil {
+			services["drop"] = g.drop.Snapshot().State
+		}
+		return services
 	}
-	return g.agent.Snapshot()
+	for name, state := range g.agent.Snapshot() {
+		services[name] = state
+	}
+	if g.drop != nil {
+		services["drop"] = g.drop.Snapshot().State
+	}
+	return services
+}
+
+func (g *GatewayBridge) dropCapability() *gatewayclient.DropCapability {
+	if g.drop == nil {
+		return nil
+	}
+	return &gatewayclient.DropCapability{
+		Enabled: g.drop.Enabled(), AcceptsPublicUploads: g.drop.AcceptsPublicUploads(),
+		PublicGatewayEnabled: g.drop.PublicGatewayAvailable(),
+		WebUIAvailable:       g.drop.WebUIAvailable(),
+	}
 }
 
 func (g *GatewayBridge) cachedSpeedtest() gatewayclient.Speedtest {
