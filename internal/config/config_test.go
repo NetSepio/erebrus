@@ -156,9 +156,10 @@ func TestLoadDropDefaultsAndOverrides(t *testing.T) {
 	t.Setenv("DROP_STORAGE_MAX", "")
 	t.Setenv("DROP_SWARM_PORT", "")
 	t.Setenv("DROP_WEBUI_ENABLED", "")
+	t.Setenv("DROP_PUBLIC_GATEWAY_ENABLED", "")
 	c := Load()
 	if c.DropEnabled || c.DropStorageMax != "10GB" || c.DropStorageMaxBytes != 10_000_000_000 ||
-		c.DropSwarmPortInt() != 4001 || c.DropWebUIEnabled {
+		c.DropSwarmPortInt() != 4001 || c.DropWebUIEnabled || c.DropPublicGatewayAvailable() {
 		t.Fatalf("Drop defaults = %+v", c)
 	}
 
@@ -166,11 +167,12 @@ func TestLoadDropDefaultsAndOverrides(t *testing.T) {
 	t.Setenv("DROP_STORAGE_MAX", "5GB")
 	t.Setenv("DROP_SWARM_PORT", "4101")
 	t.Setenv("DROP_WEBUI_ENABLED", "true")
+	t.Setenv("DROP_PUBLIC_GATEWAY_ENABLED", "true")
 	t.Setenv("EREBRUS_ACCESS", "private")
 	t.Setenv("EREBRUS_MODE", "container")
 	c = Load()
 	if !c.DropEnabled || c.DropStorageMaxBytes != 5_000_000_000 ||
-		c.DropSwarmPortInt() != 4101 || !c.DropWebUIAvailable() {
+		c.DropSwarmPortInt() != 4101 || !c.DropWebUIAvailable() || !c.DropPublicGatewayAvailable() {
 		t.Fatalf("Drop overrides = %+v", c)
 	}
 }

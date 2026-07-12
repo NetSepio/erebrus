@@ -85,6 +85,9 @@ func (s *Service) Enabled() bool { return s.cfg.DropEnabled }
 // AcceptsPublicUploads reports the stable public-storage capability.
 func (s *Service) AcceptsPublicUploads() bool { return s.cfg.DropAcceptsPublicUploads() }
 
+// PublicGatewayAvailable reports whether Kubo's read-only CID gateway is host-published.
+func (s *Service) PublicGatewayAvailable() bool { return s.cfg.DropPublicGatewayAvailable() }
+
 // WebUIAvailable reports whether the exact-purpose Kubo proxy may be used.
 func (s *Service) WebUIAvailable() bool {
 	return s.cfg.DropWebUIAvailable() && s.operational()

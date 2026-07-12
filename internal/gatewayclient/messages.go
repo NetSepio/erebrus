@@ -65,6 +65,7 @@ type Capabilities struct {
 type DropCapability struct {
 	Enabled              bool `json:"enabled"`
 	AcceptsPublicUploads bool `json:"accepts_public_uploads"`
+	PublicGatewayEnabled bool `json:"public_gateway_enabled"`
 	WebUIAvailable       bool `json:"webui_available"`
 }
 

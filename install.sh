@@ -45,6 +45,7 @@ DROP="${DROP_ENABLED:-}"
 DROP_STORAGE_MAX="${DROP_STORAGE_MAX:-10GB}"
 DROP_SWARM_PORT="${DROP_SWARM_PORT:-4001}"
 DROP_WEBUI_ENABLED="${DROP_WEBUI_ENABLED:-false}"
+DROP_PUBLIC_GATEWAY_ENABLED="${DROP_PUBLIC_GATEWAY_ENABLED:-}"
 DROP_GATEWAY_PORT=8080
 DROP_STATE="disabled"
 ASSUME_YES="${ASSUME_YES:-false}"
@@ -108,6 +109,8 @@ while [[ $# -gt 0 ]]; do
     --profile) PROFILE="${2:-}"; shift 2 ;;
     --drop) DROP="true"; shift ;;
     --no-drop) DROP="false"; shift ;;
+    --drop-public-gateway) DROP_PUBLIC_GATEWAY_ENABLED="true"; shift ;;
+    --no-drop-public-gateway) DROP_PUBLIC_GATEWAY_ENABLED="false"; shift ;;
     --docker|--container) DEPLOY="container"; shift ;;
     --host) DEPLOY="host"; shift ;;
     -y|--yes) ASSUME_YES=true; shift ;;
@@ -124,6 +127,8 @@ Usage: install.sh [options]
   --profile standard|shield|sentinel  Deployment profile (default: standard)
   --drop                    Enable the optional Kubo/IPFS Drop sidecar
   --no-drop                 Disable Drop and preserve existing Kubo data
+  --drop-public-gateway     Publish unauthenticated CID reads on 8080/tcp
+  --no-drop-public-gateway  Keep all file reads behind the Erebrus gateway
   --container | --docker    Shorthand for --mode container
   --host                    Shorthand for --mode host
   -y, --yes                 Non-interactive; accept defaults (pair with env vars)
@@ -135,6 +140,7 @@ Key env overrides: EREBRUS_ACCESS, EREBRUS_DEPLOY, MNEMONIC, WG_ENDPOINT_HOST,
   NODE_NAME, REGION, ZONE (auto for US if unset), EREBRUS_IMAGE, EREBRUS_BUILD_LOCAL,
   GATEWAY_URL, NODE_API_TOKEN, ENABLE_STEALTH,
   DROP_ENABLED, DROP_STORAGE_MAX, DROP_SWARM_PORT, DROP_WEBUI_ENABLED,
+  DROP_PUBLIC_GATEWAY_ENABLED,
   REALITY_SERVER_NAMES, HYSTERIA2_OBFS_PASSWORD, ENABLE_APP_HOSTING,
   APP_WILDCARD_DOMAIN, INSTALL_DIR, MIN_DOWN_MBPS, MIN_UP_MBPS
 Linux only (x86_64/arm64). Needs a static public IP, bandwidth, and open ports.
@@ -312,15 +318,17 @@ print(hit)
 }
 
 prepare_drop_firewall() {
-  [[ "$DROP" == "true" ]] || return
+  [[ "$DROP" == "true" ]] || return 0
   if command -v ufw >/dev/null 2>&1 && run ufw status >/dev/null 2>&1; then
     info "Opening Drop ports via ufw before reachability checks…"
-    run ufw allow "${DROP_GATEWAY_PORT}/tcp" >>"$LOG_FILE" 2>&1 || true
+    [[ "$DROP_PUBLIC_GATEWAY_ENABLED" == "true" ]] &&
+      run ufw allow "${DROP_GATEWAY_PORT}/tcp" >>"$LOG_FILE" 2>&1 || true
     run ufw allow "${DROP_SWARM_PORT}/tcp" >>"$LOG_FILE" 2>&1 || true
     run ufw allow "${DROP_SWARM_PORT}/udp" >>"$LOG_FILE" 2>&1 || true
   elif command -v firewall-cmd >/dev/null 2>&1; then
     info "Opening Drop ports via firewalld before reachability checks…"
-    run firewall-cmd --permanent --add-port="${DROP_GATEWAY_PORT}/tcp" >>"$LOG_FILE" 2>&1 || true
+    [[ "$DROP_PUBLIC_GATEWAY_ENABLED" == "true" ]] &&
+      run firewall-cmd --permanent --add-port="${DROP_GATEWAY_PORT}/tcp" >>"$LOG_FILE" 2>&1 || true
     run firewall-cmd --permanent --add-port="${DROP_SWARM_PORT}/tcp" >>"$LOG_FILE" 2>&1 || true
     run firewall-cmd --permanent --add-port="${DROP_SWARM_PORT}/udp" >>"$LOG_FILE" 2>&1 || true
     run firewall-cmd --reload >>"$LOG_FILE" 2>&1 || true
@@ -341,7 +349,8 @@ run_preflight() {
   check_inbound_tcp "$HTTP_PORT" "REST API"
   check_inbound_tcp "$STEALTH_TCP_PORT" "VLESS+REALITY carrier"
   if [[ "$DROP" == "true" ]]; then
-    check_inbound_tcp "$DROP_GATEWAY_PORT" "Kubo public gateway" true
+    [[ "$DROP_PUBLIC_GATEWAY_ENABLED" == "true" ]] &&
+      check_inbound_tcp "$DROP_GATEWAY_PORT" "Kubo public gateway" true
     check_inbound_tcp "$DROP_SWARM_PORT" "Kubo swarm" true
   fi
   warn "UDP ports $WG_PORT (WireGuard) and $STEALTH_UDP_PORT (Hysteria2) can't be probed reliably —"
@@ -440,7 +449,27 @@ choose_drop() {
   else
     DROP="false"
   fi
+  if [[ "$DROP" == "true" ]]; then
+    if [[ -n "$DROP_PUBLIC_GATEWAY_ENABLED" ]]; then
+      case "$(echo "$DROP_PUBLIC_GATEWAY_ENABLED" | tr '[:upper:]' '[:lower:]')" in
+        1|true|yes|on) DROP_PUBLIC_GATEWAY_ENABLED="true" ;;
+        0|false|no|off) DROP_PUBLIC_GATEWAY_ENABLED="false" ;;
+        *) die "invalid DROP_PUBLIC_GATEWAY_ENABLED value: $DROP_PUBLIC_GATEWAY_ENABLED" ;;
+      esac
+    elif $ASSUME_YES || [[ -z "$TTY" ]]; then
+      DROP_PUBLIC_GATEWAY_ENABLED="false"
+    elif confirm "Allow public CID retrieval directly from this node on 8080/tcp?" n; then
+      DROP_PUBLIC_GATEWAY_ENABLED="true"
+    else
+      DROP_PUBLIC_GATEWAY_ENABLED="false"
+    fi
+  else
+    DROP_PUBLIC_GATEWAY_ENABLED="false"
+  fi
   ok "Drop: $([[ "$DROP" == "true" ]] && echo enabled || echo disabled)"
+  if [[ "$DROP" == "true" ]]; then
+    ok "Drop public CID gateway: $([[ "$DROP_PUBLIC_GATEWAY_ENABLED" == "true" ]] && echo enabled || echo disabled)"
+  fi
 }
 
 # config values
@@ -605,6 +634,7 @@ DROP_ENABLED=${DROP}
 DROP_STORAGE_MAX=${DROP_STORAGE_MAX}
 DROP_SWARM_PORT=${DROP_SWARM_PORT}
 DROP_WEBUI_ENABLED=${DROP_WEBUI_ENABLED}
+DROP_PUBLIC_GATEWAY_ENABLED=${DROP_PUBLIC_GATEWAY_ENABLED}
 
 # Profile / firewall wiring
 $(profile_env_block)
@@ -665,16 +695,19 @@ install_compose_file() {
 }
 
 install_drop_files() {
-  local compose_src="" init_src=""
+  local compose_src="" public_src="" init_src=""
   if [[ -f "$INSTALL_DIR/deploy/compose/drop.yml" ]]; then
     compose_src="$INSTALL_DIR/deploy/compose/drop.yml"
+    public_src="$INSTALL_DIR/deploy/compose/drop-public-gateway.yml"
     init_src="$INSTALL_DIR/deploy/compose/kubo-init.sh"
   elif [[ -f "$INSTALL_DIR/src/deploy/compose/drop.yml" ]]; then
     compose_src="$INSTALL_DIR/src/deploy/compose/drop.yml"
+    public_src="$INSTALL_DIR/src/deploy/compose/drop-public-gateway.yml"
     init_src="$INSTALL_DIR/src/deploy/compose/kubo-init.sh"
   fi
-  if [[ -n "$compose_src" && -f "$init_src" ]]; then
+  if [[ -n "$compose_src" && -f "$public_src" && -f "$init_src" ]]; then
     run cp "$compose_src" "$INSTALL_DIR/drop.yml"
+    run cp "$public_src" "$INSTALL_DIR/drop-public-gateway.yml"
     run cp "$init_src" "$INSTALL_DIR/kubo-init.sh"
     run chmod 755 "$INSTALL_DIR/kubo-init.sh"
     return
@@ -682,6 +715,8 @@ install_drop_files() {
   info "Fetching Drop Compose support…"
   curl -fsSL "https://raw.githubusercontent.com/NetSepio/erebrus/${BRANCH}/deploy/compose/drop.yml" \
     -o "$INSTALL_DIR/drop.yml" >>"$LOG_FILE" 2>&1 || die "failed to fetch deploy/compose/drop.yml"
+  curl -fsSL "https://raw.githubusercontent.com/NetSepio/erebrus/${BRANCH}/deploy/compose/drop-public-gateway.yml" \
+    -o "$INSTALL_DIR/drop-public-gateway.yml" >>"$LOG_FILE" 2>&1 || die "failed to fetch deploy/compose/drop-public-gateway.yml"
   curl -fsSL "https://raw.githubusercontent.com/NetSepio/erebrus/${BRANCH}/deploy/compose/kubo-init.sh" \
     -o "$INSTALL_DIR/kubo-init.sh" >>"$LOG_FILE" 2>&1 || die "failed to fetch deploy/compose/kubo-init.sh"
   run chmod 755 "$INSTALL_DIR/kubo-init.sh"
@@ -700,7 +735,8 @@ open_firewall() {
     run ufw allow "${WG_PORT}/udp"    >>"$LOG_FILE" 2>&1 || true
     run ufw allow "${STEALTH_UDP_PORT}/udp"   >>"$LOG_FILE" 2>&1 || true
     if [[ "$DROP" == "true" ]]; then
-      run ufw allow "${DROP_GATEWAY_PORT}/tcp" >>"$LOG_FILE" 2>&1 || true
+      [[ "$DROP_PUBLIC_GATEWAY_ENABLED" == "true" ]] &&
+        run ufw allow "${DROP_GATEWAY_PORT}/tcp" >>"$LOG_FILE" 2>&1 || true
       run ufw allow "${DROP_SWARM_PORT}/tcp" >>"$LOG_FILE" 2>&1 || true
       run ufw allow "${DROP_SWARM_PORT}/udp" >>"$LOG_FILE" 2>&1 || true
     fi
@@ -713,7 +749,8 @@ open_firewall() {
     run firewall-cmd --permanent --add-port="${WG_PORT}/udp"    >>"$LOG_FILE" 2>&1 || true
     run firewall-cmd --permanent --add-port="${STEALTH_UDP_PORT}/udp"   >>"$LOG_FILE" 2>&1 || true
     if [[ "$DROP" == "true" ]]; then
-      run firewall-cmd --permanent --add-port="${DROP_GATEWAY_PORT}/tcp" >>"$LOG_FILE" 2>&1 || true
+      [[ "$DROP_PUBLIC_GATEWAY_ENABLED" == "true" ]] &&
+        run firewall-cmd --permanent --add-port="${DROP_GATEWAY_PORT}/tcp" >>"$LOG_FILE" 2>&1 || true
       run firewall-cmd --permanent --add-port="${DROP_SWARM_PORT}/tcp" >>"$LOG_FILE" 2>&1 || true
       run firewall-cmd --permanent --add-port="${DROP_SWARM_PORT}/udp" >>"$LOG_FILE" 2>&1 || true
     fi
@@ -723,7 +760,11 @@ open_firewall() {
   else
     warn "No ufw/firewalld detected. Ensure these are open in your cloud security group:"
     warn "  ${HTTP_PORT}/tcp, ${STEALTH_TCP_PORT}/tcp, ${WG_PORT}/udp, ${STEALTH_UDP_PORT}/udp ${extra_tcp:+(+ 80/tcp 443/tcp)}"
-    [[ "$DROP" == "true" ]] && warn "  Drop gateway: ${DROP_GATEWAY_PORT}/tcp; swarm: ${DROP_SWARM_PORT}/tcp and ${DROP_SWARM_PORT}/udp"
+    if [[ "$DROP" == "true" ]]; then
+      [[ "$DROP_PUBLIC_GATEWAY_ENABLED" == "true" ]] &&
+        warn "  Drop public CID gateway: ${DROP_GATEWAY_PORT}/tcp"
+      warn "  Drop swarm: ${DROP_SWARM_PORT}/tcp and ${DROP_SWARM_PORT}/udp"
+    fi
   fi
 }
 
@@ -781,10 +822,13 @@ install_docker_mode() {
   local -a compose=(docker compose)
   docker compose version >/dev/null 2>&1 || compose=(docker-compose)
   if [[ "$DROP" == "true" ]]; then
-    ( cd "$INSTALL_DIR" && run "${compose[@]}" --env-file .env -f docker-compose.yml -f drop.yml up -d >>"$LOG_FILE" 2>&1 ) || die "docker compose up failed"
+    local -a drop_files=(-f docker-compose.yml -f drop.yml)
+    [[ "$DROP_PUBLIC_GATEWAY_ENABLED" == "true" ]] &&
+      drop_files+=(-f drop-public-gateway.yml)
+    ( cd "$INSTALL_DIR" && run "${compose[@]}" --env-file .env "${drop_files[@]}" up -d >>"$LOG_FILE" 2>&1 ) || die "docker compose up failed"
     local kubo_id="" health="" i
     for i in $(seq 1 30); do
-      kubo_id="$(cd "$INSTALL_DIR" && run "${compose[@]}" --env-file .env -f docker-compose.yml -f drop.yml ps -q kubo 2>/dev/null || true)"
+      kubo_id="$(cd "$INSTALL_DIR" && run "${compose[@]}" --env-file .env "${drop_files[@]}" ps -q kubo 2>/dev/null || true)"
       if [[ -n "$kubo_id" ]]; then
         health="$(run docker inspect --format '{{if .State.Health}}{{.State.Health.Status}}{{else}}{{.State.Status}}{{end}}' "$kubo_id" 2>/dev/null || true)"
         [[ "$health" == "healthy" ]] && break
@@ -794,11 +838,13 @@ install_docker_mode() {
     if [[ "$health" == "healthy" ]]; then
       DROP_STATE="active"
       ok "Drop Kubo sidecar is healthy."
-      if curl -sS --max-time 5 -o /dev/null "http://127.0.0.1:${DROP_GATEWAY_PORT}/"; then
-        ok "Drop public gateway is listening on ${DROP_GATEWAY_PORT}/tcp."
-      else
-        DROP_STATE="degraded"
-        warn "Drop public gateway is not reachable locally on ${DROP_GATEWAY_PORT}/tcp."
+      if [[ "$DROP_PUBLIC_GATEWAY_ENABLED" == "true" ]]; then
+        if curl -sS --max-time 5 -o /dev/null "http://127.0.0.1:${DROP_GATEWAY_PORT}/"; then
+          ok "Drop public gateway is listening on ${DROP_GATEWAY_PORT}/tcp."
+        else
+          DROP_STATE="degraded"
+          warn "Drop public gateway is not reachable locally on ${DROP_GATEWAY_PORT}/tcp."
+        fi
       fi
     else
       DROP_STATE="starting"
@@ -931,13 +977,20 @@ validate_and_summary() {
   echo "  Node API key: ${NODE_API_TOKEN}"
   echo "  Verify   : erebrus status"
   if [[ "$DROP" == "true" ]]; then
-    echo "  Drop     : ${DROP_STATE} (gateway ${DROP_GATEWAY_PORT}/tcp; swarm ${DROP_SWARM_PORT}/tcp+udp)"
+    if [[ "$DROP_PUBLIC_GATEWAY_ENABLED" == "true" ]]; then
+      echo "  Drop     : ${DROP_STATE} (public CID gateway ${DROP_GATEWAY_PORT}/tcp; swarm ${DROP_SWARM_PORT}/tcp+udp)"
+    else
+      echo "  Drop     : ${DROP_STATE} (gateway-only file access; swarm ${DROP_SWARM_PORT}/tcp+udp)"
+    fi
   else
     echo "  Drop     : disabled (existing Kubo data preserved)"
   fi
   if [[ "$DEPLOY" == "container" ]]; then
     if [[ "$DROP" == "true" ]]; then
-      echo "  Manage   : cd $INSTALL_DIR && docker compose --env-file .env -f docker-compose.yml -f drop.yml [ps|logs -f|restart]"
+      local public_file=""
+      [[ "$DROP_PUBLIC_GATEWAY_ENABLED" == "true" ]] &&
+        public_file=" -f drop-public-gateway.yml"
+      echo "  Manage   : cd $INSTALL_DIR && docker compose --env-file .env -f docker-compose.yml -f drop.yml${public_file} [ps|logs -f|restart]"
     else
       echo "  Manage   : cd $INSTALL_DIR && docker compose [logs -f|restart|down]"
     fi

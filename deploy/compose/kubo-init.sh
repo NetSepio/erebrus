@@ -44,6 +44,10 @@ fi
 ipfs config Addresses.API /ip4/0.0.0.0/tcp/5001
 ipfs config Addresses.Gateway /ip4/0.0.0.0/tcp/8080
 ipfs config --json Gateway.NoFetch true
+ipfs config --json Gateway.NoDNSLink true
+ipfs config --json Gateway.ExposeRoutingAPI false
 ipfs config Datastore.StorageMax "${DROP_STORAGE_MAX:-10GB}"
+ipfs config --json Datastore.StorageGCWatermark 80
+ipfs config Datastore.GCPeriod 30m
 rm -f "$private_file" "$conflict_file"
 touch "$managed_file"

@@ -88,6 +88,7 @@ type Config struct {
 	DropStorageMaxBytes int64
 	DropSwarmPort       string
 	DropWebUIEnabled    bool
+	DropPublicGateway   bool
 
 	// registrar
 	ChainRegistration string // off | solana
@@ -177,6 +178,7 @@ func Load() *Config {
 		DropStorageMax:         env("DROP_STORAGE_MAX", "10GB"),
 		DropSwarmPort:          env("DROP_SWARM_PORT", "4001"),
 		DropWebUIEnabled:       boolEnv("DROP_WEBUI_ENABLED", false),
+		DropPublicGateway:      boolEnv("DROP_PUBLIC_GATEWAY_ENABLED", false),
 		ChainRegistration:      env("CHAIN_REGISTRATION", "off"),
 		PrivateDNSEnabled:      boolEnv("PRIVATE_DNS_ENABLED", false),
 		PrivateDNSDomain:       env("PRIVATE_DNS_DOMAIN", "ere"),
@@ -314,6 +316,11 @@ func (c *Config) DropSwarmPortInt() int { n, _ := strconv.Atoi(c.DropSwarmPort);
 // DropAcceptsPublicUploads reports whether the gateway may select this node for public Drop storage.
 func (c *Config) DropAcceptsPublicUploads() bool {
 	return c.DropEnabled && c.Mode.IsPublic()
+}
+
+// DropPublicGatewayAvailable reports whether direct unauthenticated CID retrieval is enabled.
+func (c *Config) DropPublicGatewayAvailable() bool {
+	return c.DropEnabled && c.DropPublicGateway
 }
 
 // DropWebUIAvailable reports whether the private Kubo administration proxy is enabled.

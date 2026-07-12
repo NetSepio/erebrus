@@ -37,6 +37,7 @@ services:
       NODE_KEY: "${NODE_KEY:-${NODE_API_TOKEN:-}}"
       GATEWAY_URL: "${GATEWAY_URL:-}"
       GATEWAY_AUTO_REGISTER: "${GATEWAY_AUTO_REGISTER:-true}"
+      GATEWAY_PUBLIC_KEY: "${GATEWAY_PUBLIC_KEY:-}"
       EREBRUS_NODE_REGISTRATION_TOKEN: "${EREBRUS_NODE_REGISTRATION_TOKEN:-${EREBRUS_ORG_ENROLLMENT_SECRET:-}}"
       WALLET_CHAIN: "${WALLET_CHAIN:-SOLANA}"
       AUTH_EULA: "${AUTH_EULA:-I accept the Erebrus Terms of Service https://erebrus.network/terms.}"
@@ -80,6 +81,7 @@ services:
       DROP_STORAGE_MAX: "${DROP_STORAGE_MAX:-10GB}"
       DROP_SWARM_PORT: "${DROP_SWARM_PORT:-4001}"
       DROP_WEBUI_ENABLED: "${DROP_WEBUI_ENABLED:-false}"
+      DROP_PUBLIC_GATEWAY_ENABLED: "${DROP_PUBLIC_GATEWAY_ENABLED:-false}"
     ports:
       - "${HTTP_PORT:-9080}:${HTTP_PORT:-9080}/tcp"
       - "${WG_ENDPOINT_PORT:-51820}:${WG_ENDPOINT_PORT:-51820}/udp"
@@ -103,14 +105,13 @@ services:
         until [ -s /data/ipfs/.erebrus-identity-ready ]; do sleep 1; done
         chown "$(id -u ipfs):$(id -g ipfs)" /data/ipfs/.erebrus-*
         chmod 600 /data/ipfs/.erebrus-*
-        exec /sbin/tini -- /usr/local/bin/start_ipfs daemon --migrate=true --agent-version-suffix=erebrus-drop
+        exec /sbin/tini -- /usr/local/bin/start_ipfs daemon --migrate=true --enable-gc --agent-version-suffix=erebrus-drop
     environment:
       DROP_STORAGE_MAX: "${DROP_STORAGE_MAX:-10GB}"
       IPFS_TELEMETRY: "off"
     ports:
       - "${DROP_SWARM_PORT:-4001}:4001/tcp"
       - "${DROP_SWARM_PORT:-4001}:4001/udp"
-      - "8080:8080/tcp"
     expose:
       - "5001"
     volumes:
@@ -122,6 +123,17 @@ services:
       timeout: 5s
       retries: 6
       start_period: 30s
+    stop_grace_period: 2m
+    pids_limit: 512
+    ulimits:
+      nofile:
+        soft: 65536
+        hard: 65536
+    logging:
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "3"
 
 volumes:
   erebrus-state:

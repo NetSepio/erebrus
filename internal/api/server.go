@@ -219,12 +219,14 @@ func (s *Server) servicesSnapshot() map[string]string {
 func (s *Server) publicDropCapability() map[string]bool {
 	if s.drop == nil {
 		return map[string]bool{
-			"enabled": false, "accepts_public_uploads": false, "webui_available": false,
+			"enabled": false, "accepts_public_uploads": false,
+			"public_gateway_enabled": false, "webui_available": false,
 		}
 	}
 	return map[string]bool{
 		"enabled": s.drop.Enabled(), "accepts_public_uploads": s.drop.AcceptsPublicUploads(),
-		"webui_available": s.drop.WebUIAvailable(),
+		"public_gateway_enabled": s.drop.PublicGatewayAvailable(),
+		"webui_available":        s.drop.WebUIAvailable(),
 	}
 }
 

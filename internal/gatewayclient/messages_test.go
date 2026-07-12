@@ -111,7 +111,8 @@ func TestDropCapabilityRoundTrip(t *testing.T) {
 	h := Hello{
 		Capabilities: Capabilities{
 			Drop: &DropCapability{
-				Enabled: true, AcceptsPublicUploads: true, WebUIAvailable: false,
+				Enabled: true, AcceptsPublicUploads: true, PublicGatewayEnabled: true,
+				WebUIAvailable: false,
 			},
 		},
 	}
@@ -128,7 +129,8 @@ func TestDropCapabilityRoundTrip(t *testing.T) {
 		t.Fatal(err)
 	}
 	if got.Capabilities.Drop == nil || !got.Capabilities.Drop.Enabled ||
-		!got.Capabilities.Drop.AcceptsPublicUploads || got.Capabilities.Drop.WebUIAvailable {
+		!got.Capabilities.Drop.AcceptsPublicUploads || !got.Capabilities.Drop.PublicGatewayEnabled ||
+		got.Capabilities.Drop.WebUIAvailable {
 		t.Fatalf("drop capability = %+v", got.Capabilities.Drop)
 	}
 }
