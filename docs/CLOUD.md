@@ -20,7 +20,7 @@ Deployment profile (`EREBRUS_NETWORK_PROFILE`) is separate: `bridge` for Docker,
 | 51820 | udp |
 | 8443 | tcp |
 | 4443 | udp |
-| 8080 | tcp (Drop CID gateway only) |
+| 443 | tcp (Drop TLS CID gateway only, when a domain is configured) |
 | 4001 | tcp + udp (Drop only) |
 
 Public bare-metal nodes use stealth on **443/tcp** and **443/udp**.
@@ -38,8 +38,10 @@ The installer detects the public IP for `WG_ENDPOINT_HOST`. Set it explicitly
 only when the node should advertise a DNS name or a different public address.
 
 Omit `--drop` or pass `--no-drop` for VPN-only deployment. Drop publishes swarm
-on `4001/tcp+udp`; add `--drop-public-gateway` only when unauthenticated direct
-CID retrieval on `8080/tcp` is intended. Admin RPC `5001` remains private.
+on `4001/tcp+udp`; add `--drop-public-gateway-domain <domain>` only when
+unauthenticated direct CID retrieval on `https://<domain>/ipfs/<cid>` is
+intended and DNS points to the node. Admin RPC `5001` and the raw Kubo gateway
+`8080` remain private.
 
 ## Install (bare metal)
 

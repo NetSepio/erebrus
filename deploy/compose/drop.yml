@@ -5,7 +5,7 @@ services:
       DROP_STORAGE_MAX: "${DROP_STORAGE_MAX:-10GB}"
       DROP_SWARM_PORT: "${DROP_SWARM_PORT:-4001}"
       DROP_WEBUI_ENABLED: "${DROP_WEBUI_ENABLED:-false}"
-      DROP_PUBLIC_GATEWAY_ENABLED: "${DROP_PUBLIC_GATEWAY_ENABLED:-false}"
+      DROP_PUBLIC_GATEWAY_DOMAIN: "${DROP_PUBLIC_GATEWAY_DOMAIN:-}"
     volumes:
       - kubo_data:/var/lib/erebrus-kubo
 

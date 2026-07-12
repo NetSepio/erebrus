@@ -9,8 +9,10 @@ info:
     bearer token except /api/v2/status and /metrics. Drop routes additionally
     require X-Erebrus-Node-Key and an exact-purpose token.
 
-    When Drop is enabled, direct CID reads use the separate public Kubo gateway
-    at `http://<node-ip>:8080/ipfs/<cid>`. Kubo admin RPC `5001` remains private.
+    When Drop is enabled and DROP_PUBLIC_GATEWAY_DOMAIN is configured, direct
+    CID reads use the separate public Kubo gateway at
+    `https://<domain>/ipfs/<cid>` (TLS terminated by Traefik on 443/tcp). Kubo
+    admin RPC `5001` and the raw Kubo gateway `8080` remain private.
 
     FROZEN (v2.0): additive changes only. See ../../../erebrus-gateway/docs/v2/ws-protocol.md
     for the WebSocket control plane.
@@ -308,13 +310,14 @@ components:
           $ref: "#/components/schemas/DropCapability"
     DropCapability:
       type: object
-      required: [enabled, accepts_public_uploads, public_gateway_enabled, webui_available]
+      required: [enabled, accepts_public_uploads, webui_available]
       properties:
         enabled: { type: boolean }
         accepts_public_uploads: { type: boolean }
-        public_gateway_enabled:
-          type: boolean
-          description: Whether unauthenticated direct CID reads are host-published on 8080/tcp
+        public_gateway_url:
+          type: string
+          format: uri
+          description: HTTPS base URL for public CID reads, present only when configured and reachable
         webui_available: { type: boolean }
     DropStatus:
       type: object

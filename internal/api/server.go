@@ -216,18 +216,22 @@ func (s *Server) servicesSnapshot() map[string]string {
 	return out
 }
 
-func (s *Server) publicDropCapability() map[string]bool {
+func (s *Server) publicDropCapability() map[string]any {
 	if s.drop == nil {
-		return map[string]bool{
+		return map[string]any{
 			"enabled": false, "accepts_public_uploads": false,
-			"public_gateway_enabled": false, "webui_available": false,
+			"webui_available": false,
 		}
 	}
-	return map[string]bool{
-		"enabled": s.drop.Enabled(), "accepts_public_uploads": s.drop.AcceptsPublicUploads(),
-		"public_gateway_enabled": s.drop.PublicGatewayAvailable(),
+	out := map[string]any{
+		"enabled":                s.drop.Enabled(),
+		"accepts_public_uploads": s.drop.AcceptsPublicUploads(),
 		"webui_available":        s.drop.WebUIAvailable(),
 	}
+	if url := s.drop.PublicGatewayURL(); url != "" {
+		out["public_gateway_url"] = url
+	}
+	return out
 }
 
 func (s *Server) handleStats(c *gin.Context) {

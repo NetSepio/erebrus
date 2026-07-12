@@ -42,16 +42,17 @@ Drop while preserving its volume. Drop v1 requires Docker.
 | 51820 | udp | WireGuard fast path |
 | 8443 | tcp | VLESS + REALITY stealth carrier |
 | 4443 | udp | Hysteria2 stealth carrier |
-| 8080 | tcp | Optional public Kubo CID gateway — **Drop + explicit opt-in only** |
+| 443 | tcp | Optional public CID gateway — **Drop + public domain configured only** |
 | 4001 | tcp + udp | Kubo swarm — **Drop only** |
 | 80, 443 | tcp | Caddy ingress — **host mode + App-Hosting only** |
 
 Open the ports required by the selected features in your cloud firewall /
-security group; keep optional `8080/tcp` closed unless public CID retrieval is
-selected. UDP can't be probed remotely, so double-check 51820, 4443, and Drop's
-4001/udp when enabled. The installer probes `4001/tcp`, plus `8080/tcp` when
-public CID retrieval is selected. Kubo admin RPC `5001` is internal-only and
-must not be published.
+security group. Keep `443/tcp` closed unless `DROP_PUBLIC_GATEWAY_DOMAIN` is
+configured and DNS points to the node. UDP can't be probed remotely, so
+double-check 51820, 4443, and Drop's 4001/udp when enabled. The installer probes
+`4001/tcp`, plus `443/tcp` when a public gateway domain is configured. Kubo admin
+RPC `5001` and the raw Kubo gateway `8080` are internal-only and must not be
+published.
 
 ## Configuration
 
@@ -96,15 +97,16 @@ Sentinel. The installer prompts for it, or accepts:
 ./install.sh --mode container --profile standard --drop
 ./install.sh --mode container --profile shield --drop
 ./install.sh --mode container --profile sentinel --drop
-./install.sh --mode container --profile standard --drop --drop-public-gateway
+./install.sh --mode container --profile standard --drop --drop-public-gateway-domain drop.example.com
 ```
 
 Kubo uses `ipfs/kubo:v0.42.0`, stores its repo in a persistent `kubo_data`
 volume, and receives a deterministic identity distinct from the Erebrus node
-PeerID. Direct CID retrieval on `8080/tcp` defaults off; without the public
-gateway override, files are uploaded and read only through the authenticated
-Erebrus gateway. See [DROP.md](DROP.md) for APIs, metrics, upgrades, and
-destructive cleanup.
+PeerID. Direct CID retrieval on `https://<domain>/ipfs/<cid>` defaults off; the
+`DROP_PUBLIC_GATEWAY_DOMAIN` option must be set to a DNS name pointing to the
+node. Without it, files are uploaded and read only through the authenticated
+Erebrus gateway. The raw Kubo `8080` and `5001` ports are never published.
+See [DROP.md](DROP.md) for APIs, metrics, upgrades, and destructive cleanup.
 
 ### Gateway registration
 
