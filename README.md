@@ -69,6 +69,7 @@ only public, coarse aggregates (`/api/v2/status`, `/api/v2/stats`).
 - [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) — package layout and the stealth carrier topology.
 - [docs/SECURITY-AUDIT.md](docs/SECURITY-AUDIT.md) — data-capture inventory, threat model, and operator hardening.
 - [docs/DROP.md](docs/DROP.md) — Drop installation, private APIs, metrics, and safe storage operations.
+- [docs/DROP-IMPLEMENTATION-CONTEXT.md](docs/DROP-IMPLEMENTATION-CONTEXT.md) — Drop/Kubo architecture decisions, invariants, and validation baseline.
 - [docs/node-api.openapi.yaml](docs/node-api.openapi.yaml) — the `/api/v2` REST contract.
 
 The REST surface lives under `/api/v2` (status, stats, peers CRUD, credentials,
