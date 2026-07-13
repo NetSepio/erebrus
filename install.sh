@@ -2,13 +2,8 @@
 #
 # Erebrus v2 node installer — curl -fsSL https://erebrus.io/install.sh | bash
 #
-# Deploy mode (how the node runs):
-#   container (default) — Docker compose; WireGuard + stealth carriers in a container.
-#   host                — bare metal via systemd; supports App-Hosting + wildcard DNS.
-#
-# Access mode (who can use the node — independent of deploy):
-#   private | public
-#   All nodes register with the gateway using their access type.
+# Runs the node as a Docker compose service. Access mode (private | public) controls
+# gateway visibility and default stealth ports.
 #
 # Linux only (x86_64 / arm64). A node needs a STATIC, internet-routable public
 # IP, real bandwidth, and open ports — the installer verifies all three.
@@ -23,7 +18,6 @@ BRANCH="${EREBRUS_BRANCH:-main}"
 INSTALL_DIR="${INSTALL_DIR:-/opt/erebrus}"
 STATE_DIR="${STATE_DIR:-/var/lib/erebrus}"
 ENV_DIR="/etc/erebrus"
-GO_VERSION="${GO_VERSION:-1.23.4}"
 BUILD_TAGS="with_reality_server"
 
 # Ports
@@ -31,14 +25,12 @@ HTTP_PORT="${HTTP_PORT:-9080}"        # tcp  REST API
 WG_PORT="${WG_ENDPOINT_PORT:-51820}"  # udp  WireGuard
 STEALTH_TCP_PORT="${STEALTH_TCP_PORT:-8443}"  # tcp  VLESS+REALITY (gateway prod: 443)
 STEALTH_UDP_PORT="${STEALTH_UDP_PORT:-4443}"  # udp  Hysteria2 (gateway prod: 443)
-# (host + app-hosting also needs 80/tcp + 443/tcp for Caddy)
 
 # Minimum acceptable throughput for an exit node (Mbps)
 MIN_DOWN_MBPS="${MIN_DOWN_MBPS:-50}"
 MIN_UP_MBPS="${MIN_UP_MBPS:-20}"
 
 # Behaviour toggles
-DEPLOY="${EREBRUS_DEPLOY:-container}"
 ACCESS="${EREBRUS_ACCESS:-${ACCESS:-}}"
 PROFILE="${EREBRUS_PROFILE:-standard}"
 DROP="${DROP_ENABLED:-false}"
@@ -46,8 +38,6 @@ INTERACTIVE="${INTERACTIVE:-false}"
 DROP_STORAGE_MAX="${DROP_STORAGE_MAX:-10GB}"
 DROP_SWARM_PORT="${DROP_SWARM_PORT:-4001}"
 DROP_WEBUI_ENABLED="${DROP_WEBUI_ENABLED:-false}"
-DROP_PUBLIC_GATEWAY_DOMAIN="${DROP_PUBLIC_GATEWAY_DOMAIN:-}"
-DROP_GATEWAY_TLS_PORT=443
 DROP_STATE="disabled"
 ASSUME_YES="${ASSUME_YES:-false}"
 SKIP_CHECKS="${SKIP_CHECKS:-false}"
@@ -90,18 +80,6 @@ ask() { # ask VARNAME "prompt" "default"
   printf -v "$__var" '%s' "${__in:-$__def}"
 }
 
-validate_drop_public_gateway_domain() {
-  local d="$1"
-  [[ -z "$d" ]] && return 0
-  # Reject schemes, ports, paths, query fragments, credentials, localhost, and bare IPs.
-  [[ "$d" == *"://"* || "$d" == *":"* || "$d" == *"/"* || "$d" == *"?"* || "$d" == *"#"* || "$d" == *"@"* ]] && return 1
-  [[ "$(echo "$d" | tr '[:upper:]' '[:lower:]')" == "localhost" ]] && return 1
-  [[ "$d" =~ ^[0-9]+\.[0-9]+\.[0-9]+\.[0-9]+$ ]] && return 1
-  [[ "$d" =~ ^[0-9a-fA-F:]+$ ]] && return 1
-  [[ "$d" =~ ^[a-zA-Z0-9]([a-zA-Z0-9-]{0,61}[a-zA-Z0-9])?(\.[a-zA-Z0-9]([a-zA-Z0-9-]{0,61}[a-zA-Z0-9])?)*$ ]] || return 1
-  return 0
-}
-
 banner() {
   echo -e "${C_B}${C_BOLD}"
   cat <<'EOF'
@@ -117,14 +95,10 @@ EOF
 # ---------------------------------------------------------------------------
 while [[ $# -gt 0 ]]; do
   case "$1" in
-    --mode|--deploy) DEPLOY="${2:-}"; shift 2 ;;
     --access) ACCESS="${2:-}"; shift 2 ;;
     --profile) PROFILE="${2:-}"; shift 2 ;;
     --drop) DROP="true"; shift ;;
     --no-drop) DROP="false"; shift ;;
-    --drop-public-gateway-domain) DROP_PUBLIC_GATEWAY_DOMAIN="${2:-}"; shift 2 ;;
-    --docker|--container) DEPLOY="container"; shift ;;
-    --host) DEPLOY="host"; shift ;;
     -y|--yes) ASSUME_YES=true; shift ;;
     --interactive) INTERACTIVE=true; shift ;;
     --skip-checks) SKIP_CHECKS=true; shift ;;
@@ -140,21 +114,16 @@ Minimal unattended install (container + standard profile; everything else derive
   EREBRUS_NODE_REGISTRATION_TOKEN="ere_reg_..." \
   bash install.sh --yes --skip-checks
 
-Optional: --drop, --drop-public-gateway-domain <domain>, INSTALL_DIR, WG_ENDPOINT_HOST,
+Optional: --drop, INSTALL_DIR, WG_ENDPOINT_HOST,
   NODE_NAME, EREBRUS_IMAGE, REGION, ZONE.
 
 Usage: install.sh [options]
-  --mode container|host     Deploy mode (default: container)
-  --deploy container|host   Alias for --mode
   --access private|public          Gateway visibility (required unless EREBRUS_ACCESS is set)
   --profile standard|shield|sentinel  Deployment profile (default: standard)
   --drop                    Enable the optional Kubo/IPFS Drop sidecar
   --no-drop                 Disable Drop and preserve existing Kubo data
-  --drop-public-gateway-domain <domain>  Enable public CID reads via https://<domain>/ipfs/<cid>
-  --container | --docker    Shorthand for --mode container
-  --host                    Shorthand for --mode host
   -y, --yes                 Non-interactive (required inputs must be set)
-  --interactive             Prompt for deploy/profile/drop (legacy wizard)
+  --interactive             Prompt for access/profile/drop
   --skip-checks             Skip static-IP / bandwidth / port preflight
   --branch <name>           Source branch to build from (default: main)
   -h, --help                This help
@@ -339,40 +308,15 @@ prepare_drop_firewall() {
   [[ "$DROP" == "true" ]] || return 0
   if command -v ufw >/dev/null 2>&1 && run ufw status >/dev/null 2>&1; then
     info "Opening Drop ports via ufw before reachability checks…"
-    [[ -n "$DROP_PUBLIC_GATEWAY_DOMAIN" ]] &&
-      run ufw allow "${DROP_GATEWAY_TLS_PORT}/tcp" >>"$LOG_FILE" 2>&1 || true
     run ufw allow "${DROP_SWARM_PORT}/tcp" >>"$LOG_FILE" 2>&1 || true
     run ufw allow "${DROP_SWARM_PORT}/udp" >>"$LOG_FILE" 2>&1 || true
   elif command -v firewall-cmd >/dev/null 2>&1; then
     info "Opening Drop ports via firewalld before reachability checks…"
-    [[ -n "$DROP_PUBLIC_GATEWAY_DOMAIN" ]] &&
-      run firewall-cmd --permanent --add-port="${DROP_GATEWAY_TLS_PORT}/tcp" >>"$LOG_FILE" 2>&1 || true
     run firewall-cmd --permanent --add-port="${DROP_SWARM_PORT}/tcp" >>"$LOG_FILE" 2>&1 || true
     run firewall-cmd --permanent --add-port="${DROP_SWARM_PORT}/udp" >>"$LOG_FILE" 2>&1 || true
     run firewall-cmd --reload >>"$LOG_FILE" 2>&1 || true
   else
     warn "No ufw/firewalld detected; open Drop ports in the host and cloud firewalls."
-  fi
-}
-
-check_drop_gateway_domain() {
-  [[ -n "$DROP_PUBLIC_GATEWAY_DOMAIN" ]] || return 0
-  [[ -n "$PUBLIC_IP" ]] || return 0
-  local resolved=""
-  if command -v getent >/dev/null 2>&1; then
-    resolved="$(getent ahostsv4 "$DROP_PUBLIC_GATEWAY_DOMAIN" 2>/dev/null | awk '/STREAM/{print $1; exit}' || true)"
-  fi
-  if [[ -z "$resolved" ]] && command -v dig >/dev/null 2>&1; then
-    resolved="$(dig +short "$DROP_PUBLIC_GATEWAY_DOMAIN" A 2>/dev/null | head -1 || true)"
-  fi
-  if [[ -z "$resolved" ]]; then
-    warn "Could not resolve $DROP_PUBLIC_GATEWAY_DOMAIN to verify it points to $PUBLIC_IP"
-    return
-  fi
-  if [[ "$resolved" == "$PUBLIC_IP" ]]; then
-    ok "Drop public gateway DNS $DROP_PUBLIC_GATEWAY_DOMAIN -> $PUBLIC_IP"
-  else
-    warn "Drop public gateway DNS $DROP_PUBLIC_GATEWAY_DOMAIN resolves to $resolved (expected $PUBLIC_IP)"
   fi
 }
 
@@ -384,15 +328,10 @@ run_preflight() {
   command -v ip >/dev/null 2>&1 || pkg_install iproute2 || pkg_install iproute || true
   check_static_ip
   check_bandwidth
-  if [[ "$DROP" == "true" && -n "$DROP_PUBLIC_GATEWAY_DOMAIN" ]]; then
-    check_drop_gateway_domain
-  fi
   info "Checking inbound port reachability…"
   check_inbound_tcp "$HTTP_PORT" "REST API"
   check_inbound_tcp "$STEALTH_TCP_PORT" "VLESS+REALITY carrier"
   if [[ "$DROP" == "true" ]]; then
-    [[ -n "$DROP_PUBLIC_GATEWAY_DOMAIN" ]] &&
-      check_inbound_tcp "$DROP_GATEWAY_TLS_PORT" "Drop public TLS gateway" true
     check_inbound_tcp "$DROP_SWARM_PORT" "Kubo swarm" true
   fi
   warn "UDP ports $WG_PORT (WireGuard) and $STEALTH_UDP_PORT (Hysteria2) can't be probed reliably —"
@@ -403,31 +342,6 @@ run_preflight() {
 # ---------------------------------------------------------------------------
 # Mode selection + configuration
 # ---------------------------------------------------------------------------
-normalize_deploy() {
-  case "$1" in
-    docker|container) echo "container" ;;
-    host) echo "host" ;;
-    *) echo "$1" ;;
-  esac
-}
-
-choose_deploy() {
-  DEPLOY="$(normalize_deploy "$DEPLOY")"
-  [[ -n "$DEPLOY" ]] && { ok "Deploy mode: $DEPLOY"; return; }
-  $INTERACTIVE || { DEPLOY="container"; ok "Deploy mode: $DEPLOY"; return; }
-  echo
-  echo -e "${C_BOLD}Choose deploy mode:${C_RESET}"
-  echo "  1) container — Docker compose (VPN + stealth). Recommended."
-  echo "  2) host      — bare-metal systemd. Adds App-Hosting (wildcard DNS)."
-  local c; ask c "Selection [1/2]" "1"
-  case "$c" in
-    1|docker|container) DEPLOY="container" ;;
-    2|host) DEPLOY="host" ;;
-    *) die "invalid selection: $c" ;;
-  esac
-  ok "Deploy mode: $DEPLOY"
-}
-
 normalize_access() {
   case "$(echo "$1" | tr '[:upper:]' '[:lower:]')" in
     private|public) echo "$(echo "$1" | tr '[:upper:]' '[:lower:]')" ;;
@@ -496,29 +410,9 @@ choose_drop() {
   else
     DROP="false"
   fi
-  if [[ "$DROP" == "true" ]]; then
-    if [[ -n "$DROP_PUBLIC_GATEWAY_DOMAIN" ]]; then
-      if ! validate_drop_public_gateway_domain "$DROP_PUBLIC_GATEWAY_DOMAIN"; then
-        die "invalid DROP_PUBLIC_GATEWAY_DOMAIN: $DROP_PUBLIC_GATEWAY_DOMAIN"
-      fi
-    elif $ASSUME_YES || [[ -z "$TTY" ]]; then
-      DROP_PUBLIC_GATEWAY_DOMAIN=""
-    else
-      ask DROP_PUBLIC_GATEWAY_DOMAIN "Public CID gateway domain (leave empty to disable; DNS must point to this node)" ""
-      if [[ -n "$DROP_PUBLIC_GATEWAY_DOMAIN" ]] && ! validate_drop_public_gateway_domain "$DROP_PUBLIC_GATEWAY_DOMAIN"; then
-        die "invalid DROP_PUBLIC_GATEWAY_DOMAIN: $DROP_PUBLIC_GATEWAY_DOMAIN"
-      fi
-    fi
-  else
-    DROP_PUBLIC_GATEWAY_DOMAIN=""
-  fi
   ok "Drop: $([[ "$DROP" == "true" ]] && echo enabled || echo disabled)"
   if [[ "$DROP" == "true" ]]; then
-    if [[ -n "$DROP_PUBLIC_GATEWAY_DOMAIN" ]]; then
-      ok "Drop public CID gateway: https://$DROP_PUBLIC_GATEWAY_DOMAIN/ipfs/<cid>"
-    else
-      ok "Drop public CID gateway: disabled (files accessed via authenticated gateway)"
-    fi
+    ok "Drop: files accessed via the authenticated Erebrus gateway"
   fi
 }
 
@@ -529,9 +423,6 @@ EREBRUS_NODE_REGISTRATION_TOKEN="${EREBRUS_NODE_REGISTRATION_TOKEN:-${EREBRUS_OR
 GATEWAY_URL="${GATEWAY_URL:-https://gateway.erebrus.io}"
 ENABLE_STEALTH="${ENABLE_STEALTH:-true}"; REALITY_SERVER_NAMES="${REALITY_SERVER_NAMES:-www.microsoft.com}"
 HYSTERIA2_OBFS_PASSWORD="${HYSTERIA2_OBFS_PASSWORD:-}"
-ENABLE_APP_HOSTING="${ENABLE_APP_HOSTING:-false}"; APP_WILDCARD_DOMAIN="${APP_WILDCARD_DOMAIN:-}"
-PUBLIC_DOMAIN="${PUBLIC_DOMAIN:-}"; WILDCARD_DOMAIN="${WILDCARD_DOMAIN:-}"
-PUBLIC_GATEWAY_ENABLED="${PUBLIC_GATEWAY_ENABLED:-false}"
 EREBRUS_BIN=""  # path/way to invoke binary for genmnemonic
 
 rand_token() { head -c 24 /dev/urandom | base64 | tr -d '/+=' | head -c 32; }
@@ -610,7 +501,7 @@ gather_config() {
   if $INTERACTIVE && [[ -n "$TTY" ]] && ! $ASSUME_YES; then
     ask NODE_NAME "Node name" "$NODE_NAME"
     ask ZONE "Zone (optional — e.g. east, west, us-east)" "${ZONE:-}"
-    ask WG_ENDPOINT_HOST "Public endpoint host (IP or domain clients dial)" "$WG_ENDPOINT_HOST"
+    ask WG_ENDPOINT_HOST "Public endpoint IP" "$WG_ENDPOINT_HOST"
     ask GATEWAY_URL "Gateway URL" "$GATEWAY_URL"
   else
     ok "Node name: $NODE_NAME"
@@ -618,17 +509,7 @@ gather_config() {
     ok "Gateway: $GATEWAY_URL"
   fi
 
-  case "$DEPLOY" in
-    container)
-      EREBRUS_MODE=container
-      EREBRUS_NETWORK_PROFILE=bridge
-      ;;
-    host)
-      EREBRUS_MODE=host
-      EREBRUS_NETWORK_PROFILE=host-network
-      ;;
-    *) die "invalid deploy mode: $DEPLOY (use container or host)" ;;
-  esac
+  EREBRUS_NETWORK_PROFILE=bridge
   EREBRUS_ACCESS="${ACCESS:-private}"
 
   if [[ "$EREBRUS_ACCESS" == "public" ]]; then
@@ -636,32 +517,14 @@ gather_config() {
     STEALTH_UDP_PORT=443
     info "Public access: stealth carriers on 443/tcp and 443/udp for reachability."
   fi
-
-  if [[ "$DEPLOY" == "host" ]]; then
-    if confirm "Enable App-Hosting (expose VPN-connected apps to the internet)?" n; then
-      ENABLE_APP_HOSTING="true"
-      PUBLIC_GATEWAY_ENABLED="true"
-      echo "  App-Hosting needs a WILDCARD DNS record you control, e.g.:"
-      echo -e "      ${C_BOLD}*.apps.example.com  A  ${WG_ENDPOINT_HOST}${C_RESET}"
-      echo "  The gateway then mints per-app CNAMEs under it and routes traffic in."
-      ask APP_WILDCARD_DOMAIN "Wildcard base domain (e.g. apps.example.com)" "$APP_WILDCARD_DOMAIN"
-      [[ -n "$APP_WILDCARD_DOMAIN" ]] || die "App-Hosting requires a wildcard domain"
-      PUBLIC_DOMAIN="$APP_WILDCARD_DOMAIN"
-      WILDCARD_DOMAIN="*.${APP_WILDCARD_DOMAIN}"
-    fi
-  fi
 }
 
 # Container image: registry default; local build fallback.
 EREBRUS_IMAGE="${EREBRUS_IMAGE:-ghcr.io/netsepio/erebrus:latest}"
 
-# Invoke the node CLI regardless of install mode (pulled/built image vs host binary).
+# Invoke the node CLI from the container image.
 erebrus_cli() {
-  if [[ "$DEPLOY" == "container" ]]; then
-    run docker run --rm "$EREBRUS_IMAGE" "$@"
-  else
-    /usr/local/bin/erebrus "$@"
-  fi
+  run docker run --rm "$EREBRUS_IMAGE" "$@"
 }
 
 # Generate a mnemonic using the freshly built binary/image if the operator
@@ -691,7 +554,6 @@ RUNTYPE=release
 EREBRUS_IMAGE=${EREBRUS_IMAGE}
 EREBRUS_PROFILE=${PROFILE:-standard}
 EREBRUS_ACCESS=${EREBRUS_ACCESS:-private}
-EREBRUS_MODE=${EREBRUS_MODE:-container}
 EREBRUS_NETWORK_PROFILE=${EREBRUS_NETWORK_PROFILE:-bridge}
 SENTINEL_IMAGE=ghcr.io/netsepio/erebrus-sentinel:latest
 SERVER=0.0.0.0
@@ -725,19 +587,11 @@ STEALTH_UDP_PORT=${STEALTH_UDP_PORT}
 REALITY_SERVER_NAMES=${REALITY_SERVER_NAMES}
 HYSTERIA2_OBFS_PASSWORD=${HYSTERIA2_OBFS_PASSWORD}
 
-# Public edge / app hosting
-ENABLE_APP_HOSTING=${ENABLE_APP_HOSTING}
-APP_WILDCARD_DOMAIN=${APP_WILDCARD_DOMAIN}
-PUBLIC_DOMAIN=${PUBLIC_DOMAIN}
-WILDCARD_DOMAIN=${WILDCARD_DOMAIN}
-PUBLIC_GATEWAY_ENABLED=${PUBLIC_GATEWAY_ENABLED}
-
 # Optional Drop/Kubo storage
 DROP_ENABLED=${DROP}
 DROP_STORAGE_MAX=${DROP_STORAGE_MAX}
 DROP_SWARM_PORT=${DROP_SWARM_PORT}
 DROP_WEBUI_ENABLED=${DROP_WEBUI_ENABLED}
-DROP_PUBLIC_GATEWAY_DOMAIN=${DROP_PUBLIC_GATEWAY_DOMAIN}
 
 # Profile / firewall wiring
 $(profile_env_block)
@@ -798,19 +652,16 @@ install_compose_file() {
 }
 
 install_drop_files() {
-  local compose_src="" public_src="" init_src=""
+  local compose_src="" init_src=""
   if [[ -f "$INSTALL_DIR/deploy/compose/drop.yml" ]]; then
     compose_src="$INSTALL_DIR/deploy/compose/drop.yml"
-    public_src="$INSTALL_DIR/deploy/compose/drop-public-gateway.yml"
     init_src="$INSTALL_DIR/deploy/compose/kubo-init.sh"
   elif [[ -f "$INSTALL_DIR/src/deploy/compose/drop.yml" ]]; then
     compose_src="$INSTALL_DIR/src/deploy/compose/drop.yml"
-    public_src="$INSTALL_DIR/src/deploy/compose/drop-public-gateway.yml"
     init_src="$INSTALL_DIR/src/deploy/compose/kubo-init.sh"
   fi
-  if [[ -n "$compose_src" && -f "$public_src" && -f "$init_src" ]]; then
+  if [[ -n "$compose_src" && -f "$init_src" ]]; then
     run cp "$compose_src" "$INSTALL_DIR/drop.yml"
-    run cp "$public_src" "$INSTALL_DIR/drop-public-gateway.yml"
     run cp "$init_src" "$INSTALL_DIR/kubo-init.sh"
     run chmod 755 "$INSTALL_DIR/kubo-init.sh"
     return
@@ -818,8 +669,6 @@ install_drop_files() {
   info "Fetching Drop Compose support…"
   curl -fsSL "https://raw.githubusercontent.com/NetSepio/erebrus/${BRANCH}/deploy/compose/drop.yml" \
     -o "$INSTALL_DIR/drop.yml" >>"$LOG_FILE" 2>&1 || die "failed to fetch deploy/compose/drop.yml"
-  curl -fsSL "https://raw.githubusercontent.com/NetSepio/erebrus/${BRANCH}/deploy/compose/drop-public-gateway.yml" \
-    -o "$INSTALL_DIR/drop-public-gateway.yml" >>"$LOG_FILE" 2>&1 || die "failed to fetch deploy/compose/drop-public-gateway.yml"
   curl -fsSL "https://raw.githubusercontent.com/NetSepio/erebrus/${BRANCH}/deploy/compose/kubo-init.sh" \
     -o "$INSTALL_DIR/kubo-init.sh" >>"$LOG_FILE" 2>&1 || die "failed to fetch deploy/compose/kubo-init.sh"
   run chmod 755 "$INSTALL_DIR/kubo-init.sh"
@@ -829,8 +678,6 @@ install_drop_files() {
 # Firewall
 # ---------------------------------------------------------------------------
 open_firewall() {
-  local extra_tcp=()
-  [[ "$ENABLE_APP_HOSTING" == "true" ]] && extra_tcp=(80 443)
   if command -v ufw >/dev/null 2>&1 && run ufw status >/dev/null 2>&1; then
     info "Opening ports via ufw…"
     run ufw allow "${HTTP_PORT}/tcp"  >>"$LOG_FILE" 2>&1 || true
@@ -838,12 +685,9 @@ open_firewall() {
     run ufw allow "${WG_PORT}/udp"    >>"$LOG_FILE" 2>&1 || true
     run ufw allow "${STEALTH_UDP_PORT}/udp"   >>"$LOG_FILE" 2>&1 || true
     if [[ "$DROP" == "true" ]]; then
-      [[ -n "$DROP_PUBLIC_GATEWAY_DOMAIN" ]] &&
-        run ufw allow "${DROP_GATEWAY_TLS_PORT}/tcp" >>"$LOG_FILE" 2>&1 || true
       run ufw allow "${DROP_SWARM_PORT}/tcp" >>"$LOG_FILE" 2>&1 || true
       run ufw allow "${DROP_SWARM_PORT}/udp" >>"$LOG_FILE" 2>&1 || true
     fi
-    for p in "${extra_tcp[@]}"; do run ufw allow "${p}/tcp" >>"$LOG_FILE" 2>&1 || true; done
     ok "ufw rules added."
   elif command -v firewall-cmd >/dev/null 2>&1; then
     info "Opening ports via firewalld…"
@@ -852,20 +696,15 @@ open_firewall() {
     run firewall-cmd --permanent --add-port="${WG_PORT}/udp"    >>"$LOG_FILE" 2>&1 || true
     run firewall-cmd --permanent --add-port="${STEALTH_UDP_PORT}/udp"   >>"$LOG_FILE" 2>&1 || true
     if [[ "$DROP" == "true" ]]; then
-      [[ -n "$DROP_PUBLIC_GATEWAY_DOMAIN" ]] &&
-        run firewall-cmd --permanent --add-port="${DROP_GATEWAY_TLS_PORT}/tcp" >>"$LOG_FILE" 2>&1 || true
       run firewall-cmd --permanent --add-port="${DROP_SWARM_PORT}/tcp" >>"$LOG_FILE" 2>&1 || true
       run firewall-cmd --permanent --add-port="${DROP_SWARM_PORT}/udp" >>"$LOG_FILE" 2>&1 || true
     fi
-    for p in "${extra_tcp[@]}"; do run firewall-cmd --permanent --add-port="${p}/tcp" >>"$LOG_FILE" 2>&1 || true; done
     run firewall-cmd --reload >>"$LOG_FILE" 2>&1 || true
     ok "firewalld rules added."
   else
     warn "No ufw/firewalld detected. Ensure these are open in your cloud security group:"
-    warn "  ${HTTP_PORT}/tcp, ${STEALTH_TCP_PORT}/tcp, ${WG_PORT}/udp, ${STEALTH_UDP_PORT}/udp ${extra_tcp:+(+ 80/tcp 443/tcp)}"
+    warn "  ${HTTP_PORT}/tcp, ${STEALTH_TCP_PORT}/tcp, ${WG_PORT}/udp, ${STEALTH_UDP_PORT}/udp"
     if [[ "$DROP" == "true" ]]; then
-      [[ -n "$DROP_PUBLIC_GATEWAY_DOMAIN" ]] &&
-        warn "  Drop public CID gateway: ${DROP_GATEWAY_TLS_PORT}/tcp"
       warn "  Drop swarm: ${DROP_SWARM_PORT}/tcp and ${DROP_SWARM_PORT}/udp"
     fi
   fi
@@ -926,8 +765,6 @@ install_docker_mode() {
   docker compose version >/dev/null 2>&1 || compose=(docker-compose)
   if [[ "$DROP" == "true" ]]; then
     local -a drop_files=(-f docker-compose.yml -f drop.yml)
-    [[ -n "$DROP_PUBLIC_GATEWAY_DOMAIN" ]] &&
-      drop_files+=(-f drop-public-gateway.yml)
     ( cd "$INSTALL_DIR" && run "${compose[@]}" --env-file .env "${drop_files[@]}" up -d >>"$LOG_FILE" 2>&1 ) || die "docker compose up failed"
     local kubo_id="" health="" i
     for i in $(seq 1 30); do
@@ -941,23 +778,6 @@ install_docker_mode() {
     if [[ "$health" == "healthy" ]]; then
       DROP_STATE="active"
       ok "Drop Kubo sidecar is healthy."
-      if [[ -n "$DROP_PUBLIC_GATEWAY_DOMAIN" ]]; then
-        local traefik_id=""
-        for i in $(seq 1 30); do
-          traefik_id="$(cd "$INSTALL_DIR" && run "${compose[@]}" --env-file .env "${drop_files[@]}" ps -q traefik 2>/dev/null || true)"
-          if [[ -n "$traefik_id" ]]; then
-            health="$(run docker inspect --format '{{if .State.Health}}{{.State.Health.Status}}{{else}}{{.State.Status}}{{end}}' "$traefik_id" 2>/dev/null || true)"
-            [[ "$health" == "healthy" || "$health" == "running" ]] && break
-          fi
-          sleep 2
-        done
-        if [[ "$health" == "healthy" || "$health" == "running" ]]; then
-          ok "Drop public TLS gateway is running for https://$DROP_PUBLIC_GATEWAY_DOMAIN/ipfs/<cid>."
-        else
-          DROP_STATE="degraded"
-          warn "Drop public TLS gateway is not healthy yet; VPN remains available."
-        fi
-      fi
     else
       DROP_STATE="starting"
       warn "Drop Kubo sidecar is not healthy yet; VPN remains available."
@@ -970,87 +790,6 @@ install_docker_mode() {
   fi
   open_firewall
   ok "Docker node started."
-}
-
-# ---------------------------------------------------------------------------
-# Host (bare-metal) install path
-# ---------------------------------------------------------------------------
-ensure_go() {
-  if command -v go >/dev/null 2>&1; then return; fi
-  info "Installing Go ${GO_VERSION}…"
-  local tgz="go${GO_VERSION}.linux-${ARCH}.tar.gz"
-  curl -fsSL "https://go.dev/dl/${tgz}" -o "/tmp/${tgz}" >>"$LOG_FILE" 2>&1 || die "Go download failed"
-  run rm -rf /usr/local/go && run tar -C /usr/local -xzf "/tmp/${tgz}"
-  export PATH="$PATH:/usr/local/go/bin"
-}
-
-build_host_binary() {
-  ensure_tool git
-  ensure_go
-  info "Fetching source ($BRANCH)…"
-  if [[ -d "$INSTALL_DIR/src/.git" ]]; then
-    run git -C "$INSTALL_DIR/src" fetch --depth 1 origin "$BRANCH" >>"$LOG_FILE" 2>&1
-    run git -C "$INSTALL_DIR/src" reset --hard "origin/$BRANCH" >>"$LOG_FILE" 2>&1
-  else
-    run mkdir -p "$INSTALL_DIR/src"
-    run git clone --depth 1 -b "$BRANCH" "$REPO_URL" "$INSTALL_DIR/src" >>"$LOG_FILE" 2>&1
-  fi
-  info "Building erebrus (-tags ${BUILD_TAGS}); this can take a couple of minutes…"
-  ( cd "$INSTALL_DIR/src" && run env PATH="$PATH:/usr/local/go/bin" \
-      go build -tags "$BUILD_TAGS" \
-      -ldflags "-X github.com/NetSepio/erebrus/internal/config.Version=2.0.0" \
-      -o /usr/local/bin/erebrus-node ./cmd/erebrus-node >>"$LOG_FILE" 2>&1 ) || die "build failed"
-  run ln -sf /usr/local/bin/erebrus-node /usr/local/bin/erebrus
-  ok "Installed /usr/local/bin/erebrus-node (erebrus alias)"
-}
-
-install_host_mode() {
-  pkg_install wireguard-tools iptables ca-certificates curl
-  command -v modprobe >/dev/null 2>&1 && run modprobe wireguard >>"$LOG_FILE" 2>&1 || \
-    warn "Could not load the wireguard kernel module; ensure it is available on this host."
-  enable_ip_forward
-  build_host_binary
-  ensure_mnemonic
-  run mkdir -p "$STATE_DIR" /etc/wireguard
-  write_env_file "$ENV_DIR/erebrus.env"
-
-  if [[ "$ENABLE_APP_HOSTING" == "true" ]]; then
-    info "Installing Caddy for app ingress…"
-    if [[ "$PKG" == "apt" ]]; then
-      run bash -c 'apt-get install -y debian-keyring debian-archive-keyring apt-transport-https >/dev/null 2>&1; \
-        curl -1sLf https://dl.cloudsmith.io/public/caddy/stable/gpg.key | gpg --dearmor -o /usr/share/keyrings/caddy-stable-archive-keyring.gpg; \
-        curl -1sLf https://dl.cloudsmith.io/public/caddy/stable/debian.deb.txt | tee /etc/apt/sources.list.d/caddy-stable.list >/dev/null; \
-        apt-get update -qq' >>"$LOG_FILE" 2>&1 || true
-      pkg_install caddy || warn "Caddy install failed; install it manually for app hosting."
-    else
-      pkg_install caddy || warn "Caddy not packaged here; install it manually for app hosting."
-    fi
-  fi
-
-  info "Installing systemd service…"
-  run tee /etc/systemd/system/erebrus.service >/dev/null <<EOF
-[Unit]
-Description=Erebrus v2 dVPN node
-After=network-online.target
-Wants=network-online.target
-
-[Service]
-Type=simple
-EnvironmentFile=${ENV_DIR}/erebrus.env
-ExecStart=/usr/local/bin/erebrus-node
-AmbientCapabilities=CAP_NET_ADMIN
-CapabilityBoundingSet=CAP_NET_ADMIN
-Restart=on-failure
-RestartSec=5
-LimitNOFILE=1048576
-
-[Install]
-WantedBy=multi-user.target
-EOF
-  run systemctl daemon-reload
-  run systemctl enable --now erebrus >>"$LOG_FILE" 2>&1 || die "failed to start erebrus service"
-  open_firewall
-  ok "Host node started (systemd: erebrus.service)."
 }
 
 # ---------------------------------------------------------------------------
@@ -1077,45 +816,27 @@ validate_and_summary() {
     fi
   else
     warn "Node did not answer on :${HTTP_PORT} yet. Check logs:"
-    [[ "$DEPLOY" == "container" ]] && echo "    cd $INSTALL_DIR && docker compose logs -f" \
-                                    || echo "    journalctl -u erebrus -f"
+    echo "    cd $INSTALL_DIR && docker compose logs -f"
   fi
 
   echo
-  echo -e "${C_BOLD}${C_G}Erebrus node installed (profile=${PROFILE:-standard}, deploy=${DEPLOY}, access=${EREBRUS_ACCESS}).${C_RESET}"
+  echo -e "${C_BOLD}${C_G}Erebrus node installed (profile=${PROFILE:-standard}, access=${EREBRUS_ACCESS}).${C_RESET}"
   echo "  REST API : http://${WG_ENDPOINT_HOST}:${HTTP_PORT}/api/v2/status"
   echo "  WireGuard: ${WG_ENDPOINT_HOST}:${WG_PORT}/udp"
   echo "  Stealth  : VLESS+REALITY :${STEALTH_TCP_PORT}/tcp · Hysteria2 :${STEALTH_UDP_PORT}/udp"
   echo "  Node API key: ${NODE_API_TOKEN}"
   echo "  Verify   : erebrus status"
   if [[ "$DROP" == "true" ]]; then
-    if [[ -n "$DROP_PUBLIC_GATEWAY_DOMAIN" ]]; then
-      echo "  Drop     : ${DROP_STATE} (public CID gateway https://$DROP_PUBLIC_GATEWAY_DOMAIN/ipfs/<cid> on ${DROP_GATEWAY_TLS_PORT}/tcp; swarm ${DROP_SWARM_PORT}/tcp+udp)"
-    else
-      echo "  Drop     : ${DROP_STATE} (gateway-only file access; swarm ${DROP_SWARM_PORT}/tcp+udp)"
-    fi
+    echo "  Drop     : ${DROP_STATE} (gateway-only file access; swarm ${DROP_SWARM_PORT}/tcp+udp)"
   else
     echo "  Drop     : disabled (existing Kubo data preserved)"
   fi
-  if [[ "$DEPLOY" == "container" ]]; then
-    if [[ "$DROP" == "true" ]]; then
-      local public_file=""
-      [[ -n "$DROP_PUBLIC_GATEWAY_DOMAIN" ]] &&
-        public_file=" -f drop-public-gateway.yml"
-      echo "  Manage   : cd $INSTALL_DIR && docker compose --env-file .env -f docker-compose.yml -f drop.yml${public_file} [ps|logs -f|restart]"
-    else
-      echo "  Manage   : cd $INSTALL_DIR && docker compose [logs -f|restart|down]"
-    fi
-    echo "  Config   : $INSTALL_DIR/.env"
+  if [[ "$DROP" == "true" ]]; then
+    echo "  Manage   : cd $INSTALL_DIR && docker compose --env-file .env -f docker-compose.yml -f drop.yml [ps|logs -f|restart]"
   else
-    echo "  Manage   : systemctl [status|restart|stop] erebrus ; journalctl -u erebrus -f"
-    echo "  Config   : $ENV_DIR/erebrus.env"
+    echo "  Manage   : cd $INSTALL_DIR && docker compose [logs -f|restart|down]"
   fi
-  if [[ "$ENABLE_APP_HOSTING" == "true" ]]; then
-    echo
-    echo -e "${C_BOLD}App-Hosting:${C_RESET} create this DNS record so the gateway can route apps:"
-    echo -e "    ${C_BOLD}*.${APP_WILDCARD_DOMAIN}  A  ${WG_ENDPOINT_HOST}${C_RESET}"
-  fi
+  echo "  Config   : $INSTALL_DIR/.env"
   echo
   echo -e "${C_Y}Back up your node identity (12-word phrase) — it cannot be recovered.${C_RESET}"
 }
@@ -1127,26 +848,14 @@ main() {
   banner
   require_root
   detect_platform
-  DEPLOY="$(normalize_deploy "${DEPLOY:-container}")"
   PROFILE="${PROFILE:-standard}"
-  choose_deploy
   ensure_required_inputs
   choose_profile
   choose_drop
-  if [[ "$DEPLOY" == "host" && "$DROP" == "true" ]]; then
-    die "Drop v1 requires container deploy; use --mode container or --no-drop"
-  fi
-  if [[ "$DEPLOY" == "host" && "${PROFILE:-standard}" != "standard" ]]; then
-    die "shield/sentinel profiles require container deploy (--mode container)"
-  fi
   prepare_drop_firewall
   run_preflight
   gather_config
-  case "$DEPLOY" in
-    container) install_docker_mode ;;
-    host)      install_host_mode ;;
-    *) die "invalid deploy mode: $DEPLOY" ;;
-  esac
+  install_docker_mode
   validate_and_summary
 }
 main "$@"

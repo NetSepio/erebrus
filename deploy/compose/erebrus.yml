@@ -4,7 +4,7 @@ services:
     build:
       context: ../..
       dockerfile: docker/erebrus-node.Dockerfile
-    container_name: erebrus-node
+    container_name: erebrus-${EREBRUS_PROFILE:-standard}
     restart: unless-stopped
     cap_add:
       - NET_ADMIN

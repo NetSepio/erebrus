@@ -55,18 +55,15 @@ type Spec struct {
 
 // Capabilities advertises optional node features.
 type Capabilities struct {
-	AccessMode     string          `json:"access_mode,omitempty"` // private | public
-	AppHosting     bool            `json:"app_hosting"`
-	WildcardDomain string          `json:"wildcard_domain"`
-	Drop           *DropCapability `json:"drop,omitempty"`
+	AccessMode string          `json:"access_mode,omitempty"` // private | public
+	Drop       *DropCapability `json:"drop,omitempty"`
 }
 
 // DropCapability advertises stable Drop feature flags.
 type DropCapability struct {
-	Enabled              bool   `json:"enabled"`
-	AcceptsPublicUploads bool   `json:"accepts_public_uploads"`
-	PublicGatewayURL     string `json:"public_gateway_url,omitempty"`
-	WebUIAvailable       bool   `json:"webui_available"`
+	Enabled              bool `json:"enabled"`
+	AcceptsPublicUploads bool `json:"accepts_public_uploads"`
+	WebUIAvailable       bool `json:"webui_available"`
 }
 
 // Endpoints describes the connection endpoints clients dial.

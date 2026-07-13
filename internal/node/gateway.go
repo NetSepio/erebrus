@@ -115,10 +115,8 @@ func (g *GatewayBridge) BuildHello(_ string) gatewayclient.Hello {
 			IP:     cfg.WGEndpointHost,
 		},
 		Capabilities: gatewayclient.Capabilities{
-			AccessMode:     cfg.Mode.GatewayAccessMode(),
-			AppHosting:     cfg.EnableAppHosting,
-			WildcardDomain: cfg.AppWildcardDomain,
-			Drop:           g.dropCapability(),
+			AccessMode: cfg.Mode.GatewayAccessMode(),
+			Drop:       g.dropCapability(),
 		},
 		Endpoints:         eps,
 		DeploymentProfile: cfg.ErebrusProfile,
@@ -188,7 +186,6 @@ func (g *GatewayBridge) dropCapability() *gatewayclient.DropCapability {
 	return &gatewayclient.DropCapability{
 		Enabled:              g.drop.Enabled(),
 		AcceptsPublicUploads: g.drop.AcceptsPublicUploads(),
-		PublicGatewayURL:     g.drop.PublicGatewayURL(),
 		WebUIAvailable:       g.drop.WebUIAvailable(),
 	}
 }

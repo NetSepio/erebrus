@@ -188,9 +188,6 @@ func (s *Server) handleStatus(c *gin.Context) {
 			"network_profile":    s.cfg.Mode.NetworkProfile,
 			"deployment_profile": s.cfg.ErebrusProfile,
 			"firewall_provider":  s.cfg.FirewallProvider,
-			"app_hosting":        s.cfg.EnableAppHosting,
-			"wildcard_domain":    s.cfg.AppWildcardDomain,
-			"public_domain":      s.cfg.PublicDomain,
 			"stealth":            s.cfg.EnableStealth,
 			"public_api_url":     readiness.PublicAPIURL(s.cfg),
 			"services":           s.servicesSnapshot(),
@@ -223,15 +220,11 @@ func (s *Server) publicDropCapability() map[string]any {
 			"webui_available": false,
 		}
 	}
-	out := map[string]any{
+	return map[string]any{
 		"enabled":                s.drop.Enabled(),
 		"accepts_public_uploads": s.drop.AcceptsPublicUploads(),
 		"webui_available":        s.drop.WebUIAvailable(),
 	}
-	if url := s.drop.PublicGatewayURL(); url != "" {
-		out["public_gateway_url"] = url
-	}
-	return out
 }
 
 func (s *Server) handleStats(c *gin.Context) {

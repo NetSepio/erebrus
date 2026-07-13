@@ -4,9 +4,7 @@ package config
 
 import (
 	"fmt"
-	"net"
 	"os"
-	"regexp"
 	"strconv"
 	"strings"
 )
@@ -23,14 +21,8 @@ type Config struct {
 	Version  string
 
 	// runtime model (v2.1+)
-	Mode                 ModeSettings
-	UnsafePublicAPI      bool
-	PublicDomain         string
-	WildcardDomain       string
-	PublicGatewayEnabled bool
-	PublicHTTPPort       string
-	PublicHTTPSPort      string
-	AutoTLS              bool
+	Mode            ModeSettings
+	UnsafePublicAPI bool
 
 	// identity
 	Mnemonic string
@@ -80,9 +72,6 @@ type Config struct {
 	// node-local state
 	StateDir string
 
-	// app hosting (Phase 5)
-	EnableAppHosting  bool
-	AppWildcardDomain string
 
 	// Drop storage
 	DropEnabled             bool
@@ -90,7 +79,6 @@ type Config struct {
 	DropStorageMaxBytes     int64
 	DropSwarmPort           string
 	DropWebUIEnabled        bool
-	DropPublicGatewayDomain string
 
 	// registrar
 	ChainRegistration string // off | solana
@@ -131,12 +119,6 @@ func Load() *Config {
 		BindAddr:                bindAddr,
 		HTTPPort:                env("HTTP_PORT", "9080"),
 		UnsafePublicAPI:         boolEnv("UNSAFE_PUBLIC_API", false),
-		PublicDomain:            firstEnv("EREBRUS_DOMAIN", "PUBLIC_DOMAIN", ""),
-		WildcardDomain:          env("WILDCARD_DOMAIN", os.Getenv("EREBRUS_WILDCARD_DOMAIN")),
-		PublicGatewayEnabled:    boolEnv("PUBLIC_GATEWAY_ENABLED", boolEnv("EREBRUS_PUBLIC_GATEWAY", false)),
-		PublicHTTPPort:          env("PUBLIC_HTTP_PORT", "80"),
-		PublicHTTPSPort:         env("PUBLIC_HTTPS_PORT", "443"),
-		AutoTLS:                 boolEnv("AUTO_TLS", true),
 		NodeName:                env("NODE_NAME", hostnameOr("erebrus-node")),
 		Region:                  env("REGION", "unknown"),
 		Zone:                    env("ZONE", ""),
@@ -174,13 +156,10 @@ func Load() *Config {
 		Hysteria2ObfsPassword:   os.Getenv("HYSTERIA2_OBFS_PASSWORD"),
 		EnableTUIC:              boolEnv("ENABLE_TUIC", false),
 		StateDir:                env("STATE_DIR", "/var/lib/erebrus"),
-		EnableAppHosting:        boolEnv("ENABLE_APP_HOSTING", false),
-		AppWildcardDomain:       os.Getenv("APP_WILDCARD_DOMAIN"),
 		DropEnabled:             boolEnv("DROP_ENABLED", false),
 		DropStorageMax:          env("DROP_STORAGE_MAX", "10GB"),
 		DropSwarmPort:           env("DROP_SWARM_PORT", "4001"),
 		DropWebUIEnabled:        boolEnv("DROP_WEBUI_ENABLED", false),
-		DropPublicGatewayDomain: env("DROP_PUBLIC_GATEWAY_DOMAIN", ""),
 		ChainRegistration:       env("CHAIN_REGISTRATION", "off"),
 		PrivateDNSEnabled:       boolEnv("PRIVATE_DNS_ENABLED", false),
 		PrivateDNSDomain:        env("PRIVATE_DNS_DOMAIN", "ere"),
@@ -243,18 +222,11 @@ func (c *Config) Validate() error {
 	if len(missing) > 0 {
 		return fmt.Errorf("missing required config: %s", strings.Join(missing, ", "))
 	}
-	if c.Mode.IsPublic() && c.PublicDomain == "" && c.EnableAppHosting {
-		c.Mode.Warnings = append(c.Mode.Warnings,
-			"WARNING: Public access mode with ENABLE_APP_HOSTING but no PUBLIC_DOMAIN set; public edge routing may be incomplete.")
-	}
 	if c.Mode.IsPublic() && (c.StealthTCPPort != "443" || c.StealthUDPPort != "443") {
 		c.Mode.Warnings = append(c.Mode.Warnings,
 			"WARNING: Public access mode production should expose stealth on 443/tcp and 443/udp (STEALTH_TCP_PORT/STEALTH_UDP_PORT) for best reachability.")
 	}
 	if c.DropEnabled {
-		if c.Mode.Deploy == DeployHost {
-			return fmt.Errorf("Drop requires container deployment in v1")
-		}
 		if c.DropStorageMaxBytes <= 0 {
 			return fmt.Errorf("DROP_STORAGE_MAX must be a positive byte size")
 		}
@@ -264,13 +236,6 @@ func (c *Config) Validate() error {
 		}
 		if c.DropWebUIEnabled && c.Mode.IsPublic() {
 			return fmt.Errorf("DROP_WEBUI_ENABLED is allowed only for private nodes")
-		}
-		if c.DropPublicGatewayDomain != "" {
-			normalized, err := normalizePublicGatewayDomain(c.DropPublicGatewayDomain)
-			if err != nil {
-				return fmt.Errorf("invalid DROP_PUBLIC_GATEWAY_DOMAIN: %w", err)
-			}
-			c.DropPublicGatewayDomain = normalized
 		}
 	}
 	return c.ValidateProfile()
@@ -325,13 +290,6 @@ func (c *Config) DropSwarmPortInt() int { n, _ := strconv.Atoi(c.DropSwarmPort);
 // DropAcceptsPublicUploads reports whether the gateway may select this node for public Drop storage.
 func (c *Config) DropAcceptsPublicUploads() bool {
 	return c.DropEnabled && c.Mode.IsPublic()
-}
-
-// DropPublicGatewayURL returns the canonical HTTPS URL for the configured public
-// CID gateway domain. It returns an empty string when no domain is configured
-// or when the domain is invalid.
-func (c *Config) DropPublicGatewayURL() string {
-	return publicGatewayURL(c.DropPublicGatewayDomain)
 }
 
 // DropWebUIAvailable reports whether the private Kubo administration proxy is enabled.
@@ -448,45 +406,3 @@ func hostnameOr(def string) string {
 	return def
 }
 
-// publicGatewayURL constructs the canonical HTTPS base URL for a public CID
-// gateway domain. It returns the empty string for empty or invalid domains.
-func publicGatewayURL(domain string) string {
-	domain, err := normalizePublicGatewayDomain(domain)
-	if err != nil || domain == "" {
-		return ""
-	}
-	return "https://" + domain
-}
-
-// normalizePublicGatewayDomain validates and normalizes a drop public gateway
-// domain. It rejects schemes, ports, paths, query fragments, credentials,
-// localhost, and IP literals.
-func normalizePublicGatewayDomain(domain string) (string, error) {
-	domain = strings.TrimSpace(domain)
-	domain = strings.TrimSuffix(domain, ".")
-	if domain == "" {
-		return "", nil
-	}
-	if strings.ContainsAny(domain, ":/?#@") || strings.Contains(domain, "..") {
-		return "", fmt.Errorf("domain must not include a scheme, port, path, query, credentials, or empty labels")
-	}
-	if strings.EqualFold(domain, "localhost") {
-		return "", fmt.Errorf("domain must not be localhost")
-	}
-	if net.ParseIP(domain) != nil {
-		return "", fmt.Errorf("domain must not be an IP literal")
-	}
-	if !isValidDNSHost(domain) {
-		return "", fmt.Errorf("domain must be a valid DNS hostname")
-	}
-	return strings.ToLower(domain), nil
-}
-
-var dnsHostRe = regexp.MustCompile(`^[a-zA-Z0-9]([a-zA-Z0-9-]{0,61}[a-zA-Z0-9])?(\.[a-zA-Z0-9]([a-zA-Z0-9-]{0,61}[a-zA-Z0-9])?)*$`)
-
-func isValidDNSHost(domain string) bool {
-	if len(domain) > 253 {
-		return false
-	}
-	return dnsHostRe.MatchString(domain)
-}

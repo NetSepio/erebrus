@@ -2,7 +2,6 @@ package gatewayclient
 
 import (
 	"encoding/json"
-	"strings"
 	"testing"
 )
 
@@ -17,7 +16,7 @@ const canonicalHello = `{
       "ip_hash": "f1820f54e0e51b8a1a47b0ec96265d6021b3a0b6c6c61563b1d62fa4a4b0d3c2"
     },
     "spec": { "cpu": "4 vCPU", "mem_mb": 8192, "region": "SG", "ip": "203.0.113.10" },
-    "capabilities": { "app_hosting": false, "wildcard_domain": "" },
+    "capabilities": {},
     "endpoints": {
       "wireguard":     { "port": 51820, "public_key": "wOLuwnTGzkkCC1WiV2t5HpJ56FftZyXTK0WnWxSDFkI=" },
       "vless_reality": { "port": 8443,  "public_key": "SRYxyiZ1Tr3w0aV3PXAhd1NSjpvm8wOCnnlLWWBd7Vc", "short_ids": ["6ba85179e30d4fc2"], "sni": "www.microsoft.com" },
@@ -112,8 +111,7 @@ func TestDropCapabilityRoundTrip(t *testing.T) {
 	h := Hello{
 		Capabilities: Capabilities{
 			Drop: &DropCapability{
-				Enabled: true, AcceptsPublicUploads: true, PublicGatewayURL: "https://drop.example.com",
-				WebUIAvailable: false,
+				Enabled: true, AcceptsPublicUploads: true, WebUIAvailable: false,
 			},
 		},
 	}
@@ -131,25 +129,7 @@ func TestDropCapabilityRoundTrip(t *testing.T) {
 	}
 	if got.Capabilities.Drop == nil || !got.Capabilities.Drop.Enabled ||
 		!got.Capabilities.Drop.AcceptsPublicUploads ||
-		got.Capabilities.Drop.PublicGatewayURL != "https://drop.example.com" ||
 		got.Capabilities.Drop.WebUIAvailable {
 		t.Fatalf("drop capability = %+v", got.Capabilities.Drop)
-	}
-}
-
-func TestDropCapabilityPublicGatewayURLOmitEmpty(t *testing.T) {
-	h := Hello{
-		Capabilities: Capabilities{
-			Drop: &DropCapability{
-				Enabled: true, AcceptsPublicUploads: true, WebUIAvailable: false,
-			},
-		},
-	}
-	frame, err := wrap(TypeHello, h)
-	if err != nil {
-		t.Fatal(err)
-	}
-	if strings.Contains(string(frame), "public_gateway_url") {
-		t.Fatalf("public_gateway_url should be omitted when empty: %s", string(frame))
 	}
 }

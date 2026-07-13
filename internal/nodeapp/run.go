@@ -14,7 +14,6 @@ import (
 	"github.com/NetSepio/erebrus/internal/config"
 	dnspkg "github.com/NetSepio/erebrus/internal/dns"
 	"github.com/NetSepio/erebrus/internal/drop"
-	"github.com/NetSepio/erebrus/internal/edge"
 	"github.com/NetSepio/erebrus/internal/firewall"
 	"github.com/NetSepio/erebrus/internal/gatewayclient"
 	"github.com/NetSepio/erebrus/internal/node"
@@ -156,24 +155,6 @@ func Run(cfg *config.Config) error {
 	apiServer.SetDropService(dropService)
 	apiServer.SetWireGuardPublicKeyProvider(wgm.ServerPublicKey)
 	svc.SetAPIStatusHook(apiServer.SetStatus)
-
-	if cfg.Mode.IsPublic() && cfg.PublicGatewayEnabled {
-		edgeProxy := &edge.Proxy{Reg: svcReg, St: st, WildcardDomain: cfg.WildcardDomain}
-		edgeSrv := &http.Server{
-			Addr: ":9081", Handler: edgeProxy.Handler(), ReadHeaderTimeout: 10 * time.Second,
-		}
-		go func() {
-			slog.Info("public edge proxy listening", "addr", edgeSrv.Addr)
-			if err := edgeSrv.ListenAndServe(); err != nil && err != http.ErrServerClosed {
-				slog.Warn("edge proxy error", "err", err)
-			}
-		}()
-		defer func() {
-			shut, cancel := context.WithTimeout(context.Background(), 5*time.Second)
-			defer cancel()
-			_ = edgeSrv.Shutdown(shut)
-		}()
-	}
 
 	var gwClient *gatewayclient.Client
 	if cfg.GatewayEnabled() {

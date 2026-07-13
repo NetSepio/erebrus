@@ -42,9 +42,6 @@ type Service struct {
 	mu            sync.RWMutex
 	snapshot      Snapshot
 	identityReady bool
-	// publicGatewayURL is the advertised HTTPS endpoint, only set when the
-	// external TLS gateway is reachable and Kubo is operational.
-	publicGatewayURL string
 }
 
 // NewService creates the optional Drop runtime.
@@ -72,9 +69,6 @@ func (s *Service) Start(ctx context.Context) error {
 	s.identityReady = true
 	s.mu.Unlock()
 	go s.poll(ctx)
-	if s.cfg.DropPublicGatewayURL() != "" {
-		go s.probeGateway(ctx)
-	}
 	return nil
 }
 
@@ -90,20 +84,6 @@ func (s *Service) Enabled() bool { return s.cfg.DropEnabled }
 
 // AcceptsPublicUploads reports the stable public-storage capability.
 func (s *Service) AcceptsPublicUploads() bool { return s.cfg.DropAcceptsPublicUploads() }
-
-// PublicGatewayURL returns the advertised HTTPS URL for direct unauthenticated
-// CID retrieval. It is empty when the gateway is disabled, the domain is
-// invalid, Kubo is not operational, or the external TLS endpoint is not
-// reachable.
-func (s *Service) PublicGatewayURL() string {
-	s.mu.RLock()
-	url := s.publicGatewayURL
-	s.mu.RUnlock()
-	if url == "" || !s.operational() {
-		return ""
-	}
-	return url
-}
 
 // WebUIAvailable reports whether the exact-purpose Kubo proxy may be used.
 func (s *Service) WebUIAvailable() bool {
@@ -262,38 +242,3 @@ func (s *Service) observeOperation(operation string, err error) {
 	s.metrics.DropNodeOperations.WithLabelValues(operation, result).Inc()
 }
 
-// probeGateway periodically checks whether the public HTTPS gateway is reachable
-// with valid TLS. Failures are isolated to the public gateway capability and do
-// not affect Drop storage or VPN readiness.
-func (s *Service) probeGateway(ctx context.Context) {
-	s.runGatewayProbe(ctx)
-	ticker := time.NewTicker(30 * time.Second)
-	defer ticker.Stop()
-	for {
-		select {
-		case <-ctx.Done():
-			return
-		case <-ticker.C:
-			s.runGatewayProbe(ctx)
-		}
-	}
-}
-
-func (s *Service) runGatewayProbe(ctx context.Context) {
-	if !s.operational() {
-		s.setPublicGatewayURL("")
-		return
-	}
-	url := s.cfg.DropPublicGatewayURL()
-	if url == "" || !ProbePublicGatewayURL(ctx, url) {
-		s.setPublicGatewayURL("")
-		return
-	}
-	s.setPublicGatewayURL(url)
-}
-
-func (s *Service) setPublicGatewayURL(url string) {
-	s.mu.Lock()
-	s.publicGatewayURL = url
-	s.mu.Unlock()
-}

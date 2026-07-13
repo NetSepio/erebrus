@@ -25,6 +25,7 @@ services:
     build:
       context: ../..
       dockerfile: docker/erebrus-node.Dockerfile
+    container_name: erebrus-sentinel
     restart: unless-stopped
     depends_on:
       erebrus-sentinel:

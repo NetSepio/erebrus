@@ -10,8 +10,6 @@ CREATE TABLE IF NOT EXISTS services (
     visibility    TEXT NOT NULL DEFAULT 'private',
     auth_mode     TEXT NOT NULL DEFAULT 'vpn-peer',
     tags          TEXT NOT NULL DEFAULT '',
-    public        INTEGER NOT NULL DEFAULT 0,
-    public_hostname TEXT NOT NULL DEFAULT '',
     created_at    INTEGER NOT NULL,
     updated_at    INTEGER NOT NULL
 );

@@ -14,43 +14,32 @@ For more details visit [erebrus.io](https://erebrus.io).
 - Optional **Erebrus Drop** storage: a pinned Kubo/IPFS sidecar with a separate
   mnemonic-derived libp2p identity and persistent local pins.
 - HTTP REST API (`/api/v2`) and Prometheus `/metrics`.
-- Optional App-Hosting: expose a VPN-connected app to the public internet (host mode).
 
 ## Install a node
 
-Linux only (x86_64 / arm64). A node needs a **static, internet-routable public IP**, real bandwidth, and open ports (`9080/tcp`, `51820/udp`, `8443/tcp`, `4443/udp`). Drop nodes additionally publish `4001/tcp+udp` for the IPFS swarm; an
-optional TLS public CID gateway on `443/tcp` is configured by setting a DNS
-domain (`DROP_PUBLIC_GATEWAY_DOMAIN`). The installer verifies the required TCP
-ports.
+Linux only (x86_64 / arm64). A node needs a **static, internet-routable public IP**, real bandwidth, and open ports (`9080/tcp`, `51820/udp`, `8443/tcp`, `4443/udp`). Drop nodes additionally publish `4001/tcp+udp` for the IPFS swarm. The installer verifies the required TCP ports.
 
 ```bash
 curl -fsSL https://erebrus.io/install.sh | bash
 ```
-
-You'll be asked to pick a mode:
-
-- **docker** (recommended) — zero-hassle: WireGuard + stealth carriers in a container.
-- **host** — bare-metal via systemd; additionally supports **App-Hosting** (needs a wildcard DNS record, e.g. `*.apps.example.com → <node-ip>`, so the gateway can mint per-app CNAMEs).
 
 Non-interactive example:
 
 ```bash
 curl -fsSL https://erebrus.io/install.sh | \
   MNEMONIC="..." \
+  EREBRUS_ACCESS=public \
   EREBRUS_NODE_REGISTRATION_TOKEN="ere_reg_..." \
-  bash -s -- --mode docker --drop --yes
+  bash -s -- --drop --yes
 ```
 
 The installer detects the public IP and uses it as `WG_ENDPOINT_HOST`. Set
-`WG_ENDPOINT_HOST` explicitly only to advertise a DNS name or override the
-detected address; NAT port forwarding remains the operator's responsibility.
+`WG_ENDPOINT_HOST` explicitly only to override the detected public IP; NAT port
+forwarding remains the operator's responsibility.
 
-Drop is optional, works with the Standard, Shield, and Sentinel Docker profiles,
-and is not supported by host mode in v1. Use `--no-drop` to stop the sidecar
-without deleting its persistent data. Direct unauthenticated CID retrieval on
-`https://<domain>/ipfs/<cid>` is a separate opt-in
-(`--drop-public-gateway-domain <domain>`); otherwise files are accessed only
-through the Erebrus gateway.
+Drop is optional, works with the Standard, Shield, and Sentinel Docker profiles.
+Use `--no-drop` to stop the sidecar without deleting its persistent data.
+Files are accessed only through the authenticated Erebrus gateway.
 
 ## Build from source
 
@@ -73,7 +62,6 @@ only public, coarse aggregates (`/api/v2/status`, `/api/v2/stats`).
 - [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) — package layout and the stealth carrier topology.
 - [docs/SECURITY-AUDIT.md](docs/SECURITY-AUDIT.md) — data-capture inventory, threat model, and operator hardening.
 - [docs/DROP.md](docs/DROP.md) — Drop installation, private APIs, metrics, and safe storage operations.
-- [docs/DROP-IMPLEMENTATION-CONTEXT.md](docs/DROP-IMPLEMENTATION-CONTEXT.md) — domain-based TLS public gateway design and implementation notes.
 - [docs/node-api.openapi.yaml](docs/node-api.openapi.yaml) — the `/api/v2` REST contract.
 
 The REST surface lives under `/api/v2` (status, stats, peers CRUD, credentials,

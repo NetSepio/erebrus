@@ -14,7 +14,7 @@ import (
 
 func runServicesCLI(args []string) error {
 	if len(args) == 0 {
-		return fmt.Errorf("usage: erebrus services list|inspect <id>|remove <id>|publish <id> [--public]|unpublish <id>|domain add|remove <id> <domain>")
+		return fmt.Errorf("usage: erebrus services list|inspect <id>|remove <id>|serve --name <name> --port <port> [--type <type>]")
 	}
 	cfg := config.Load()
 	st, err := store.Open(cfg.DBPath())
@@ -50,15 +50,6 @@ func runServicesCLI(args []string) error {
 			return fmt.Errorf("usage: erebrus services remove <service-id>")
 		}
 		return reg.Remove(ctx, args[1])
-	case "publish":
-		return runServicePublish(reg, ctx, args[1:])
-	case "unpublish":
-		if len(args) < 2 {
-			return fmt.Errorf("usage: erebrus services unpublish <service-id>")
-		}
-		return runServiceUnpublish(reg, ctx, args[1])
-	case "domain":
-		return runServiceDomain(st, ctx, args[1:])
 	default:
 		return fmt.Errorf("unknown services subcommand %q", args[0])
 	}

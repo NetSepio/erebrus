@@ -14,15 +14,7 @@ const (
 	ModePublic  RuntimeMode = "public"  // listed in public directory
 )
 
-// DeployMode is how the node process is run on the machine.
-type DeployMode string
-
-const (
-	DeployContainer DeployMode = "container" // Docker / compose (bridge networking)
-	DeployHost      DeployMode = "host"      // bare metal / systemd (host-network)
-)
-
-// NetworkProfile describes container vs host networking (advanced override).
+// NetworkProfile describes Docker container networking.
 type NetworkProfile string
 
 const (
@@ -37,30 +29,27 @@ const (
 	legacyModeDocker  = "docker"
 )
 
-// ModeSettings holds parsed access, deploy, and network profile.
+// ModeSettings holds parsed access and network profile.
 type ModeSettings struct {
 	RuntimeMode    RuntimeMode // access: private | public
-	Deploy         DeployMode  // container | host
 	NetworkProfile NetworkProfile
 	Warnings       []string
 }
 
-// ParseModeSettings reads EREBRUS_ACCESS, EREBRUS_MODE (deploy), and
-// EREBRUS_NETWORK_PROFILE with legacy fallbacks.
-func ParseModeSettings(accessRaw, deployRaw, profileRaw string) (ModeSettings, error) {
+// ParseModeSettings reads EREBRUS_ACCESS and EREBRUS_NETWORK_PROFILE with legacy fallbacks.
+func ParseModeSettings(accessRaw, profileRaw string) (ModeSettings, error) {
 	accessRaw = strings.ToLower(strings.TrimSpace(accessRaw))
-	deployRaw = strings.ToLower(strings.TrimSpace(deployRaw))
 	profileRaw = strings.ToLower(strings.TrimSpace(profileRaw))
 
 	var warnings []string
 
 	// Legacy: EREBRUS_MODE used to mean access (private/public/gateway).
-	if accessRaw == "" && isAccessToken(deployRaw) {
+	if accessRaw == "" && isAccessToken(profileRaw) {
 		warnings = append(warnings, fmt.Sprintf(
-			"WARNING: EREBRUS_MODE=%q is deprecated for access. Use EREBRUS_ACCESS=%s and EREBRUS_MODE=container|host for deploy.",
-			deployRaw, normalizeAccessToken(deployRaw)))
-		accessRaw = deployRaw
-		deployRaw = ""
+			"WARNING: EREBRUS_MODE=%q is deprecated for access. Use EREBRUS_ACCESS=%s.",
+			profileRaw, normalizeAccessToken(profileRaw)))
+		accessRaw = profileRaw
+		profileRaw = ""
 	}
 
 	access, accessWarnings, err := parseAccess(accessRaw)
@@ -69,22 +58,12 @@ func ParseModeSettings(accessRaw, deployRaw, profileRaw string) (ModeSettings, e
 	}
 	warnings = append(warnings, accessWarnings...)
 
-	deploy, deployWarnings, err := parseDeploy(deployRaw)
-	if err != nil {
-		return ModeSettings{}, err
-	}
-	warnings = append(warnings, deployWarnings...)
-
-	profile, profileWarnings, err := parseNetworkProfile(profileRaw, deploy)
+	profile, profileWarnings, err := parseNetworkProfile(profileRaw)
 	if err != nil {
 		return ModeSettings{}, err
 	}
 	warnings = append(warnings, profileWarnings...)
 
-	if access == ModePublic && profile == NetworkBridge {
-		warnings = append(warnings,
-			"WARNING: Public access with bridge networking may work, but host-network is recommended for production nodes because WireGuard routing, 443 binding, reverse proxying, and debugging are simpler.")
-	}
 	if profile == NetworkNative {
 		warnings = append(warnings,
 			"WARNING: EREBRUS_NETWORK_PROFILE=native is experimental; container deployment is recommended.")
@@ -92,7 +71,6 @@ func ParseModeSettings(accessRaw, deployRaw, profileRaw string) (ModeSettings, e
 
 	return ModeSettings{
 		RuntimeMode:    access,
-		Deploy:         deploy,
 		NetworkProfile: profile,
 		Warnings:       warnings,
 	}, nil
@@ -102,7 +80,6 @@ func ParseModeSettings(accessRaw, deployRaw, profileRaw string) (ModeSettings, e
 func ParseModeSettingsFromEnv() (ModeSettings, error) {
 	return ParseModeSettings(
 		os.Getenv("EREBRUS_ACCESS"),
-		os.Getenv("EREBRUS_MODE"),
 		os.Getenv("EREBRUS_NETWORK_PROFILE"),
 	)
 }
@@ -141,31 +118,10 @@ func parseAccess(raw string) (RuntimeMode, []string, error) {
 	}
 }
 
-func parseDeploy(raw string) (DeployMode, []string, error) {
-	var warnings []string
-	switch raw {
-	case "", legacyModeDocker:
-		if raw == legacyModeDocker {
-			warnings = append(warnings, fmt.Sprintf(
-				"WARNING: EREBRUS_MODE=%q is deprecated. Use EREBRUS_MODE=%s.", legacyModeDocker, DeployContainer))
-		}
-		return DeployContainer, warnings, nil
-	case string(DeployContainer):
-		return DeployContainer, warnings, nil
-	case string(DeployHost):
-		return DeployHost, warnings, nil
-	default:
-		return "", nil, fmt.Errorf("EREBRUS_MODE must be container or host (got %q)", raw)
-	}
-}
-
-func parseNetworkProfile(raw string, deploy DeployMode) (NetworkProfile, []string, error) {
+func parseNetworkProfile(raw string) (NetworkProfile, []string, error) {
 	var warnings []string
 	switch raw {
 	case "":
-		if deploy == DeployHost {
-			return NetworkHostNetwork, warnings, nil
-		}
 		return NetworkBridge, warnings, nil
 	case string(NetworkBridge), string(NetworkHostNetwork), string(NetworkNative):
 		return NetworkProfile(raw), warnings, nil
@@ -183,11 +139,6 @@ func (m ModeSettings) IsPublic() bool { return m.RuntimeMode == ModePublic }
 // IsGateway is deprecated; use IsPublic.
 func (m ModeSettings) IsGateway() bool { return m.IsPublic() }
 
-// IsContainer reports Docker/compose deployment.
-func (m ModeSettings) IsContainer() bool { return m.Deploy == DeployContainer }
-
-// IsHostDeploy reports bare-metal/systemd deployment.
-func (m ModeSettings) IsHostDeploy() bool { return m.Deploy == DeployHost }
 
 // GatewayAccessMode maps local access policy to gateway public|private.
 func (m ModeSettings) GatewayAccessMode() string {

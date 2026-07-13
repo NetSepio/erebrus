@@ -9,10 +9,8 @@ info:
     bearer token except /api/v2/status and /metrics. Drop routes additionally
     require X-Erebrus-Node-Key and an exact-purpose token.
 
-    When Drop is enabled and DROP_PUBLIC_GATEWAY_DOMAIN is configured, direct
-    CID reads use the separate public Kubo gateway at
-    `https://<domain>/ipfs/<cid>` (TLS terminated by Traefik on 443/tcp). Kubo
-    admin RPC `5001` and the raw Kubo gateway `8080` remain private.
+    When Drop is enabled, CID reads use the authenticated Erebrus gateway-to-node
+    API. Kubo admin RPC `5001` and the raw Kubo gateway `8080` remain private.
 
     FROZEN (v2.0): additive changes only. See ../../../erebrus-gateway/docs/v2/ws-protocol.md
     for the WebSocket control plane.
@@ -272,11 +270,6 @@ paths:
       responses:
         "200": { description: Bundle, content: { application/json: { schema: { $ref: "#/components/schemas/CredentialBundle" } } } }
         "404": { description: Unknown peer }
-  /api/v2/apps:
-    get:
-      summary: List hosted apps (Phase 5; 404 unless ENABLE_APP_HOSTING)
-      responses:
-        "200": { description: App list — schema frozen in Phase 5 addendum }
 components:
   securitySchemes:
     paseto:
@@ -299,8 +292,6 @@ components:
     Capabilities:
       type: object
       properties:
-        app_hosting: { type: boolean }
-        wildcard_domain: { type: string, example: "*.node-sg-1.erebrus.network" }
         services:
           type: object
           additionalProperties:
@@ -314,10 +305,6 @@ components:
       properties:
         enabled: { type: boolean }
         accepts_public_uploads: { type: boolean }
-        public_gateway_url:
-          type: string
-          format: uri
-          description: HTTPS base URL for public CID reads, present only when configured and reachable
         webui_available: { type: boolean }
     DropStatus:
       type: object

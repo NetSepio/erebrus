@@ -23,12 +23,9 @@ an optional `capabilities.drop` object and a coarse `services.drop` state:
     "version": "2.0.0",
     "capabilities": {
       "access_mode": "public",
-      "app_hosting": false,
-      "wildcard_domain": "",
       "drop": {
         "enabled": true,
         "accepts_public_uploads": true,
-        "public_gateway_url": "https://drop.example.com",
         "webui_available": false
       }
     },
@@ -41,11 +38,7 @@ an optional `capabilities.drop` object and a coarse `services.drop` state:
 ```
 
 `capabilities.drop` is omitted by nodes that do not implement Drop.
-`public_gateway_url` is an HTTPS base URL such as
-`https://drop.example.com`, and is present only when a public gateway domain is
-configured and the external TLS endpoint is reachable with valid TLS. When
-omitted or empty, file operations remain available through the authenticated
-Erebrus gateway.
+File operations remain available through the authenticated Erebrus gateway.
 
 ## Node heartbeat
 

@@ -27,7 +27,7 @@ audit is still recommended before a large public launch._
 | node → gateway (WS) | identity, heartbeat, per-client byte deltas | node PASETO |
 | node ↔ host | SQLite DB, `config.env`, WG kernel iface | host root |
 | node ↔ Kubo | bounded object streams and admin RPC on the Compose network | exact-purpose node API; RPC not host-published |
-| internet → Kubo gateway (optional) | reads locally available blocks by CID on `https://<domain>/ipfs/<cid>` (443/tcp) | explicit operator opt-in; TLS terminated by Traefik; remote fetching and routing API disabled |
+| internet → Kubo gateway | no direct public access; reads by CID go through the authenticated Erebrus API | Kubo gateway `8080` and RPC `5001` are internal to the VPN/node network |
 
 The node is the **exit point**: it necessarily sees the source (client) and can
 observe destination IPs of forwarded packets at the network layer. The design
@@ -107,8 +107,7 @@ behind TLS or a firewall. _Roadmap: gateway↔node mTLS / PASETO-signed calls._
 ### F5 — DNS leakage (OPERATOR / ROADMAP)
 With `WG_DNS=1.1.1.1`, clients' DNS resolves at Cloudflare. Operators wanting
 no third party should run a local resolver and set `WG_DNS` to it; the
-node-internal DNS (Phase 5, `miekg/dns`) will make this the default for
-app-hosting nodes.
+node-internal DNS (`miekg/dns`) will make this the default.
 
 ### F6 — Secrets at rest (PARTIALLY MITIGATED)
 The DB holds the WG server private key, REALITY key, Hy2 cert key and per-peer
@@ -150,13 +149,11 @@ TCP carrier) resists MITM by design.
 ### F12 — Kubo admin exposure (OPERATOR — never publish)
 Kubo RPC `5001` controls pins, configuration, and repository operations. The
 supplied Compose files keep it on the private network and publish swarm
-`4001/tcp+udp`. The read-only CID gateway is exposed on `443/tcp` through a
-separate Traefik sidecar only when `DROP_PUBLIC_GATEWAY_DOMAIN` is configured.
-It proxies only `/ipfs/*` to the internal Kubo gateway, uses `Gateway.NoFetch=true`,
-disables DNSLink and the delegated `/routing/v1` API, and serves locally
-available blocks without turning the node into a recursive or routing gateway.
-Do not add a host mapping for `5001` or the raw Kubo gateway `8080`; use the
-authenticated node proxy for WebUI access.
+`4001/tcp+udp`. The Kubo gateway and RPC are not exposed publicly; reads go
+through the authenticated Erebrus API. `Gateway.NoFetch=true`, DNSLink, and the
+delegated `/routing/v1` API are disabled so the node does not act as a recursive
+or routing gateway. Do not add a host mapping for `5001` or the raw Kubo gateway
+`8080`; use the authenticated node proxy for WebUI access.
 
 ### Resolved in codebase (no action)
 
@@ -179,9 +176,6 @@ authenticated node proxy for WebUI access.
       `4001/tcp+udp` when enabled.
 - [ ] Never publish Kubo admin RPC `5001` or the raw Kubo gateway `8080`;
       use the exact-purpose node proxy.
-- [ ] Open Drop `443/tcp` only when `DROP_PUBLIC_GATEWAY_DOMAIN` is configured
-      and DNS points to the node; understand that anyone with a CID can request
-      locally available content.
 - [ ] Keep `Gateway.ExposeRoutingAPI=false` and automatic Kubo GC enabled.
 - [ ] Enable full-disk encryption; keep `config.env` and `STATE_DIR` `0600/0700`.
 - [ ] Treat `kubo_data` as sensitive persistent storage; disable Drop without

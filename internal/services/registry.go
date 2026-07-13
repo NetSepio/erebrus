@@ -25,8 +25,6 @@ type Service struct {
 	Visibility   string   `json:"visibility"`
 	AuthMode     string   `json:"auth_mode"`
 	Tags         []string `json:"tags"`
-	Public       bool     `json:"public"`
-	PublicHost   string   `json:"public_hostname,omitempty"`
 	CreatedAt    int64    `json:"created_at"`
 	UpdatedAt    int64    `json:"updated_at"`
 }
@@ -60,16 +58,11 @@ func (r *Registry) Publish(ctx context.Context, s Service) (*Service, error) {
 	s.CreatedAt = now
 	s.UpdatedAt = now
 	tags, _ := json.Marshal(s.Tags)
-	pub := 0
-	if s.Public {
-		pub = 1
-	}
 	if err := r.St.UpsertService(ctx, store.ServiceRow{
 		ID: s.ID, Name: s.Name, Type: s.Type, Protocol: s.Protocol,
 		InternalAddr: s.InternalAddr, Port: s.Port,
 		OwnerPeerID: s.OwnerPeerID, OwnerDID: s.OwnerDID,
 		Visibility: s.Visibility, AuthMode: s.AuthMode, Tags: string(tags),
-		Public: pub, PublicHost: s.PublicHost,
 		CreatedAt: s.CreatedAt, UpdatedAt: s.UpdatedAt,
 	}); err != nil {
 		return nil, err
@@ -123,7 +116,6 @@ func rowToService(row store.ServiceRow) Service {
 		InternalAddr: row.InternalAddr, Port: row.Port,
 		OwnerPeerID: row.OwnerPeerID, OwnerDID: row.OwnerDID,
 		Visibility: row.Visibility, AuthMode: row.AuthMode, Tags: tags,
-		Public: row.Public == 1, PublicHost: row.PublicHost,
 		CreatedAt: row.CreatedAt, UpdatedAt: row.UpdatedAt,
 	}
 }

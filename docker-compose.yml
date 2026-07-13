@@ -5,7 +5,7 @@ services:
     build:
       context: .
       dockerfile: docker/erebrus-node.Dockerfile
-    container_name: erebrus-node
+    container_name: erebrus-${EREBRUS_PROFILE:-standard}
     restart: unless-stopped
     # NET_ADMIN + module access let the node bring up the WireGuard interface.
     cap_add:
@@ -24,7 +24,6 @@ services:
       SHIELD_ADMIN_URL: "${SHIELD_ADMIN_URL:-}"
       SENTINEL_API_URL: "${SENTINEL_API_URL:-}"
       EREBRUS_ACCESS: "${EREBRUS_ACCESS:-private}"
-      EREBRUS_MODE: "${EREBRUS_MODE:-container}"
       EREBRUS_NETWORK_PROFILE: "${EREBRUS_NETWORK_PROFILE:-bridge}"
       SERVER: "${SERVER:-0.0.0.0}"
       HTTP_PORT: "${HTTP_PORT:-9080}"
@@ -61,12 +60,6 @@ services:
       REALITY_HANDSHAKE_SERVER: "${REALITY_HANDSHAKE_SERVER:-}"
       HYSTERIA2_OBFS_PASSWORD: "${HYSTERIA2_OBFS_PASSWORD:-}"
       ENABLE_TUIC: "${ENABLE_TUIC:-false}"
-      # Public edge / app hosting
-      ENABLE_APP_HOSTING: "${ENABLE_APP_HOSTING:-false}"
-      APP_WILDCARD_DOMAIN: "${APP_WILDCARD_DOMAIN:-}"
-      PUBLIC_DOMAIN: "${PUBLIC_DOMAIN:-}"
-      WILDCARD_DOMAIN: "${WILDCARD_DOMAIN:-}"
-      PUBLIC_GATEWAY_ENABLED: "${PUBLIC_GATEWAY_ENABLED:-false}"
       # Private DNS
       PRIVATE_DNS_ENABLED: "${PRIVATE_DNS_ENABLED:-false}"
       PRIVATE_DNS_DOMAIN: "${PRIVATE_DNS_DOMAIN:-ere}"
@@ -81,7 +74,6 @@ services:
       DROP_STORAGE_MAX: "${DROP_STORAGE_MAX:-10GB}"
       DROP_SWARM_PORT: "${DROP_SWARM_PORT:-4001}"
       DROP_WEBUI_ENABLED: "${DROP_WEBUI_ENABLED:-false}"
-      DROP_PUBLIC_GATEWAY_DOMAIN: "${DROP_PUBLIC_GATEWAY_DOMAIN:-}"
     ports:
       - "${HTTP_PORT:-9080}:${HTTP_PORT:-9080}/tcp"
       - "${WG_ENDPOINT_PORT:-51820}:${WG_ENDPOINT_PORT:-51820}/udp"

@@ -20,6 +20,7 @@ services:
     build:
       context: ../..
       dockerfile: docker/erebrus-node.Dockerfile
+    container_name: erebrus-shield
     restart: unless-stopped
     depends_on:
       adguardhome:

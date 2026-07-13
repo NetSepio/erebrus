@@ -11,25 +11,21 @@ curl -fsSL https://erebrus.io/install.sh | bash
 ```
 
 The installer runs preflight checks (static IP / NAT, up+down bandwidth, inbound
-port reachability), then asks for an install **mode**:
-
-| Mode | What you get | Use it when |
-|------|--------------|-------------|
-| **docker** | WireGuard + stealth carriers in a container (compose). | You just want to run a VPN node. Recommended. |
-| **host** | Bare-metal via `systemd`. Adds **App-Hosting** (expose a VPN-connected app to the internet). | You want app/port exposure and can set a wildcard DNS record. |
+port reachability).
 
 Non-interactive:
 
 ```bash
 curl -fsSL https://erebrus.io/install.sh | \
   MNEMONIC="..." \
+  EREBRUS_ACCESS=public \
   EREBRUS_NODE_REGISTRATION_TOKEN="ere_reg_..." \
-  bash -s -- --mode docker --yes
+  bash -s -- --yes --skip-checks
 ```
 
 The installer detects the public IP and uses it as `WG_ENDPOINT_HOST`. Set the
-variable explicitly only to advertise a DNS name or override the detected
-address; hosts behind NAT still require port forwarding.
+variable explicitly only to override the detected public IP; hosts behind NAT
+still require port forwarding.
 
 Add `--drop` to run the optional Kubo/IPFS storage sidecar. `--no-drop` stops
 Drop while preserving its volume. Drop v1 requires Docker.
@@ -42,17 +38,14 @@ Drop while preserving its volume. Drop v1 requires Docker.
 | 51820 | udp | WireGuard fast path |
 | 8443 | tcp | VLESS + REALITY stealth carrier |
 | 4443 | udp | Hysteria2 stealth carrier |
-| 443 | tcp | Optional public CID gateway — **Drop + public domain configured only** |
+| 443 | tcp | VLESS + REALITY stealth carrier on public nodes |
 | 4001 | tcp + udp | Kubo swarm — **Drop only** |
-| 80, 443 | tcp | Caddy ingress — **host mode + App-Hosting only** |
 
 Open the ports required by the selected features in your cloud firewall /
-security group. Keep `443/tcp` closed unless `DROP_PUBLIC_GATEWAY_DOMAIN` is
-configured and DNS points to the node. UDP can't be probed remotely, so
+security group. `443/tcp` is not used by Drop. UDP can't be probed remotely, so
 double-check 51820, 4443, and Drop's 4001/udp when enabled. The installer probes
-`4001/tcp`, plus `443/tcp` when a public gateway domain is configured. Kubo admin
-RPC `5001` and the raw Kubo gateway `8080` are internal-only and must not be
-published.
+`4001/tcp`. Kubo admin RPC `5001` and the raw Kubo gateway `8080` are
+internal-only and must not be published.
 
 ## Configuration
 
@@ -91,8 +84,7 @@ too. Gateway-side filtering/display is a separate follow-up.
 
 Installer: `./install.sh --profile shield` (or interactive prompt). Sets
 `EREBRUS_PROFILE`, `FIREWALL_PROVIDER`, `FIREWALL_DNS_ADDR`, and `WG_DNS` for
-tunnel DNS routing. **Shield and Sentinel require container deploy** (`--mode container`);
-host/systemd install supports `standard` profile only.
+tunnel DNS routing.
 
 Registration sends `deployment_profile` to the gateway; firewall rules sync via
 WS `sync_firewall` when an operator calls `POST .../firewall/sync` on the gateway.
@@ -103,18 +95,15 @@ Drop adds the same `deploy/compose/drop.yml` override to Standard, Shield, or
 Sentinel. The installer prompts for it, or accepts:
 
 ```bash
-./install.sh --mode container --profile standard --drop
-./install.sh --mode container --profile shield --drop
-./install.sh --mode container --profile sentinel --drop
-./install.sh --mode container --profile standard --drop --drop-public-gateway-domain drop.example.com
+./install.sh --profile standard --drop
+./install.sh --profile shield --drop
+./install.sh --profile sentinel --drop
 ```
 
 Kubo uses `ipfs/kubo:v0.42.0`, stores its repo in a persistent `kubo_data`
 volume, and receives a deterministic identity distinct from the Erebrus node
-PeerID. Direct CID retrieval on `https://<domain>/ipfs/<cid>` defaults off; the
-`DROP_PUBLIC_GATEWAY_DOMAIN` option must be set to a DNS name pointing to the
-node. Without it, files are uploaded and read only through the authenticated
-Erebrus gateway. The raw Kubo `8080` and `5001` ports are never published.
+PeerID. Files are uploaded and read only through the authenticated Erebrus
+gateway. The raw Kubo `8080` and `5001` ports are never published.
 See [DROP.md](DROP.md) for APIs, metrics, upgrades, and destructive cleanup.
 
 ### Gateway registration
@@ -135,17 +124,13 @@ The gateway returns `node_id` = libp2p `peer_id` (same value in WS `hello.node_i
 On an existing US node:
 
 ```bash
-# docker: edit /opt/erebrus/.env (or your INSTALL_DIR)
+# edit /opt/erebrus/.env (or your INSTALL_DIR)
 ZONE=east
 REGION=US
 docker compose up -d
-
-# host: edit /etc/erebrus/erebrus.env then
-systemctl restart erebrus
 ```
 
 - **docker** config: `${INSTALL_DIR}/.env` (default `/opt/erebrus/.env`)
-- **host** config: `/etc/erebrus/erebrus.env`
 
 ## Managing the node
 
@@ -166,17 +151,7 @@ docker compose --env-file .env -f docker-compose.yml -f drop.yml ps
 docker compose --env-file .env -f docker-compose.yml -f drop.yml logs -f kubo
 ```
 
-Append `-f drop-public-gateway.yml` when direct public CID retrieval was
-enabled during installation.
-
 Do not use `down -v`; it deletes persistent node and Kubo volumes.
-
-**host**
-```bash
-systemctl status erebrus
-journalctl -u erebrus -f
-systemctl restart erebrus
-```
 
 ## Verify
 
@@ -199,18 +174,6 @@ curl -s -X PUT http://127.0.0.1:9080/api/v2/peers/test \
 
 The bundle returns the WireGuard config plus `vless://` / `hysteria2://` share URIs
 and a ready sing-box client profile (WireGuard tunnelled through the carrier).
-
-## App-Hosting (host mode)
-
-Create a wildcard DNS record pointing at the node:
-
-```
-*.apps.example.com   A   <node-public-ip>
-```
-
-The gateway then mints per-app CNAMEs under it and routes public traffic through the
-node to the chosen VPN client's port. (Route automation lands with the gateway; the
-installer prepares the host — Caddy + the wildcard domain.)
 
 ## Troubleshooting
 

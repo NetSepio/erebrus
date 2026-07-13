@@ -61,18 +61,6 @@ func Main(args []string) {
 				os.Exit(1)
 			}
 			return
-		case "init":
-			if err := runInitCLI(args[2:]); err != nil {
-				fmt.Fprintln(os.Stderr, "init:", err)
-				os.Exit(1)
-			}
-			return
-		case "doctor":
-			if err := runDoctorCLI(args[2:]); err != nil {
-				fmt.Fprintln(os.Stderr, "doctor:", err)
-				os.Exit(1)
-			}
-			return
 		}
 	}
 
@@ -93,7 +81,6 @@ func Main(args []string) {
 	slog.Info("runtime settings",
 		"profile", cfg.ErebrusProfile,
 		"access", cfg.Mode.RuntimeMode,
-		"deploy", cfg.Mode.Deploy,
 		"network_profile", cfg.Mode.NetworkProfile,
 		"firewall_provider", cfg.FirewallProvider,
 		"api_bind", fmt.Sprintf("%s:%s", cfg.BindAddr, cfg.HTTPPort),
