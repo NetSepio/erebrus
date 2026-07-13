@@ -20,8 +20,8 @@ RUN chmod +x ./erebrus-node ./erebrus
 
 EXPOSE 9080/tcp
 EXPOSE 51820/udp
-EXPOSE 8443/tcp
-EXPOSE 4443/udp
+EXPOSE 443/tcp
+EXPOSE 443/udp
 
 VOLUME ["/var/lib/erebrus", "/etc/wireguard"]
 

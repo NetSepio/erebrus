@@ -8,8 +8,8 @@ For more details visit [erebrus.io](https://erebrus.io).
 
 - WireGuard fast path with a SQLite-backed, race-free peer store.
 - **Stealth carriers** for restrictive networks: when WireGuard's UDP is throttled or DPI-blocked, the same tunnel is wrapped in an embedded sing-box transport that looks like ordinary internet traffic:
-  - **VLESS + REALITY** (`:8443/tcp`) — presents as a real TLS session to a borrowed SNI.
-  - **Hysteria2** (`:4443/udp`) — QUIC/HTTP3 with optional Salamander obfuscation.
+  - **VLESS + REALITY** (`:443/tcp`) — presents as a real TLS session to a borrowed SNI.
+  - **Hysteria2** (`:443/udp`) — QUIC/HTTP3 with optional Salamander obfuscation.
 - libp2p identity + DID (`did:erebrus:<peerId>`) derived from a mnemonic.
 - Optional **Erebrus Drop** storage: a pinned Kubo/IPFS sidecar with a separate
   mnemonic-derived libp2p identity and persistent local pins.
@@ -17,7 +17,7 @@ For more details visit [erebrus.io](https://erebrus.io).
 
 ## Install a node
 
-Linux only (x86_64 / arm64). A node needs a **static, internet-routable public IP**, real bandwidth, and open ports (`9080/tcp`, `51820/udp`, `8443/tcp`, `4443/udp`). Drop nodes additionally publish `4001/tcp+udp` for the IPFS swarm. The installer verifies the required TCP ports.
+Linux only (x86_64 / arm64). A node needs a **static, internet-routable public IP**, real bandwidth, and open ports (`9080/tcp`, `51820/udp`, `443/tcp`, `443/udp`). Drop nodes additionally publish `4001/tcp+udp` for the IPFS swarm. The installer verifies the required TCP ports.
 
 ```bash
 curl -fsSL https://erebrus.io/install.sh | bash

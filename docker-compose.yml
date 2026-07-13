@@ -54,8 +54,8 @@ services:
       WG_POST_DOWN: "${WG_POST_DOWN:-iptables -D FORWARD -i %i -j ACCEPT; iptables -D FORWARD -o %i -j ACCEPT; iptables -t nat -D POSTROUTING -o eth0 -j MASQUERADE}"
       # Stealth carriers (sing-box)
       ENABLE_STEALTH: "${ENABLE_STEALTH:-true}"
-      STEALTH_TCP_PORT: "${STEALTH_TCP_PORT:-8443}"
-      STEALTH_UDP_PORT: "${STEALTH_UDP_PORT:-4443}"
+      STEALTH_TCP_PORT: "${STEALTH_TCP_PORT:-443}"
+      STEALTH_UDP_PORT: "${STEALTH_UDP_PORT:-443}"
       REALITY_SERVER_NAMES: "${REALITY_SERVER_NAMES:-www.microsoft.com}"
       REALITY_HANDSHAKE_SERVER: "${REALITY_HANDSHAKE_SERVER:-}"
       HYSTERIA2_OBFS_PASSWORD: "${HYSTERIA2_OBFS_PASSWORD:-}"
@@ -77,8 +77,8 @@ services:
     ports:
       - "${HTTP_PORT:-9080}:${HTTP_PORT:-9080}/tcp"
       - "${WG_ENDPOINT_PORT:-51820}:${WG_ENDPOINT_PORT:-51820}/udp"
-      - "${STEALTH_TCP_PORT:-8443}:${STEALTH_TCP_PORT:-8443}/tcp"
-      - "${STEALTH_UDP_PORT:-4443}:${STEALTH_UDP_PORT:-4443}/udp"
+      - "${STEALTH_TCP_PORT:-443}:${STEALTH_TCP_PORT:-443}/tcp"
+      - "${STEALTH_UDP_PORT:-443}:${STEALTH_UDP_PORT:-443}/udp"
     volumes:
       - erebrus-state:/var/lib/erebrus
       - erebrus-wireguard:/etc/wireguard

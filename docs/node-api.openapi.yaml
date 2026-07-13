@@ -368,10 +368,10 @@ components:
         vless_uri:
           type: string
           description: vless:// share URI (REALITY, flow=xtls-rprx-vision)
-          example: "vless://c0a4f1de-...@203.0.113.10:8443?security=reality&pbk=...&sid=...&sni=www.microsoft.com&flow=xtls-rprx-vision&type=tcp#erebrus-sg"
+          example: "vless://c0a4f1de-...@203.0.113.10:443?security=reality&pbk=...&sid=...&sni=www.microsoft.com&flow=xtls-rprx-vision&type=tcp#erebrus-sg"
         hysteria2_uri:
           type: string
-          example: "hysteria2://pw@203.0.113.10:4443/?insecure=1&sni=node#erebrus-sg"
+          example: "hysteria2://pw@203.0.113.10:443/?insecure=1&sni=node#erebrus-sg"
         singbox_profile:
           type: object
           description: |

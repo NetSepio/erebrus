@@ -27,9 +27,9 @@ wrapped in a carrier that looks like ordinary internet traffic:
 ```
 client ──WireGuard(UDP)──────────────────────────────▶ :51820  (fast path)
 
-client ──WG inside VLESS+REALITY(TCP:8443)──┐
-                                            ├─▶ sing-box ─▶ 127.0.0.1:51820 ─▶ WireGuard
-client ──WG inside Hysteria2(QUIC:4443)─────┘
+client ──WG inside VLESS+REALITY(TCP:443)──┐
+                                           ├─▶ sing-box ─▶ 127.0.0.1:51820 ─▶ WireGuard
+client ──WG inside Hysteria2(QUIC:443)─────┘
 ```
 
 Key properties:

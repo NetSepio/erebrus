@@ -11,17 +11,18 @@ Operators do **not** hand-edit `.env` files. Use the installer, then verify with
 
 `EREBRUS_NETWORK_PROFILE` controls Docker container networking: `bridge` (default) or `host-network`.
 
-## Ports (docker / private)
+## Ports (docker)
 
-| Port | Proto |
-|------|-------|
-| 9080 | tcp |
-| 51820 | udp |
-| 8443 | tcp |
-| 4443 | udp |
-| 4001 | tcp + udp (Drop only) |
+| Port | Proto | Purpose |
+|------|-------|---------|
+| 9080 | tcp | REST API |
+| 51820 | udp | WireGuard |
+| 443 | tcp | VLESS + REALITY (all nodes) |
+| 443 | udp | Hysteria2 (all nodes) |
+| 4001 | tcp + udp | Drop swarm only |
 
-Public Docker nodes use stealth on **443/tcp** and **443/udp**.
+All nodes expose stealth on **443/tcp** and **443/udp**. `EREBRUS_ACCESS`
+controls directory visibility, not carrier ports.
 
 ## Install
 

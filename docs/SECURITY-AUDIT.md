@@ -142,7 +142,7 @@ carrier-secret rotation command.
 
 ### F11 — Hysteria2 self-signed TLS (ACCEPTED)
 Hy2 uses a self-signed cert; clients connect with `insecure`. An active MITM on
-`:4443` sees only the **inner WireGuard-encrypted payload** (the client pins the
+`:443/udp` sees only the **inner WireGuard-encrypted payload** (the client pins the
 node's WG public key from the bundle), so confidentiality holds. REALITY (the
 TCP carrier) resists MITM by design.
 
@@ -172,7 +172,7 @@ or routing gateway. Do not add a host mapping for `5001` or the raw Kubo gateway
 - [ ] Set a strong `NODE_API_TOKEN` (the installer generates 32 bytes) — never blank.
 - [ ] Do **not** expose `:9080` to the public internet: TLS-terminate it, or
       firewall it to the gateway only.
-- [ ] Open only what's needed: `51820/udp`, `8443/tcp`, `4443/udp`, and Drop
+- [ ] Open only what's needed: `51820/udp`, `443/tcp`, `443/udp`, and Drop
       `4001/tcp+udp` when enabled.
 - [ ] Never publish Kubo admin RPC `5001` or the raw Kubo gateway `8080`;
       use the exact-purpose node proxy.

@@ -140,8 +140,8 @@ func Load() *Config {
 		WGInterface:             normalizeInterface(env("WG_INTERFACE_NAME", "wg0")),
 		WGEndpointHost:          os.Getenv("WG_ENDPOINT_HOST"),
 		WGEndpointPort:          firstEnv("WG_PORT", "WG_ENDPOINT_PORT", "51820"),
-		StealthTCPPort:          firstEnv("STEALTH_TCP_PORT", "VLESS_PORT", "8443"),
-		StealthUDPPort:          firstEnv("STEALTH_UDP_PORT", "HYSTERIA2_PORT", "4443"),
+		StealthTCPPort:          firstEnv("STEALTH_TCP_PORT", "VLESS_PORT", "443"),
+		StealthUDPPort:          firstEnv("STEALTH_UDP_PORT", "HYSTERIA2_PORT", "443"),
 		WGIPv4Subnet:            env("WG_IPv4_SUBNET", "10.0.0.1/16"),
 		WGDNS:                   env("WG_DNS", "1.1.1.1"),
 		WGPostUp:                os.Getenv("WG_POST_UP"),
@@ -222,9 +222,9 @@ func (c *Config) Validate() error {
 	if len(missing) > 0 {
 		return fmt.Errorf("missing required config: %s", strings.Join(missing, ", "))
 	}
-	if c.Mode.IsPublic() && (c.StealthTCPPort != "443" || c.StealthUDPPort != "443") {
+	if c.StealthTCPPort != "443" || c.StealthUDPPort != "443" {
 		c.Mode.Warnings = append(c.Mode.Warnings,
-			"WARNING: Public access mode production should expose stealth on 443/tcp and 443/udp (STEALTH_TCP_PORT/STEALTH_UDP_PORT) for best reachability.")
+			"WARNING: Stealth should expose 443/tcp and 443/udp (STEALTH_TCP_PORT/STEALTH_UDP_PORT) for reachability through restrictive networks.")
 	}
 	if c.DropEnabled {
 		if c.DropStorageMaxBytes <= 0 {

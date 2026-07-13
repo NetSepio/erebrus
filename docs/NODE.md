@@ -36,14 +36,13 @@ Drop while preserving its volume. Drop v1 requires Docker.
 |------|-------|---------|
 | 9080 | tcp | REST API (`/api/v2`) + `/metrics` |
 | 51820 | udp | WireGuard fast path |
-| 8443 | tcp | VLESS + REALITY stealth carrier |
-| 4443 | udp | Hysteria2 stealth carrier |
-| 443 | tcp | VLESS + REALITY stealth carrier on public nodes |
+| 443 | tcp | VLESS + REALITY stealth carrier (all nodes) |
+| 443 | udp | Hysteria2 stealth carrier (all nodes) |
 | 4001 | tcp + udp | Kubo swarm — **Drop only** |
 
 Open the ports required by the selected features in your cloud firewall /
 security group. `443/tcp` is not used by Drop. UDP can't be probed remotely, so
-double-check 51820, 4443, and Drop's 4001/udp when enabled. The installer probes
+double-check 51820, 443/udp, and Drop's 4001/udp when enabled. The installer probes
 `4001/tcp`. Kubo admin RPC `5001` and the raw Kubo gateway `8080` are
 internal-only and must not be published.
 
@@ -60,7 +59,9 @@ generates a `MNEMONIC` and `NODE_API_TOKEN` for you if unset.
 | **private** | Your devices and org members only (not listed in the public directory) |
 | **public** | Entitled network users (listed in the public directory) |
 
-Set via `EREBRUS_ACCESS=private` or `EREBRUS_ACCESS=public`.
+Set via `EREBRUS_ACCESS=private` or `EREBRUS_ACCESS=public`. Access mode controls
+**who** can use the node, not stealth ports — all profiles bind carriers on
+**443/tcp** and **443/udp** for reachability through restrictive networks.
 
 ### Region and zone (for multi-node directories)
 
@@ -185,8 +186,8 @@ and a ready sing-box client profile (WireGuard tunnelled through the carrier).
 - **Peer create returns 500 in local dev** — expected when there's no live WG
   device; the credentials endpoint still renders bundles. On a real host with
   `NET_ADMIN` it succeeds.
-- **Stealth ports not reachable** — confirm the cloud firewall allows 8443/tcp and
-  4443/udp; `ss -tlnp | grep 8443` and `ss -ulnp | grep 4443` show them locally.
+- **Stealth ports not reachable** — confirm the cloud firewall allows 443/tcp and
+  443/udp; `ss -tlnp | grep 443` and `ss -ulnp | grep 443` show them locally.
 - **Drop is `unreachable`** — inspect `docker compose ... logs kubo`. VPN
   readiness remains independent and should stay available.
 - **Kubo identity conflict** — verify the node mnemonic belongs with the

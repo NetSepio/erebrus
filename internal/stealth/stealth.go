@@ -3,9 +3,9 @@
 // blocked, it wraps the same WireGuard tunnel inside one of two carriers that
 // look like ordinary internet traffic:
 //
-//   - VLESS + REALITY on tcp/:8443 — indistinguishable from a real TLS session
+//   - VLESS + REALITY on tcp/:443 — indistinguishable from a real TLS session
 //     to a borrowed SNI (no fake cert; the handshake is proxied to a real site).
-//   - Hysteria2 on udp/:4443 — QUIC/HTTP3 with optional Salamander obfuscation.
+//   - Hysteria2 on udp/:443 — QUIC/HTTP3 with optional Salamander obfuscation.
 //
 // Both carriers terminate on a single node-wide credential and route to a
 // direct outbound; per-client authentication stays in the inner WireGuard

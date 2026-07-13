@@ -23,8 +23,8 @@ BUILD_TAGS="with_reality_server"
 # Ports
 HTTP_PORT="${HTTP_PORT:-9080}"        # tcp  REST API
 WG_PORT="${WG_ENDPOINT_PORT:-51820}"  # udp  WireGuard
-STEALTH_TCP_PORT="${STEALTH_TCP_PORT:-8443}"  # tcp  VLESS+REALITY (gateway prod: 443)
-STEALTH_UDP_PORT="${STEALTH_UDP_PORT:-4443}"  # udp  Hysteria2 (gateway prod: 443)
+STEALTH_TCP_PORT="${STEALTH_TCP_PORT:-443}"  # tcp  VLESS+REALITY
+STEALTH_UDP_PORT="${STEALTH_UDP_PORT:-443}"  # udp  Hysteria2
 
 # Minimum acceptable throughput for an exit node (Mbps)
 MIN_DOWN_MBPS="${MIN_DOWN_MBPS:-50}"
@@ -512,11 +512,7 @@ gather_config() {
   EREBRUS_NETWORK_PROFILE=bridge
   EREBRUS_ACCESS="${ACCESS:-private}"
 
-  if [[ "$EREBRUS_ACCESS" == "public" ]]; then
-    STEALTH_TCP_PORT=443
-    STEALTH_UDP_PORT=443
-    info "Public access: stealth carriers on 443/tcp and 443/udp for reachability."
-  fi
+  ok "Stealth carriers: VLESS+REALITY ${STEALTH_TCP_PORT}/tcp · Hysteria2 ${STEALTH_UDP_PORT}/udp"
 }
 
 # Container image: registry default; local build fallback.
