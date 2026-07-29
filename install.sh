@@ -85,7 +85,7 @@ banner() {
   cat <<'EOF'
  ____ ____ ____ ____ ____ _  _ ____
  |___ |__/ |___ |__] |__/ |  | [__
- |___ |  \ |___ |__] |  \ |__| ___]   v2 node installer
+ |___ |  \ |___ |__] |  \ |__| ___]   node installer
 EOF
   echo -e "${C_RESET}"
 }
@@ -416,8 +416,9 @@ choose_drop() {
   fi
 }
 
-# config values
-NODE_NAME=""; REGION=""; ZONE=""; WG_ENDPOINT_HOST=""; MNEMONIC="${MNEMONIC:-}"
+# config values — preserve operator env overrides (also filled from existing .env later)
+NODE_NAME="${NODE_NAME:-}"; REGION="${REGION:-}"; ZONE="${ZONE:-}"
+WG_ENDPOINT_HOST="${WG_ENDPOINT_HOST:-}"; MNEMONIC="${MNEMONIC:-}"
 NODE_API_TOKEN="${NODE_API_TOKEN:-}"; NODE_KEY="${NODE_KEY:-}"
 EREBRUS_NODE_REGISTRATION_TOKEN="${EREBRUS_NODE_REGISTRATION_TOKEN:-${EREBRUS_ORG_ENROLLMENT_SECRET:-}}"
 GATEWAY_URL="${GATEWAY_URL:-https://gateway.erebrus.io}"
@@ -425,7 +426,15 @@ ENABLE_STEALTH="${ENABLE_STEALTH:-true}"; REALITY_SERVER_NAMES="${REALITY_SERVER
 HYSTERIA2_OBFS_PASSWORD="${HYSTERIA2_OBFS_PASSWORD:-}"
 EREBRUS_BIN=""  # path/way to invoke binary for genmnemonic
 
-rand_token() { head -c 24 /dev/urandom | base64 | tr -d '/+=' | head -c 32; }
+# pipefail-safe: do not truncate a pipeline with a second head (SIGPIPE → non-zero)
+rand_token() {
+  if command -v openssl >/dev/null 2>&1; then
+    openssl rand -base64 24 | tr -d '/+=\n' | cut -c1-32
+  else
+    # Fallback without openssl; od|head is fine if cut is last consumer of enough data
+    head -c 24 /dev/urandom | base64 | tr -d '/+=\n' | cut -c1-32
+  fi
+}
 
 read_env_value() {
   local f="$1" key="$2"
@@ -471,32 +480,46 @@ ensure_required_inputs() {
 }
 
 # For US nodes, derive east/west from ipinfo longitude when ZONE is unset.
+# Early exits must be status 0: `[[ … ]] || return` returns 1 after a failed test
+# and aborts the installer under `set -e` (broke every non-US region).
 detect_zone() {
-  [[ -n "${ZONE:-}" ]] && return
+  if [[ -n "${ZONE:-}" ]]; then
+    return 0
+  fi
   local country="${REGION:-}"
   country="$(echo "$country" | tr '[:lower:]' '[:upper:]' | tr -d '[:space:]')"
-  [[ "$country" == "US" ]] || return
+  if [[ "$country" != "US" ]]; then
+    return 0
+  fi
   local loc lon
   loc="$(curl -fsS --max-time 6 https://ipinfo.io/loc 2>/dev/null | tr -d '[:space:]' || true)"
-  [[ "$loc" == *,* ]] || return
+  if [[ "$loc" != *,* ]]; then
+    return 0
+  fi
   lon="${loc#*,}"
   if awk -v lon="$lon" 'BEGIN { if (lon+0 < -102) exit 0; exit 1 }'; then
     ZONE="west"
   else
     ZONE="east"
   fi
+  return 0
 }
 
 gather_config() {
   echo; info "${C_BOLD}Node configuration${C_RESET}"
   REGION="${REGION:-$(curl -fsS --max-time 6 https://ipinfo.io/country 2>/dev/null | tr -d '[:space:]' || echo unknown)}"
   detect_zone
-  [[ -n "${ZONE:-}" ]] && ok "Auto-detected zone: ${ZONE} (US east/west from geo)"
+  if [[ -n "${ZONE:-}" ]]; then
+    ok "Zone: ${ZONE}"
+  fi
 
   NODE_NAME="${NODE_NAME:-erebrus-$(hostname -s 2>/dev/null || echo node)}"
   WG_ENDPOINT_HOST="${WG_ENDPOINT_HOST:-$PUBLIC_IP}"
   GATEWAY_URL="${GATEWAY_URL:-https://gateway.erebrus.io}"
-  [[ -n "$NODE_API_TOKEN" ]] || NODE_API_TOKEN="$(rand_token)"
+  if [[ -z "${NODE_API_TOKEN:-}" ]]; then
+    NODE_API_TOKEN="$(rand_token)"
+  fi
+
 
   if $INTERACTIVE && [[ -n "$TTY" ]] && ! $ASSUME_YES; then
     ask NODE_NAME "Node name" "$NODE_NAME"
