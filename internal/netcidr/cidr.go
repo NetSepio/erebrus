@@ -125,26 +125,30 @@ func v4Hooks(n *net.IPNet, outIface string) (up, down []string) {
 		return nil, nil
 	}
 	s := n.String()
-	return []string{
+	up = []string{
 		fmt.Sprintf("iptables -A FORWARD -i %%i -s %s -j ACCEPT", s),
 		"iptables -A FORWARD -o %i -m conntrack --ctstate RELATED,ESTABLISHED -j ACCEPT",
 		fmt.Sprintf("iptables -t nat -A POSTROUTING -s %s -o %s -j MASQUERADE", s, outIface),
-	}, []string{
+	}
+	down = []string{
 		fmt.Sprintf("iptables -D FORWARD -i %%i -s %s -j ACCEPT", s),
 		"iptables -D FORWARD -o %i -m conntrack --ctstate RELATED,ESTABLISHED -j ACCEPT",
 		fmt.Sprintf("iptables -t nat -D POSTROUTING -s %s -o %s -j MASQUERADE", s, outIface),
 	}
+	return up, down
 }
 
 func v6Hooks(n *net.IPNet, outIface string) (up, down []string) {
 	s := n.String()
-	return []string{
+	up = []string{
 		fmt.Sprintf("ip6tables -A FORWARD -i %%i -s %s -j ACCEPT", s),
 		"ip6tables -A FORWARD -o %i -m conntrack --ctstate RELATED,ESTABLISHED -j ACCEPT",
 		fmt.Sprintf("ip6tables -t nat -A POSTROUTING -s %s -o %s -j MASQUERADE", s, outIface),
-	}, []string{
+	}
+	down = []string{
 		fmt.Sprintf("ip6tables -D FORWARD -i %%i -s %s -j ACCEPT", s),
 		"ip6tables -D FORWARD -o %i -m conntrack --ctstate RELATED,ESTABLISHED -j ACCEPT",
 		fmt.Sprintf("ip6tables -t nat -D POSTROUTING -s %s -o %s -j MASQUERADE", s, outIface),
 	}
+	return up, down
 }

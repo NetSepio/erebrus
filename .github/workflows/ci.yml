@@ -15,7 +15,12 @@ jobs:
           go-version-file: go.mod
           cache: true
       - name: Verify formatting
-        run: test -z "$(gofmt -l $(git ls-files '*.go'))"
+        run: |
+          unformatted=$(gofmt -l $(git ls-files '*.go'))
+          if [ -n "$unformatted" ]; then
+            echo "$unformatted"
+            exit 1
+          fi
       # with_utls enables the sing-box REALITY server (stealth carrier);
       # required or the stealth start-test fails. Keep in sync with Makefile/Dockerfile.
       - run: go vet -tags with_utls ./...
