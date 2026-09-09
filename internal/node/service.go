@@ -214,7 +214,7 @@ func (s *Service) buildBundle(p *store.Peer) (*api.CredentialBundle, error) {
 			ClientConf:      conf,
 			ServerPublicKey: s.wg.ServerPublicKey(),
 			Endpoint:        s.wg.Endpoint(),
-			Address:         p.WGAllowedIP,
+			Address:         s.wg.ClientAddresses(p),
 			DNS:             s.cfg.WGDNS,
 		},
 	}
@@ -225,7 +225,7 @@ func (s *Service) buildBundle(p *store.Peer) (*api.CredentialBundle, error) {
 		if label == "" {
 			label = s.cfg.NodeName
 		}
-		ps := s.stealth.BuildPeer(label, s.wg.ServerPublicKey(), p.WGAllowedIP, p.WGPresharedKey)
+		ps := s.stealth.BuildPeer(label, s.wg.ServerPublicKey(), s.wg.ClientAddresses(p), p.WGPresharedKey)
 		bundle.VLESSURI = ps.VLESSURI
 		bundle.Hysteria2URI = ps.Hysteria2URI
 		bundle.SingboxProfile = ps.SingboxProfile

@@ -3,6 +3,7 @@ package stealth
 import (
 	"fmt"
 	"net/url"
+	"strings"
 )
 
 // ClientPrivateKeyPlaceholder marks where the client substitutes its own
@@ -108,7 +109,7 @@ func (m *Manager) singboxProfile(p Params, serverWGPub, clientAddrCIDR, psk stri
 		"address":                       "127.0.0.1",
 		"port":                          m.cfg.WGEndpointPortInt(),
 		"public_key":                    serverWGPub,
-		"allowed_ips":                   []string{"0.0.0.0/0"},
+		"allowed_ips":                   []string{"0.0.0.0/0", "::/0"},
 		"persistent_keepalive_interval": 25,
 	}
 	if psk != "" {
@@ -148,7 +149,7 @@ func (m *Manager) singboxProfile(p Params, serverWGPub, clientAddrCIDR, psk stri
 		"endpoints": []map[string]any{{
 			"type":        "wireguard",
 			"tag":         "wg-out",
-			"address":     []string{clientAddrCIDR},
+			"address":     splitAddrs(clientAddrCIDR),
 			"private_key": ClientPrivateKeyPlaceholder,
 			"peers":       []map[string]any{wgPeer},
 			"detour":      "carrier-vless",
@@ -167,4 +168,19 @@ func (m *Manager) singboxProfile(p Params, serverWGPub, clientAddrCIDR, psk stri
 		},
 		"route": map[string]any{"final": "wg-out"},
 	}
+}
+
+func splitAddrs(s string) []string {
+	parts := strings.Split(s, ",")
+	out := make([]string, 0, len(parts))
+	for _, p := range parts {
+		p = strings.TrimSpace(p)
+		if p != "" {
+			out = append(out, p)
+		}
+	}
+	if len(out) == 0 {
+		return []string{s}
+	}
+	return out
 }

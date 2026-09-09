@@ -168,6 +168,64 @@ func TestDropValidation(t *testing.T) {
 	}
 }
 
+func TestLoadDerivesNATFromOperatorSubnet(t *testing.T) {
+	t.Setenv("WG_IPv4_SUBNET", "10.42.0.1/24")
+	t.Setenv("WG_IPv6_SUBNET", "fd00:64:64::1/64")
+	t.Setenv("WG_POST_UP", "")
+	t.Setenv("WG_POST_DOWN", "")
+	t.Setenv("WG_NAT_IFACE", "eth0")
+	c := Load()
+	if !strings.Contains(c.WGPostUp, "10.42.0.0/24") || strings.Contains(c.WGPostUp, "10.0.0.0/16") {
+		t.Fatalf("PostUp must follow operator subnet: %s", c.WGPostUp)
+	}
+	if !strings.Contains(c.WGPostUp, "fd00:64:64::/64") || !strings.Contains(c.WGPostUp, "ip6tables") {
+		t.Fatalf("PostUp must include IPv6 NAT: %s", c.WGPostUp)
+	}
+	if !strings.Contains(c.WGPostDown, "10.42.0.0/24") {
+		t.Fatalf("PostDown = %s", c.WGPostDown)
+	}
+}
+
+func TestLoadKeepsExplicitPostUp(t *testing.T) {
+	t.Setenv("WG_POST_UP", "iptables -t nat -A POSTROUTING -o eth1 -j MASQUERADE")
+	t.Setenv("WG_POST_DOWN", "iptables -t nat -D POSTROUTING -o eth1 -j MASQUERADE")
+	c := Load()
+	if c.WGPostUp != "iptables -t nat -A POSTROUTING -o eth1 -j MASQUERADE" {
+		t.Fatalf("explicit PostUp overwritten: %s", c.WGPostUp)
+	}
+}
+
+func TestValidateSubnet(t *testing.T) {
+	c := Load()
+	c.Mnemonic = "test"
+	c.WGEndpointHost = "203.0.113.1"
+	c.WGIPv4Subnet = "2001:db8::1/64"
+	if err := c.Validate(); err == nil || !strings.Contains(err.Error(), "IPv4") {
+		t.Fatalf("expected IPv4 subnet error, got %v", err)
+	}
+	c.WGIPv4Subnet = "10.0.0.1/8"
+	if err := c.Validate(); err == nil || !strings.Contains(err.Error(), "prefix") {
+		t.Fatalf("expected prefix error, got %v", err)
+	}
+	c.WGIPv4Subnet = "100.64.0.1/24"
+	c.WGIPv6Subnet = "10.0.0.1/24"
+	if err := c.Validate(); err == nil || !strings.Contains(err.Error(), "IPv6") {
+		t.Fatalf("expected IPv6 subnet error, got %v", err)
+	}
+}
+
+func TestLoadIPv6Off(t *testing.T) {
+	t.Setenv("WG_IPv6_SUBNET", "off")
+	t.Setenv("WG_POST_UP", "")
+	c := Load()
+	if c.WGIPv6Subnet != "" {
+		t.Fatalf("ipv6 subnet = %q", c.WGIPv6Subnet)
+	}
+	if strings.Contains(c.WGPostUp, "ip6tables") {
+		t.Fatalf("disabled IPv6 still in PostUp: %s", c.WGPostUp)
+	}
+}
+
 func TestLoadAPIBindOverride(t *testing.T) {
 	t.Setenv("API_BIND_ADDR", "127.0.0.1")
 	t.Setenv("SERVER", "0.0.0.0")

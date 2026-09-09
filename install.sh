@@ -574,6 +574,8 @@ write_env_file() {
     SHIELD_ADMIN_USER="${SHIELD_ADMIN_USER:-admin}"
     SHIELD_ADMIN_PASSWORD="${SHIELD_ADMIN_PASSWORD:-$(rand_token)}"
   fi
+  WG_IPv4_SUBNET="${WG_IPv4_SUBNET:-100.64.0.1/24}"
+  WG_IPv6_SUBNET="${WG_IPv6_SUBNET:-fd00:64:64::1/64}"
   run tee "$f" >/dev/null <<EOF
 # Erebrus v2 node — generated $(date '+%F %T')
 # See .env.example in the repo for field documentation.
@@ -603,12 +605,11 @@ WG_CONF_DIR=/etc/wireguard
 WG_INTERFACE_NAME=wg0
 WG_ENDPOINT_HOST=${WG_ENDPOINT_HOST}
 WG_ENDPOINT_PORT=${WG_PORT}
-WG_IPv4_SUBNET=10.0.0.1/16
+WG_IPv4_SUBNET=${WG_IPv4_SUBNET}
+WG_IPv6_SUBNET=${WG_IPv6_SUBNET}
 WG_DNS=1.1.1.1
-# These commands run inside the container's network namespace.  The Compose
-# bridge interface is eth0, regardless of the host interface name.
-WG_POST_UP=iptables -A FORWARD -i %i -j ACCEPT; iptables -A FORWARD -o %i -j ACCEPT; iptables -t nat -A POSTROUTING -s 10.0.0.0/16 -o eth0 -j MASQUERADE
-WG_POST_DOWN=iptables -D FORWARD -i %i -j ACCEPT; iptables -D FORWARD -o %i -j ACCEPT; iptables -t nat -D POSTROUTING -s 10.0.0.0/16 -o eth0 -j MASQUERADE
+WG_NAT_IFACE=eth0
+# PostUp/PostDown are derived at runtime from the subnets above unless set.
 
 # Stealth carriers (sing-box)
 ENABLE_STEALTH=${ENABLE_STEALTH}
@@ -644,15 +645,15 @@ SHIELD_ADMIN_URL=http://adguardhome:3000
 SHIELD_ADMIN_USER=${SHIELD_ADMIN_USER:-admin}
 SHIELD_ADMIN_PASSWORD=${SHIELD_ADMIN_PASSWORD}
 SHIELD_UPSTREAM_DNS=1.1.1.1,1.0.0.1
-WG_DNS=10.0.0.1
+WG_DNS=${WG_IPv4_SUBNET%%/*}
 PEOF
       ;;
     sentinel)
-      cat <<'PEOF'
+      cat <<PEOF
 FIREWALL_PROVIDER=unbound_erebrus
 FIREWALL_DNS_ADDR=erebrus-sentinel:53
 SENTINEL_API_URL=http://erebrus-sentinel:8788
-WG_DNS=10.0.0.1
+WG_DNS=${WG_IPv4_SUBNET%%/*}
 PEOF
       ;;
     *)
@@ -742,6 +743,7 @@ open_firewall() {
 
 enable_ip_forward() {
   echo 'net.ipv4.ip_forward=1' | run tee /etc/sysctl.d/99-erebrus.conf >/dev/null
+  echo 'net.ipv6.conf.all.forwarding=1' | run tee -a /etc/sysctl.d/99-erebrus.conf >/dev/null
   run sysctl -p /etc/sysctl.d/99-erebrus.conf >>"$LOG_FILE" 2>&1 || true
 }
 

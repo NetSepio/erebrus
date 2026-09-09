@@ -5,26 +5,31 @@ import (
 	"database/sql"
 	"errors"
 	"net"
+
+	"github.com/NetSepio/erebrus/internal/netcidr"
 )
 
 // ErrSubnetExhausted is returned when no free address remains.
 var ErrSubnetExhausted = errors.New("wireguard subnet exhausted")
 
 // txAllocateIP finds the lowest free host address in subnet (CIDR with the
-// server address as host bits, e.g. "10.0.0.1/16") not already assigned to a
+// server address as host bits, e.g. "100.64.0.1/24") not already assigned to a
 // peer, and returns it as a /32 CIDR. Runs inside the caller's transaction so
 // the read-then-insert is atomic against concurrent provisioning.
 //
-// The subnet's own host address (the server, e.g. 10.0.0.1), the network
-// address, and the broadcast address are reserved.
+// The subnet's own host address (the server), the network address, the
+// broadcast address, and .0/.255 hosts are reserved.
 func txAllocateIP(ctx context.Context, tx *sql.Tx, subnet string) (string, error) {
-	serverIP, ipnet, err := net.ParseCIDR(subnet)
+	ipnet, err := netcidr.ParseIPv4Subnet(subnet)
+	if err != nil {
+		return "", err
+	}
+	serverIP, _, err := net.ParseCIDR(subnet)
 	if err != nil {
 		return "", err
 	}
 
 	reserved := map[string]struct{}{}
-	// network + broadcast + server host
 	reserved[ipnet.IP.String()] = struct{}{}
 	reserved[broadcastAddr(ipnet).String()] = struct{}{}
 	reserved[serverIP.String()] = struct{}{}
@@ -50,6 +55,9 @@ func txAllocateIP(ctx context.Context, tx *sql.Tx, subnet string) (string, error
 	for ip := cloneIP(ipnet.IP.Mask(ipnet.Mask)); ipnet.Contains(ip); incIP(ip) {
 		addr := ip.String()
 		if _, taken := reserved[addr]; taken {
+			continue
+		}
+		if netcidr.SkipIPv4Host(ip) {
 			continue
 		}
 		return addr + "/32", nil

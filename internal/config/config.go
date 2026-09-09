@@ -4,9 +4,12 @@ package config
 
 import (
 	"fmt"
+	"net"
 	"os"
 	"strconv"
 	"strings"
+
+	"github.com/NetSepio/erebrus/internal/netcidr"
 )
 
 // Config holds the full node configuration.
@@ -50,7 +53,9 @@ type Config struct {
 	WGEndpointPort string // WG_PORT alias
 	StealthTCPPort string // STEALTH_TCP_PORT — VLESS+REALITY
 	StealthUDPPort string // STEALTH_UDP_PORT — Hysteria2/QUIC
-	WGIPv4Subnet   string // e.g. "10.0.0.1/16"
+	WGIPv4Subnet   string // e.g. "100.64.0.1/24"
+	WGIPv6Subnet   string // e.g. "fd00:64:64::1/64"; "off" disables
+	WGNATIface     string // uplink for derived MASQUERADE (eth0 in Compose)
 	WGDNS          string
 	WGPostUp       string
 	WGPostDown     string
@@ -141,7 +146,9 @@ func Load() *Config {
 		WGEndpointPort:         firstEnv("WG_PORT", "WG_ENDPOINT_PORT", "51820"),
 		StealthTCPPort:         firstEnv("STEALTH_TCP_PORT", "VLESS_PORT", "443"),
 		StealthUDPPort:         firstEnv("STEALTH_UDP_PORT", "HYSTERIA2_PORT", "443"),
-		WGIPv4Subnet:           env("WG_IPv4_SUBNET", "10.0.0.1/16"),
+		WGIPv4Subnet:           env("WG_IPv4_SUBNET", "100.64.0.1/24"),
+		WGIPv6Subnet:           loadIPv6Subnet(),
+		WGNATIface:             env("WG_NAT_IFACE", "eth0"),
 		WGDNS:                  env("WG_DNS", "1.1.1.1"),
 		WGPostUp:               os.Getenv("WG_POST_UP"),
 		WGPostDown:             os.Getenv("WG_POST_DOWN"),
@@ -182,6 +189,7 @@ func Load() *Config {
 	c.VLESSPort = c.StealthTCPPort
 	c.Hysteria2Port = c.StealthUDPPort
 	c.DropStorageMaxBytes, _ = parseByteSize(c.DropStorageMax)
+	c.deriveWGHooks()
 	// The management peer API shares the HTTP listener. When it is bound to a
 	// non-loopback address it is reachable off-host (token-gated, fail-closed),
 	// so always surface that as a conscious decision — not just under the
@@ -236,6 +244,14 @@ func (c *Config) Validate() error {
 	if !validInterfaceName(c.WGInterface) {
 		return fmt.Errorf("WG_INTERFACE_NAME contains invalid characters")
 	}
+	if _, err := netcidr.ParseIPv4Subnet(c.WGIPv4Subnet); err != nil {
+		return err
+	}
+	if c.WGIPv6Subnet != "" {
+		if _, err := netcidr.ParseIPv6Subnet(c.WGIPv6Subnet); err != nil {
+			return err
+		}
+	}
 	if c.StealthTCPPort != "443" || c.StealthUDPPort != "443" {
 		c.Mode.Warnings = append(c.Mode.Warnings,
 			"WARNING: Stealth should expose 443/tcp and 443/udp (STEALTH_TCP_PORT/STEALTH_UDP_PORT) for reachability through restrictive networks.")
@@ -253,6 +269,35 @@ func (c *Config) Validate() error {
 		}
 	}
 	return c.ValidateProfile()
+}
+
+func loadIPv6Subnet() string {
+	raw := strings.TrimSpace(os.Getenv("WG_IPv6_SUBNET"))
+	switch strings.ToLower(raw) {
+	case "off", "none", "disabled":
+		return ""
+	case "":
+		return "fd00:64:64::1/64"
+	default:
+		return raw
+	}
+}
+
+func (c *Config) deriveWGHooks() {
+	if strings.TrimSpace(c.WGPostUp) != "" {
+		return
+	}
+	v4, err := netcidr.ParseIPv4Subnet(c.WGIPv4Subnet)
+	if err != nil {
+		return
+	}
+	var v6 *net.IPNet
+	if c.WGIPv6Subnet != "" {
+		if n, err := netcidr.ParseIPv6Subnet(c.WGIPv6Subnet); err == nil {
+			v6 = n
+		}
+	}
+	c.WGPostUp, c.WGPostDown = netcidr.DeriveHooks(v4, v6, c.WGNATIface)
 }
 
 func validInterfaceName(value string) bool {

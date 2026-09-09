@@ -57,7 +57,7 @@ PublicKey = {{ .ServerPublicKey }}
 {{- if .PresharedKey }}
 PresharedKey = {{ .PresharedKey }}
 {{- end }}
-AllowedIPs = 0.0.0.0/0
+AllowedIPs = 0.0.0.0/0, ::/0
 Endpoint = {{ .Endpoint }}
 PersistentKeepalive = 16
 `))

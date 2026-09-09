@@ -36,16 +36,20 @@ func Start(ctx context.Context, mnemonic, listenPort, publicHost, gatewayMultiad
 		return nil, err
 	}
 
+	listen := []string{fmt.Sprintf("/ip4/0.0.0.0/tcp/%s", listenPort)}
+	if ipv6Listening() {
+		listen = append(listen, fmt.Sprintf("/ip6/::/tcp/%s", listenPort))
+	}
 	options := []libp2p.Option{
-		libp2p.ListenAddrStrings(fmt.Sprintf("/ip4/0.0.0.0/tcp/%s", listenPort)),
+		libp2p.ListenAddrStrings(listen...),
 		libp2p.Identity(priv),
 		libp2p.DisableRelay(),
 	}
-	if advertised, err := advertisedAddress(publicHost, listenPort); err != nil {
+	if advertised, err := advertisedAddresses(publicHost, listenPort); err != nil {
 		return nil, fmt.Errorf("public p2p address: %w", err)
-	} else if advertised != nil {
+	} else if len(advertised) > 0 {
 		options = append(options, libp2p.AddrsFactory(func(addrs []multiaddr.Multiaddr) []multiaddr.Multiaddr {
-			return append(addrs, advertised)
+			return append(addrs, advertised...)
 		}))
 	}
 	h, err := libp2p.New(options...)
@@ -79,6 +83,29 @@ func Start(ctx context.Context, mnemonic, listenPort, publicHost, gatewayMultiad
 	return n, nil
 }
 
+func advertisedAddresses(host, port string) ([]multiaddr.Multiaddr, error) {
+	host = strings.TrimSpace(host)
+	if host == "" {
+		return nil, nil
+	}
+	if ip := net.ParseIP(host); ip != nil {
+		ma, err := advertisedAddress(host, port)
+		if err != nil || ma == nil {
+			return nil, err
+		}
+		return []multiaddr.Multiaddr{ma}, nil
+	}
+	a4, err := multiaddr.NewMultiaddr(fmt.Sprintf("/dns4/%s/tcp/%s", host, port))
+	if err != nil {
+		return nil, err
+	}
+	a6, err := multiaddr.NewMultiaddr(fmt.Sprintf("/dns6/%s/tcp/%s", host, port))
+	if err != nil {
+		return []multiaddr.Multiaddr{a4}, nil
+	}
+	return []multiaddr.Multiaddr{a4, a6}, nil
+}
+
 func advertisedAddress(host, port string) (multiaddr.Multiaddr, error) {
 	host = strings.TrimSpace(host)
 	if host == "" {
@@ -95,6 +122,15 @@ func advertisedAddress(host, port string) (multiaddr.Multiaddr, error) {
 		}
 	}
 	return multiaddr.NewMultiaddr(fmt.Sprintf("/%s/%s/tcp/%s", protocol, host, port))
+}
+
+func ipv6Listening() bool {
+	ln, err := net.Listen("tcp6", "[::]:0")
+	if err != nil {
+		return false
+	}
+	_ = ln.Close()
+	return true
 }
 
 func (n *Node) connectBootstrap(ctx context.Context, addr string) error {

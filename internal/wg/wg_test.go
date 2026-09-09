@@ -38,13 +38,27 @@ func TestServerTemplateDoesNotRenderPeerMetadata(t *testing.T) {
 	}
 }
 
-func TestClientTemplateDoesNotAdvertiseUnsupportedIPv6(t *testing.T) {
+func TestClientTemplateTunnelsIPv6(t *testing.T) {
 	body, err := renderClient(clientTplData{})
 	if err != nil {
 		t.Fatal(err)
 	}
-	if strings.Contains(body, "::/0") {
-		t.Fatalf("client config advertises unsupported IPv6: %s", body)
+	if !strings.Contains(body, "0.0.0.0/0, ::/0") {
+		t.Fatalf("client config should tunnel IPv6: %s", body)
+	}
+}
+
+func TestClientAddressesDualStack(t *testing.T) {
+	m := New(&config.Config{
+		WGIPv4Subnet: "100.64.0.1/24",
+		WGIPv6Subnet: "fd00:64:64::1/64",
+	}, nil, nil)
+	got := m.ClientAddresses(&store.Peer{WGAllowedIP: "100.64.0.7/32"})
+	if got != "100.64.0.7/32, fd00:64:64::7/128" {
+		t.Fatalf("addresses = %q", got)
+	}
+	if !strings.Contains(m.serverAddress(), "100.64.0.1/24") || !strings.Contains(m.serverAddress(), "fd00:64:64::1/64") {
+		t.Fatalf("server address = %q", m.serverAddress())
 	}
 }
 

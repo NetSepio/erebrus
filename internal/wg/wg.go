@@ -16,6 +16,7 @@ import (
 	"time"
 
 	"github.com/NetSepio/erebrus/internal/config"
+	"github.com/NetSepio/erebrus/internal/netcidr"
 	"github.com/NetSepio/erebrus/internal/store"
 	"golang.zx2c4.com/wireguard/wgctrl/wgtypes"
 )
@@ -109,19 +110,31 @@ func (m *Manager) Apply(ctx context.Context) error {
 	if err != nil {
 		return err
 	}
-	return m.ctrl.SyncPeers(m.cfg.WGInterface, activePeers(peers, time.Now()))
+	return m.ctrl.SyncPeers(m.cfg.WGInterface, m.tunnelPeers(activePeers(peers, time.Now())))
 }
 
 // ClientConfig renders a wg-quick config for a peer, with the private key left
 // as a placeholder for the client to fill in.
 func (m *Manager) ClientConfig(p *store.Peer) (string, error) {
 	return renderClient(clientTplData{
-		Address:         p.WGAllowedIP,
+		Address:         m.ClientAddresses(p),
 		DNS:             m.cfg.WGDNS,
 		ServerPublicKey: m.ServerPublicKey(),
 		PresharedKey:    p.WGPresharedKey,
 		Endpoint:        m.Endpoint(),
 	})
+}
+
+// ClientAddresses is the dual-stack tunnel address list for a peer.
+func (m *Manager) ClientAddresses(p *store.Peer) string {
+	if p == nil {
+		return ""
+	}
+	addrs := []string{p.WGAllowedIP}
+	if v6 := m.peerIPv6CIDR(p); v6 != "" {
+		addrs = append(addrs, v6)
+	}
+	return strings.Join(addrs, ", ")
 }
 
 func (m *Manager) loadOrCreateKeys(ctx context.Context) error {
@@ -171,7 +184,7 @@ func (m *Manager) writeServerConf(ctx context.Context) error {
 		PostUp:     m.cfg.WGPostUp,
 		PreDown:    m.cfg.WGPreDown,
 		PostDown:   m.cfg.WGPostDown,
-		Peers:      activePeers(peers, time.Now()),
+		Peers:      m.tunnelPeers(activePeers(peers, time.Now())),
 	})
 	if err != nil {
 		return err
@@ -253,15 +266,46 @@ func hasExpiredEnabledPeer(peers []*store.Peer, now time.Time) bool {
 	return false
 }
 
-// serverAddress returns the server's own address inside the subnet as a CIDR,
-// e.g. "10.0.0.1/16".
-func (m *Manager) serverAddress() string {
-	ip, ipnet, err := net.ParseCIDR(m.cfg.WGIPv4Subnet)
-	if err != nil {
-		return m.cfg.WGIPv4Subnet
+func (m *Manager) tunnelPeers(peers []*store.Peer) []*store.Peer {
+	out := make([]*store.Peer, len(peers))
+	for i, p := range peers {
+		cp := *p
+		cp.WGAllowedIP = m.ClientAddresses(p)
+		out[i] = &cp
 	}
-	ones, _ := ipnet.Mask.Size()
-	return fmt.Sprintf("%s/%d", ip.String(), ones)
+	return out
+}
+
+func (m *Manager) peerIPv6CIDR(p *store.Peer) string {
+	if m.cfg == nil || m.cfg.WGIPv6Subnet == "" || p == nil {
+		return ""
+	}
+	ip, _, err := net.ParseCIDR(p.WGAllowedIP)
+	if err != nil {
+		return ""
+	}
+	v4net, err := netcidr.ParseIPv4Subnet(m.cfg.WGIPv4Subnet)
+	if err != nil {
+		return ""
+	}
+	v6net, err := netcidr.ParseIPv6Subnet(m.cfg.WGIPv6Subnet)
+	if err != nil {
+		return ""
+	}
+	off, err := netcidr.HostOffset(ip, v4net)
+	if err != nil {
+		return ""
+	}
+	return netcidr.AddOffset(v6net.IP, off).String() + "/128"
+}
+
+// serverAddress returns the server's dual-stack interface addresses.
+func (m *Manager) serverAddress() string {
+	v4 := netcidr.HostCIDR(m.cfg.WGIPv4Subnet)
+	if m.cfg.WGIPv6Subnet == "" {
+		return v4
+	}
+	return v4 + ", " + netcidr.HostCIDR(m.cfg.WGIPv6Subnet)
 }
 
 func (m *Manager) confPath() string {

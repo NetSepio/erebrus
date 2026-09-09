@@ -81,6 +81,21 @@ func TestPeerSyncDiffUpdatesChangedAllowedIP(t *testing.T) {
 	}
 }
 
+func TestPeerSyncDiffParsesDualStackAllowedIPs(t *testing.T) {
+	key := mustPeerKey(t)
+	desired := []*store.Peer{{
+		ID: "a", Enabled: true, WGPublicKey: key.String(),
+		WGAllowedIP: "100.64.0.7/32, fd00:64:64::7/128",
+	}}
+	cfgs, err := peerSyncDiff(nil, desired)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(cfgs) != 1 || allowedIPsKey(cfgs[0].AllowedIPs) != "100.64.0.7/32,fd00:64:64::7/128" {
+		t.Fatalf("dual-stack add = %+v", cfgs)
+	}
+}
+
 func TestPeerSyncDiffIgnoresDisabledDesiredPeers(t *testing.T) {
 	key := mustPeerKey(t)
 	current := []wgtypes.Peer{{PublicKey: key, AllowedIPs: []net.IPNet{mustCIDR(t, "10.0.0.2/32")}}}

@@ -85,7 +85,7 @@ func tunnelGatewayIP(subnet, override string) string {
 	}
 	ip, _, err := net.ParseCIDR(subnet)
 	if err != nil {
-		return "10.0.0.1"
+		return "100.64.0.1"
 	}
 	return ip.String()
 }

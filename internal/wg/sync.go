@@ -72,11 +72,21 @@ func parseDesiredPeer(p *store.Peer) (desiredPeer, error) {
 	if err != nil {
 		return desiredPeer{}, fmt.Errorf("peer %s bad public key: %w", p.ID, err)
 	}
-	_, ipnet, err := net.ParseCIDR(p.WGAllowedIP)
-	if err != nil {
-		return desiredPeer{}, fmt.Errorf("peer %s bad allowed ip: %w", p.ID, err)
+	d := desiredPeer{id: p.ID, pub: pub}
+	for _, part := range strings.Split(p.WGAllowedIP, ",") {
+		part = strings.TrimSpace(part)
+		if part == "" {
+			continue
+		}
+		_, ipnet, err := net.ParseCIDR(part)
+		if err != nil {
+			return desiredPeer{}, fmt.Errorf("peer %s bad allowed ip %q: %w", p.ID, part, err)
+		}
+		d.ips = append(d.ips, *ipnet)
 	}
-	d := desiredPeer{id: p.ID, pub: pub, ips: []net.IPNet{*ipnet}}
+	if len(d.ips) == 0 {
+		return desiredPeer{}, fmt.Errorf("peer %s missing allowed ip", p.ID)
+	}
 	if p.WGPresharedKey != "" {
 		psk, err := wgtypes.ParseKey(p.WGPresharedKey)
 		if err != nil {
