@@ -38,4 +38,4 @@ The swarm listener is host-published. The Kubo gateway (`8080`) and RPC (`5001`)
 
 ## Build tag
 
-The sing-box REALITY _server_ is gated behind `with_reality_server`. The binary **must** be built with it (`make build`, the Dockerfile, and CI all set it) or the REALITY inbound fails to start at runtime.
+The sing-box REALITY _server_ is gated behind `with_utls`. The binary **must** be built with it (`make build`, the Dockerfile, and CI all set it) or the REALITY inbound fails to start at runtime.

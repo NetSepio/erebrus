@@ -109,16 +109,16 @@ func (s *Server) handleDropWebUI(c *gin.Context) {
 	}
 	target, _ := url.Parse(drop.DefaultKuboRPCURL)
 	proxy := httputil.NewSingleHostReverseProxy(target)
-	director := proxy.Director
-	proxy.Director = func(req *http.Request) {
-		director(req)
+	proxy.Director = nil
+	proxy.Rewrite = func(req *httputil.ProxyRequest) {
+		req.SetURL(target)
 		path := strings.TrimPrefix(c.Param("path"), "/")
-		req.URL.Path = "/" + path
-		req.Host = target.Host
-		req.Header.Del("Authorization")
-		req.Header.Del("X-Erebrus-Node-Key")
-		req.Header.Del("Origin")
-		req.Header.Del("Referer")
+		req.Out.URL.Path = "/" + path
+		req.Out.Host = target.Host
+		req.Out.Header.Del("Authorization")
+		req.Out.Header.Del("X-Erebrus-Node-Key")
+		req.Out.Header.Del("Origin")
+		req.Out.Header.Del("Referer")
 	}
 	proxy.ModifyResponse = func(resp *http.Response) error {
 		location := resp.Header.Get("Location")

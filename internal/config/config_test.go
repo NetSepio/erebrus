@@ -68,7 +68,6 @@ func TestLegacyHostNetworkProfileFromAccess(t *testing.T) {
 	}
 }
 
-
 func TestInvalidAccess(t *testing.T) {
 	if _, err := ParseModeSettings("astro", "bridge"); err == nil {
 		t.Fatal("expected error for invalid access")
@@ -90,6 +89,23 @@ func TestLoadAPIBindDefault(t *testing.T) {
 	c := Load()
 	if c.BindAddr != "0.0.0.0" {
 		t.Fatalf("bind addr = %q, want 0.0.0.0 default during testing", c.BindAddr)
+	}
+}
+
+func TestValidateRejectsInvalidRuntimePortsAndInterface(t *testing.T) {
+	t.Setenv("EREBRUS_ACCESS", "private")
+	t.Setenv("EREBRUS_NETWORK_PROFILE", "bridge")
+	c := Load()
+	c.Mnemonic = "test"
+	c.WGEndpointHost = "203.0.113.1"
+	c.WGEndpointPort = "65536"
+	if err := c.Validate(); err == nil || !strings.Contains(err.Error(), "WG_ENDPOINT_PORT") {
+		t.Fatalf("expected WireGuard port error, got %v", err)
+	}
+	c.WGEndpointPort = "51820"
+	c.WGInterface = "../wg0"
+	if err := c.Validate(); err == nil || !strings.Contains(err.Error(), "WG_INTERFACE_NAME") {
+		t.Fatalf("expected interface error, got %v", err)
 	}
 }
 

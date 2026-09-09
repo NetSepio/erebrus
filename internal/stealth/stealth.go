@@ -81,7 +81,15 @@ func (m *Manager) Start(ctx context.Context) error {
 	}
 
 	opts := m.serverOptions()
-	boxCtx := box.Context(ctx, inboundRegistry(), outboundRegistry(), endpointRegistry())
+	boxCtx := box.Context(
+		ctx,
+		inboundRegistry(),
+		outboundRegistry(),
+		endpointRegistry(),
+		dnsTransportRegistry(),
+		serviceRegistry(),
+		certificateProviderRegistry(),
+	)
 	instance, err := box.New(box.Options{Context: boxCtx, Options: opts})
 	if err != nil {
 		return fmt.Errorf("stealth: build sing-box: %w", err)
@@ -189,14 +197,23 @@ func (m *Manager) serverOptions() option.Options {
 		Log:      &option.LogOptions{Level: logLevel, Timestamp: true},
 		Inbounds: inbounds,
 		Outbounds: []option.Outbound{{
-			Type: C.TypeDirect,
-			Tag:  "direct",
-			Options: &option.DirectOutboundOptions{
-				OverrideAddress: "127.0.0.1",
-				OverridePort:    uint16(m.cfg.WGEndpointPortInt()),
-			},
+			Type:    C.TypeDirect,
+			Tag:     "direct",
+			Options: &option.DirectOutboundOptions{},
 		}},
-		Route: &option.RouteOptions{Final: "direct"},
+		Route: &option.RouteOptions{
+			Rules: []option.Rule{{
+				Type: C.RuleTypeDefault,
+				DefaultOptions: option.DefaultRule{RuleAction: option.RuleAction{
+					Action: C.RuleActionTypeRouteOptions,
+					RouteOptionsOptions: option.RouteOptionsActionOptions{
+						OverrideAddress: "127.0.0.1",
+						OverridePort:    uint16(m.cfg.WGEndpointPortInt()),
+					},
+				}},
+			}},
+			Final: "direct",
+		},
 	}
 }
 

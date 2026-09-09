@@ -8,6 +8,8 @@ import (
 	"context"
 	"crypto/rand"
 	"encoding/base64"
+	"fmt"
+	"strings"
 	"time"
 
 	"github.com/NetSepio/erebrus/internal/api"
@@ -17,6 +19,7 @@ import (
 	"github.com/NetSepio/erebrus/internal/telemetry"
 	"github.com/NetSepio/erebrus/internal/wg"
 	"github.com/google/uuid"
+	"golang.zx2c4.com/wireguard/wgctrl/wgtypes"
 )
 
 // Service provisions peers across all protocols and renders credential bundles.
@@ -101,6 +104,9 @@ func (s *Service) UpsertPeer(ctx context.Context, id string, req api.PeerRequest
 	if id == "" {
 		id = uuid.NewString()
 	}
+	if err := validatePeerInput(id, req); err != nil {
+		return nil, err
+	}
 	gen := store.GeneratedCreds{
 		ProxyUUID:     uuid.NewString(),
 		ProxyPassword: randomToken(24),
@@ -149,6 +155,9 @@ func (s *Service) Credentials(ctx context.Context, id string) (*api.CredentialBu
 	if err != nil {
 		return nil, err
 	}
+	if !peer.Enabled || (peer.ExpiresAt > 0 && peer.ExpiresAt <= time.Now().Unix()) {
+		return nil, store.ErrNotFound
+	}
 	return s.buildBundle(peer)
 }
 
@@ -158,14 +167,36 @@ func (s *Service) ListPeers(ctx context.Context) ([]api.PeerInfo, error) {
 	if err != nil {
 		return nil, err
 	}
+	now := time.Now().Unix()
 	out := make([]api.PeerInfo, 0, len(peers))
 	for _, p := range peers {
+		enabled := p.Enabled && (p.ExpiresAt == 0 || p.ExpiresAt > now)
 		out = append(out, api.PeerInfo{
 			ID: p.ID, Name: p.Name, WGAllowedIP: p.WGAllowedIP,
-			Enabled: p.Enabled, CreatedAt: p.CreatedAt, ExpiresAt: p.ExpiresAt,
+			Enabled: enabled, CreatedAt: p.CreatedAt, ExpiresAt: p.ExpiresAt,
 		})
 	}
 	return out, nil
+}
+
+func validatePeerInput(id string, req api.PeerRequest) error {
+	for name, value := range map[string]string{"id": id, "name": req.Name, "wallet": req.Wallet} {
+		if len(value) > 256 || strings.ContainsAny(value, "\r\n\x00") {
+			return fmt.Errorf("invalid peer %s", name)
+		}
+	}
+	if _, err := wgtypes.ParseKey(strings.TrimSpace(req.WGPublicKey)); err != nil {
+		return fmt.Errorf("invalid WireGuard public key: %w", err)
+	}
+	if req.WGPresharedKey != "" {
+		if _, err := wgtypes.ParseKey(strings.TrimSpace(req.WGPresharedKey)); err != nil {
+			return fmt.Errorf("invalid WireGuard preshared key: %w", err)
+		}
+	}
+	if req.ExpiresAt > 0 && req.ExpiresAt <= time.Now().Unix() {
+		return fmt.Errorf("peer expiration must be in the future")
+	}
+	return nil
 }
 
 func (s *Service) buildBundle(p *store.Peer) (*api.CredentialBundle, error) {

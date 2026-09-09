@@ -16,7 +16,7 @@ For more details visit [erebrus.io](https://erebrus.io).
 
 ## Install a node
 
-Linux only (x86\_64 / arm64). A node needs a **static, internet-routable public IP**, real bandwidth, and open ports (`9080/tcp`, `51820/udp`, `443/tcp`, `443/udp`). Drop nodes additionally publish `4001/tcp+udp` for the IPFS swarm. The installer verifies the required TCP ports.
+Linux only (x86\_64 / arm64). A node needs a **static, internet-routable public IP**, real bandwidth, and open ports (`9080/tcp`, `51820/udp`, `443/tcp`, `443/udp`, `9002/tcp`). Drop nodes additionally publish `4001/tcp+udp` for the IPFS swarm. The installer verifies the required TCP ports.
 
 ```bash
 curl -fsSL https://erebrus.io/install.sh | bash
@@ -41,7 +41,7 @@ Drop is optional, works with the Standard, Shield, and Sentinel Docker profiles.
 The REALITY server requires a build tag, wired into the Makefile and Dockerfile:
 
 ```bash
-make build      # go build -tags with_reality_server -o erebrus ./cmd/erebrus
+make build      # go build -tags with_utls -o erebrus ./cmd/erebrus
 make test
 ```
 

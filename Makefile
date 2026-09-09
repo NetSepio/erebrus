@@ -13,7 +13,7 @@ GOTEST=$(GOCMD) test
 GOVET=$(GOCMD) vet
 GOCLEAN=$(GOCMD) clean
 
-BUILD_TAGS=with_reality_server
+BUILD_TAGS=with_utls
 LDFLAGS=-ldflags "-X github.com/NetSepio/erebrus/internal/config.Version=2.0.0-dev"
 
 .PHONY: build build-node build-legacy build-sentinel install vet test clean all

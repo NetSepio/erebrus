@@ -4,6 +4,8 @@ import (
 	"context"
 	"fmt"
 	"log/slog"
+	"net"
+	"strings"
 	"time"
 
 	"github.com/libp2p/go-libp2p"
@@ -28,22 +30,30 @@ type Node struct {
 // Start brings up the libp2p host with a deterministic identity, connects to
 // the gateway bootstrap peer (if configured), and advertises on the DHT. It
 // returns a started Node; call Close to stop it.
-func Start(ctx context.Context, mnemonic, listenPort, gatewayMultiaddr string) (*Node, error) {
+func Start(ctx context.Context, mnemonic, listenPort, publicHost, gatewayMultiaddr string) (*Node, error) {
 	priv, err := DeriveIdentity(mnemonic)
 	if err != nil {
 		return nil, err
 	}
 
-	h, err := libp2p.New(
+	options := []libp2p.Option{
 		libp2p.ListenAddrStrings(fmt.Sprintf("/ip4/0.0.0.0/tcp/%s", listenPort)),
 		libp2p.Identity(priv),
 		libp2p.DisableRelay(),
-	)
+	}
+	if advertised, err := advertisedAddress(publicHost, listenPort); err != nil {
+		return nil, fmt.Errorf("public p2p address: %w", err)
+	} else if advertised != nil {
+		options = append(options, libp2p.AddrsFactory(func(addrs []multiaddr.Multiaddr) []multiaddr.Multiaddr {
+			return append(addrs, advertised)
+		}))
+	}
+	h, err := libp2p.New(options...)
 	if err != nil {
 		return nil, fmt.Errorf("libp2p host: %w", err)
 	}
 
-	kad, err := dht.New(ctx, h, dht.Mode(dht.ModeAuto))
+	kad, err := dht.New(h, dht.Mode(dht.ModeAuto))
 	if err != nil {
 		_ = h.Close()
 		return nil, fmt.Errorf("dht: %w", err)
@@ -67,6 +77,24 @@ func Start(ctx context.Context, mnemonic, listenPort, gatewayMultiaddr string) (
 	slog.Info("libp2p host started",
 		"peer_id", h.ID().String(), "did", n.did, "addrs", h.Addrs())
 	return n, nil
+}
+
+func advertisedAddress(host, port string) (multiaddr.Multiaddr, error) {
+	host = strings.TrimSpace(host)
+	if host == "" {
+		return nil, nil
+	}
+	protocol := "dns4"
+	if ip := net.ParseIP(host); ip != nil {
+		if ip.To4() != nil {
+			protocol = "ip4"
+			host = ip.String()
+		} else {
+			protocol = "ip6"
+			host = ip.String()
+		}
+	}
+	return multiaddr.NewMultiaddr(fmt.Sprintf("/%s/%s/tcp/%s", protocol, host, port))
 }
 
 func (n *Node) connectBootstrap(ctx context.Context, addr string) error {

@@ -44,14 +44,15 @@ services:
       NODE_ID: "${NODE_ID:-}"
       NODE_TOKEN: "${NODE_TOKEN:-}"
       GATEWAY_PEER_MULTIADDR: "${GATEWAY_PEER_MULTIADDR:-}"
+      P2P_LISTEN_PORT: "${P2P_LISTEN_PORT:-9002}"
       # WireGuard
       WG_CONF_DIR: "${WG_CONF_DIR:-/etc/wireguard}"
       WG_INTERFACE_NAME: "${WG_INTERFACE_NAME:-wg0}"
       WG_ENDPOINT_PORT: "${WG_ENDPOINT_PORT:-51820}"
       WG_IPv4_SUBNET: "${WG_IPv4_SUBNET:-10.0.0.1/16}"
       WG_DNS: "${WG_DNS:-1.1.1.1}"
-      WG_POST_UP: "${WG_POST_UP:-iptables -A FORWARD -i %i -j ACCEPT; iptables -A FORWARD -o %i -j ACCEPT; iptables -t nat -A POSTROUTING -o eth0 -j MASQUERADE}"
-      WG_POST_DOWN: "${WG_POST_DOWN:-iptables -D FORWARD -i %i -j ACCEPT; iptables -D FORWARD -o %i -j ACCEPT; iptables -t nat -D POSTROUTING -o eth0 -j MASQUERADE}"
+      WG_POST_UP: "${WG_POST_UP:-iptables -A FORWARD -i %i -j ACCEPT; iptables -A FORWARD -o %i -j ACCEPT; iptables -t nat -A POSTROUTING -s 10.0.0.0/16 -o eth0 -j MASQUERADE}"
+      WG_POST_DOWN: "${WG_POST_DOWN:-iptables -D FORWARD -i %i -j ACCEPT; iptables -D FORWARD -o %i -j ACCEPT; iptables -t nat -D POSTROUTING -s 10.0.0.0/16 -o eth0 -j MASQUERADE}"
       # Stealth carriers (sing-box)
       ENABLE_STEALTH: "${ENABLE_STEALTH:-true}"
       STEALTH_TCP_PORT: "${STEALTH_TCP_PORT:-443}"
@@ -79,10 +80,17 @@ services:
       - "${WG_ENDPOINT_PORT:-51820}:${WG_ENDPOINT_PORT:-51820}/udp"
       - "${STEALTH_TCP_PORT:-443}:${STEALTH_TCP_PORT:-443}/tcp"
       - "${STEALTH_UDP_PORT:-443}:${STEALTH_UDP_PORT:-443}/udp"
+      - "${P2P_LISTEN_PORT:-9002}:${P2P_LISTEN_PORT:-9002}/tcp"
     volumes:
       - erebrus-state:/var/lib/erebrus
       - erebrus-wireguard:/etc/wireguard
       - kubo_data:/var/lib/erebrus-kubo
+    healthcheck:
+      test: ["CMD-SHELL", "wget -q -O /dev/null http://127.0.0.1:$${HTTP_PORT:-9080}/healthz"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 20s
 
   kubo:
     profiles: ["drop"]

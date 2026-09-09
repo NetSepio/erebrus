@@ -18,13 +18,14 @@ BRANCH="${EREBRUS_BRANCH:-main}"
 INSTALL_DIR="${INSTALL_DIR:-/opt/erebrus}"
 STATE_DIR="${STATE_DIR:-/var/lib/erebrus}"
 ENV_DIR="/etc/erebrus"
-BUILD_TAGS="with_reality_server"
+BUILD_TAGS="with_utls"
 
 # Ports
 HTTP_PORT="${HTTP_PORT:-9080}"        # tcp  REST API
 WG_PORT="${WG_ENDPOINT_PORT:-51820}"  # udp  WireGuard
 STEALTH_TCP_PORT="${STEALTH_TCP_PORT:-443}"  # tcp  VLESS+REALITY
 STEALTH_UDP_PORT="${STEALTH_UDP_PORT:-443}"  # udp  Hysteria2
+P2P_PORT="${P2P_LISTEN_PORT:-9002}"         # tcp  libp2p/DHT
 
 # Minimum acceptable throughput for an exit node (Mbps)
 MIN_DOWN_MBPS="${MIN_DOWN_MBPS:-50}"
@@ -204,7 +205,7 @@ check_static_ip() {
   else
     warn "Public IP $PUBLIC_IP is NOT on a local interface — host appears to be behind NAT."
   warn "Inbound traffic will only reach this node if that IP is STATIC and ports"
-  warn "$HTTP_PORT/tcp, $WG_PORT/udp, $STEALTH_TCP_PORT/tcp, $STEALTH_UDP_PORT/udp are forwarded here."
+  warn "$HTTP_PORT/tcp, $WG_PORT/udp, $STEALTH_TCP_PORT/tcp, $STEALTH_UDP_PORT/udp, and $P2P_PORT/tcp are forwarded here."
     confirm "Continue anyway?" n || die "aborted: a static, routable public IP is required"
   fi
   warn "Note: the installer cannot prove the IP is permanent — make sure it is STATIC,"
@@ -422,7 +423,7 @@ WG_ENDPOINT_HOST="${WG_ENDPOINT_HOST:-}"; MNEMONIC="${MNEMONIC:-}"
 NODE_API_TOKEN="${NODE_API_TOKEN:-}"; NODE_KEY="${NODE_KEY:-}"
 EREBRUS_NODE_REGISTRATION_TOKEN="${EREBRUS_NODE_REGISTRATION_TOKEN:-${EREBRUS_ORG_ENROLLMENT_SECRET:-}}"
 GATEWAY_URL="${GATEWAY_URL:-https://gateway.erebrus.io}"
-ENABLE_STEALTH="${ENABLE_STEALTH:-true}"; REALITY_SERVER_NAMES="${REALITY_SERVER_NAMES:-www.microsoft.com}"
+ENABLE_STEALTH="${ENABLE_STEALTH:-}"; REALITY_SERVER_NAMES="${REALITY_SERVER_NAMES:-www.microsoft.com}"
 HYSTERIA2_OBFS_PASSWORD="${HYSTERIA2_OBFS_PASSWORD:-}"
 EREBRUS_BIN=""  # path/way to invoke binary for genmnemonic
 
@@ -454,6 +455,12 @@ load_existing_env_values() {
   ZONE="${ZONE:-$(read_env_value "$f" ZONE)}"
   NODE_API_TOKEN="${NODE_API_TOKEN:-$(read_env_value "$f" NODE_API_TOKEN)}"
   NODE_KEY="${NODE_KEY:-$(read_env_value "$f" NODE_KEY)}"
+  ENABLE_STEALTH="${ENABLE_STEALTH:-$(read_env_value "$f" ENABLE_STEALTH)}"
+  HYSTERIA2_OBFS_PASSWORD="${HYSTERIA2_OBFS_PASSWORD:-$(read_env_value "$f" HYSTERIA2_OBFS_PASSWORD)}"
+  SHIELD_ADMIN_USER="${SHIELD_ADMIN_USER:-$(read_env_value "$f" SHIELD_ADMIN_USER)}"
+  SHIELD_ADMIN_PASSWORD="${SHIELD_ADMIN_PASSWORD:-$(read_env_value "$f" SHIELD_ADMIN_PASSWORD)}"
+  P2P_PORT="${P2P_LISTEN_PORT:-$(read_env_value "$f" P2P_LISTEN_PORT)}"
+  P2P_PORT="${P2P_PORT:-9002}"
 }
 
 ensure_required_inputs() {
@@ -516,6 +523,7 @@ gather_config() {
   NODE_NAME="${NODE_NAME:-erebrus-$(hostname -s 2>/dev/null || echo node)}"
   WG_ENDPOINT_HOST="${WG_ENDPOINT_HOST:-$PUBLIC_IP}"
   GATEWAY_URL="${GATEWAY_URL:-https://gateway.erebrus.io}"
+  ENABLE_STEALTH="${ENABLE_STEALTH:-true}"
   if [[ -z "${NODE_API_TOKEN:-}" ]]; then
     NODE_API_TOKEN="$(rand_token)"
   fi
@@ -585,6 +593,7 @@ NODE_API_TOKEN=${NODE_API_TOKEN}
 NODE_KEY=${NODE_KEY:-${NODE_API_TOKEN}}
 GATEWAY_URL=${GATEWAY_URL}
 GATEWAY_AUTO_REGISTER=true
+P2P_LISTEN_PORT=${P2P_PORT}
 EREBRUS_NODE_REGISTRATION_TOKEN=${EREBRUS_NODE_REGISTRATION_TOKEN}
 WALLET_CHAIN=SOLANA
 API_PUBLIC_URL=http://${WG_ENDPOINT_HOST}:${HTTP_PORT}
@@ -596,8 +605,10 @@ WG_ENDPOINT_HOST=${WG_ENDPOINT_HOST}
 WG_ENDPOINT_PORT=${WG_PORT}
 WG_IPv4_SUBNET=10.0.0.1/16
 WG_DNS=1.1.1.1
-WG_POST_UP=iptables -A FORWARD -i %i -j ACCEPT; iptables -A FORWARD -o %i -j ACCEPT; iptables -t nat -A POSTROUTING -o $(default_iface) -j MASQUERADE
-WG_POST_DOWN=iptables -D FORWARD -i %i -j ACCEPT; iptables -D FORWARD -o %i -j ACCEPT; iptables -t nat -D POSTROUTING -o $(default_iface) -j MASQUERADE
+# These commands run inside the container's network namespace.  The Compose
+# bridge interface is eth0, regardless of the host interface name.
+WG_POST_UP=iptables -A FORWARD -i %i -j ACCEPT; iptables -A FORWARD -o %i -j ACCEPT; iptables -t nat -A POSTROUTING -s 10.0.0.0/16 -o eth0 -j MASQUERADE
+WG_POST_DOWN=iptables -D FORWARD -i %i -j ACCEPT; iptables -D FORWARD -o %i -j ACCEPT; iptables -t nat -D POSTROUTING -s 10.0.0.0/16 -o eth0 -j MASQUERADE
 
 # Stealth carriers (sing-box)
 ENABLE_STEALTH=${ENABLE_STEALTH}
@@ -622,8 +633,6 @@ EOF
   run chmod 600 "$f"
   ok "Wrote config: $f"
 }
-
-default_iface() { ip route show default 2>/dev/null | awk '/default/{print $5; exit}' || echo eth0; }
 
 profile_env_block() {
   case "${PROFILE:-standard}" in
@@ -703,6 +712,7 @@ open_firewall() {
     run ufw allow "${STEALTH_TCP_PORT}/tcp" >>"$LOG_FILE" 2>&1 || true
     run ufw allow "${WG_PORT}/udp"    >>"$LOG_FILE" 2>&1 || true
     run ufw allow "${STEALTH_UDP_PORT}/udp"   >>"$LOG_FILE" 2>&1 || true
+    run ufw allow "${P2P_PORT}/tcp" >>"$LOG_FILE" 2>&1 || true
     if [[ "$DROP" == "true" ]]; then
       run ufw allow "${DROP_SWARM_PORT}/tcp" >>"$LOG_FILE" 2>&1 || true
       run ufw allow "${DROP_SWARM_PORT}/udp" >>"$LOG_FILE" 2>&1 || true
@@ -714,6 +724,7 @@ open_firewall() {
     run firewall-cmd --permanent --add-port="${STEALTH_TCP_PORT}/tcp" >>"$LOG_FILE" 2>&1 || true
     run firewall-cmd --permanent --add-port="${WG_PORT}/udp"    >>"$LOG_FILE" 2>&1 || true
     run firewall-cmd --permanent --add-port="${STEALTH_UDP_PORT}/udp"   >>"$LOG_FILE" 2>&1 || true
+    run firewall-cmd --permanent --add-port="${P2P_PORT}/tcp" >>"$LOG_FILE" 2>&1 || true
     if [[ "$DROP" == "true" ]]; then
       run firewall-cmd --permanent --add-port="${DROP_SWARM_PORT}/tcp" >>"$LOG_FILE" 2>&1 || true
       run firewall-cmd --permanent --add-port="${DROP_SWARM_PORT}/udp" >>"$LOG_FILE" 2>&1 || true
@@ -722,7 +733,7 @@ open_firewall() {
     ok "firewalld rules added."
   else
     warn "No ufw/firewalld detected. Ensure these are open in your cloud security group:"
-    warn "  ${HTTP_PORT}/tcp, ${STEALTH_TCP_PORT}/tcp, ${WG_PORT}/udp, ${STEALTH_UDP_PORT}/udp"
+    warn "  ${HTTP_PORT}/tcp, ${STEALTH_TCP_PORT}/tcp, ${WG_PORT}/udp, ${STEALTH_UDP_PORT}/udp, ${P2P_PORT}/tcp"
     if [[ "$DROP" == "true" ]]; then
       warn "  Drop swarm: ${DROP_SWARM_PORT}/tcp and ${DROP_SWARM_PORT}/udp"
     fi
@@ -843,6 +854,7 @@ validate_and_summary() {
   echo "  REST API : http://${WG_ENDPOINT_HOST}:${HTTP_PORT}/api/v2/status"
   echo "  WireGuard: ${WG_ENDPOINT_HOST}:${WG_PORT}/udp"
   echo "  Stealth  : VLESS+REALITY :${STEALTH_TCP_PORT}/tcp · Hysteria2 :${STEALTH_UDP_PORT}/udp"
+  echo "  P2P      : ${WG_ENDPOINT_HOST}:${P2P_PORT}/tcp"
   echo "  Node API key: ${NODE_API_TOKEN}"
   echo "  Verify   : erebrus status"
   if [[ "$DROP" == "true" ]]; then

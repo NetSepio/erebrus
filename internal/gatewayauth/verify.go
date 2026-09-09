@@ -28,8 +28,8 @@ func VerifyGatewayCall(token, gatewayPublicKeyHex, expectNodeID string) (*Claims
 	if err != nil {
 		return nil, err
 	}
-	if expectNodeID != "" && c.NodeID != "" && c.NodeID != expectNodeID {
-		return nil, fmt.Errorf("node_id mismatch")
+	if err := validateNodeClaims(c, expectNodeID); err != nil {
+		return nil, err
 	}
 	return c, nil
 }
@@ -68,15 +68,22 @@ func verifyGatewayCall(token, gatewayPublicKeyHex string) (*Claims, error) {
 }
 
 func validatePurposeClaims(c *Claims, expectNodeID, expectPurpose string) error {
+	if err := validateNodeClaims(c, expectNodeID); err != nil {
+		return err
+	}
+	if expectPurpose == "" || c.Purpose != expectPurpose {
+		return fmt.Errorf("purpose mismatch")
+	}
+	return nil
+}
+
+func validateNodeClaims(c *Claims, expectNodeID string) error {
 	nodeID := c.NodeID
 	if nodeID == "" {
 		nodeID = c.PeerID
 	}
 	if expectNodeID == "" || nodeID != expectNodeID {
 		return fmt.Errorf("node_id mismatch")
-	}
-	if expectPurpose == "" || c.Purpose != expectPurpose {
-		return fmt.Errorf("purpose mismatch")
 	}
 	return nil
 }

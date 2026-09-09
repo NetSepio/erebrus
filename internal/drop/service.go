@@ -241,4 +241,3 @@ func (s *Service) observeOperation(operation string, err error) {
 	}
 	s.metrics.DropNodeOperations.WithLabelValues(operation, result).Inc()
 }
-

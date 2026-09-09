@@ -7,7 +7,7 @@ package registrar
 
 import (
 	"context"
-	"encoding/hex"
+	"fmt"
 	"log/slog"
 
 	"golang.org/x/crypto/sha3"
@@ -45,8 +45,7 @@ func New(mode string) Registrar {
 // HashIP returns the lowercase hex SHA3-256 of an IP string, used to obfuscate
 // node IPs anywhere they leave the operational trust boundary.
 func HashIP(ip string) string {
-	sum := sha3.Sum256([]byte(ip))
-	return hex.EncodeToString(sum[:])
+	return fmt.Sprintf("%x", sha3.Sum256([]byte(ip)))
 }
 
 type noop struct{}

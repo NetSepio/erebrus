@@ -7,11 +7,13 @@ package wg
 import (
 	"context"
 	"fmt"
+	"log/slog"
 	"net"
 	"os"
 	"path/filepath"
 	"strings"
 	"sync"
+	"time"
 
 	"github.com/NetSepio/erebrus/internal/config"
 	"github.com/NetSepio/erebrus/internal/store"
@@ -29,6 +31,7 @@ type Manager struct {
 	st   *store.Store
 	ctrl Controller
 
+	applyMu    sync.Mutex
 	mu         sync.RWMutex
 	privateKey string
 	publicKey  string
@@ -53,7 +56,11 @@ func (m *Manager) Init(ctx context.Context) error {
 	if err := m.writeServerConf(ctx); err != nil {
 		return err
 	}
-	return m.ctrl.BringUp(m.cfg.WGInterface, m.confPath())
+	if err := m.ctrl.BringUp(m.cfg.WGInterface, m.confPath()); err != nil {
+		return err
+	}
+	go m.expiryLoop(ctx)
+	return nil
 }
 
 // ServerPublicKey returns the node's WireGuard public key.
@@ -93,6 +100,8 @@ func (m *Manager) PeerTransfers() []PeerTransfer {
 // Apply re-renders the interface config from the current peer set and syncs the
 // live peer list. Call after any peer add/update/remove.
 func (m *Manager) Apply(ctx context.Context) error {
+	m.applyMu.Lock()
+	defer m.applyMu.Unlock()
 	if err := m.writeServerConf(ctx); err != nil {
 		return err
 	}
@@ -100,7 +109,7 @@ func (m *Manager) Apply(ctx context.Context) error {
 	if err != nil {
 		return err
 	}
-	return m.ctrl.SyncPeers(m.cfg.WGInterface, peers)
+	return m.ctrl.SyncPeers(m.cfg.WGInterface, activePeers(peers, time.Now()))
 }
 
 // ClientConfig renders a wg-quick config for a peer, with the private key left
@@ -162,12 +171,65 @@ func (m *Manager) writeServerConf(ctx context.Context) error {
 		PostUp:     m.cfg.WGPostUp,
 		PreDown:    m.cfg.WGPreDown,
 		PostDown:   m.cfg.WGPostDown,
-		Peers:      peers,
+		Peers:      activePeers(peers, time.Now()),
 	})
 	if err != nil {
 		return err
 	}
-	return os.WriteFile(m.confPath(), data, 0o600)
+	return writeFileAtomic(m.confPath(), data, 0o600)
+}
+
+func activePeers(peers []*store.Peer, now time.Time) []*store.Peer {
+	cutoff := now.Unix()
+	out := make([]*store.Peer, 0, len(peers))
+	for _, peer := range peers {
+		if peer.Enabled && (peer.ExpiresAt == 0 || peer.ExpiresAt > cutoff) {
+			out = append(out, peer)
+		}
+	}
+	return out
+}
+
+func writeFileAtomic(path string, data []byte, mode os.FileMode) (err error) {
+	tmp, err := os.CreateTemp(filepath.Dir(path), ".wg-conf-*")
+	if err != nil {
+		return err
+	}
+	tmpName := tmp.Name()
+	defer func() {
+		_ = tmp.Close()
+		if err != nil {
+			_ = os.Remove(tmpName)
+		}
+	}()
+	if err = tmp.Chmod(mode); err != nil {
+		return err
+	}
+	if _, err = tmp.Write(data); err != nil {
+		return err
+	}
+	if err = tmp.Sync(); err != nil {
+		return err
+	}
+	if err = tmp.Close(); err != nil {
+		return err
+	}
+	return os.Rename(tmpName, path)
+}
+
+func (m *Manager) expiryLoop(ctx context.Context) {
+	ticker := time.NewTicker(time.Minute)
+	defer ticker.Stop()
+	for {
+		select {
+		case <-ctx.Done():
+			return
+		case <-ticker.C:
+			if err := m.Apply(ctx); err != nil && ctx.Err() == nil {
+				slog.Warn("wireguard expiry sync failed", "err", err)
+			}
+		}
+	}
 }
 
 // serverAddress returns the server's own address inside the subnet as a CIDR,

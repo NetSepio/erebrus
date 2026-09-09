@@ -36,7 +36,7 @@ PreDown = {{ .PreDown }}
 PostDown = {{ .PostDown }}
 {{- end }}
 {{ range .Peers }}{{ if .Enabled }}
-# {{ .Name }} / {{ .Wallet }} / id={{ .ID }}
+# Erebrus managed peer
 [Peer]
 PublicKey = {{ .WGPublicKey }}
 {{- if .WGPresharedKey }}
@@ -57,7 +57,7 @@ PublicKey = {{ .ServerPublicKey }}
 {{- if .PresharedKey }}
 PresharedKey = {{ .PresharedKey }}
 {{- end }}
-AllowedIPs = 0.0.0.0/0, ::/0
+AllowedIPs = 0.0.0.0/0
 Endpoint = {{ .Endpoint }}
 PersistentKeepalive = 16
 `))

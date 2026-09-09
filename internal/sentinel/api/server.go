@@ -48,6 +48,8 @@ func (s *Server) ListenAndServe() error {
 	mux.HandleFunc("/metrics", s.handleMetrics)
 	srv := &http.Server{
 		Addr: s.addr, Handler: mux, ReadHeaderTimeout: 10 * time.Second,
+		ReadTimeout: 15 * time.Second, WriteTimeout: 30 * time.Second,
+		IdleTimeout: 60 * time.Second, MaxHeaderBytes: 1 << 20,
 	}
 	slog.Info("sentinel API listening", "addr", s.addr)
 	return srv.ListenAndServe()
@@ -71,6 +73,7 @@ func (s *Server) handleLicenseCheck(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
 		return
 	}
+	r.Body = http.MaxBytesReader(w, r.Body, 1<<20)
 	var req struct {
 		Licensed *bool `json:"licensed"`
 	}
@@ -89,9 +92,14 @@ func (s *Server) handlePolicyApply(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
 		return
 	}
+	r.Body = http.MaxBytesReader(w, r.Body, 1<<20)
 	var p policy.Policy
 	if err := json.NewDecoder(r.Body).Decode(&p); err != nil {
 		http.Error(w, "invalid body", http.StatusBadRequest)
+		return
+	}
+	if err := policy.Validate(p); err != nil {
+		http.Error(w, "invalid policy", http.StatusBadRequest)
 		return
 	}
 	if err := s.apply(p); err != nil {

@@ -9,6 +9,7 @@ import (
 	_ "embed"
 	"net/http"
 	"strconv"
+	"sync"
 
 	"github.com/NetSepio/erebrus/internal/config"
 	"github.com/NetSepio/erebrus/internal/drop"
@@ -50,6 +51,7 @@ type Server struct {
 	wireGuardPublicKey func() string
 	serviceSnapshotFn  func() map[string]string
 	drop               *drop.Service
+	mu                 sync.RWMutex
 }
 
 // NewServer builds the API server.
@@ -82,7 +84,15 @@ func (s *Server) SetStatus(status string) {
 	if status == "" {
 		status = "online"
 	}
+	s.mu.Lock()
 	s.status = status
+	s.mu.Unlock()
+}
+
+func (s *Server) currentStatus() string {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+	return s.status
 }
 
 // Router returns the configured Gin engine.
@@ -135,7 +145,7 @@ func (s *Server) handleStatus(c *gin.Context) {
 	if s.readinessFn != nil {
 		in = s.readinessFn()
 		in.Cfg = s.cfg
-		if in.IdentityConfigured == false && s.id.PeerID != "" {
+		if !in.IdentityConfigured && s.id.PeerID != "" {
 			in.IdentityConfigured = true
 		}
 	}
@@ -167,7 +177,7 @@ func (s *Server) handleStatus(c *gin.Context) {
 		NodeName:   s.cfg.NodeName,
 		Region:     s.cfg.Region,
 		Zone:       s.cfg.Zone,
-		Status:     s.status,
+		Status:     s.currentStatus(),
 		AccessMode: string(s.cfg.Mode.RuntimeMode),
 		PeerID:     s.id.PeerID,
 		DID:        s.id.DID,

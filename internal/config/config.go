@@ -72,13 +72,12 @@ type Config struct {
 	// node-local state
 	StateDir string
 
-
 	// Drop storage
-	DropEnabled             bool
-	DropStorageMax          string
-	DropStorageMaxBytes     int64
-	DropSwarmPort           string
-	DropWebUIEnabled        bool
+	DropEnabled         bool
+	DropStorageMax      string
+	DropStorageMaxBytes int64
+	DropSwarmPort       string
+	DropWebUIEnabled    bool
 
 	// registrar
 	ChainRegistration string // off | solana
@@ -115,66 +114,66 @@ func Load() *Config {
 		bindAddr = env("SERVER", "0.0.0.0")
 	}
 	c := &Config{
-		RunType:                 env("RUNTYPE", "release"),
-		BindAddr:                bindAddr,
-		HTTPPort:                env("HTTP_PORT", "9080"),
-		UnsafePublicAPI:         boolEnv("UNSAFE_PUBLIC_API", false),
-		NodeName:                env("NODE_NAME", hostnameOr("erebrus-node")),
-		Region:                  env("REGION", "unknown"),
-		Zone:                    env("ZONE", ""),
-		Version:                 Version,
-		Mnemonic:                os.Getenv("MNEMONIC"),
-		GatewayURL:              env("GATEWAY_URL", ""),
-		GatewayPeerMultiaddr:    env("GATEWAY_PEER_MULTIADDR", ""),
-		P2PListenPort:           env("P2P_LISTEN_PORT", "9002"),
-		NodeID:                  os.Getenv("NODE_ID"),
-		NodeToken:               os.Getenv("NODE_TOKEN"),
-		WalletChain:             env("WALLET_CHAIN", "SOLANA"),
-		NodeRegistrationToken:   firstEnv("EREBRUS_NODE_REGISTRATION_TOKEN", "EREBRUS_ORG_ENROLLMENT_SECRET", "ORG_ENROLLMENT_SECRET", ""),
-		APIPublicURL:            os.Getenv("API_PUBLIC_URL"),
-		GatewayAutoRegister:     boolEnv("GATEWAY_AUTO_REGISTER", true),
-		GatewayPublicKey:        os.Getenv("GATEWAY_PUBLIC_KEY"),
-		NodeKey:                 firstEnv("NODE_KEY", "NODE_API_TOKEN", ""),
-		NodeAPIToken:            firstEnv("NODE_KEY", "NODE_API_TOKEN", ""),
-		WGConfDir:               env("WG_CONF_DIR", "/etc/wireguard"),
-		WGInterface:             normalizeInterface(env("WG_INTERFACE_NAME", "wg0")),
-		WGEndpointHost:          os.Getenv("WG_ENDPOINT_HOST"),
-		WGEndpointPort:          firstEnv("WG_PORT", "WG_ENDPOINT_PORT", "51820"),
-		StealthTCPPort:          firstEnv("STEALTH_TCP_PORT", "VLESS_PORT", "443"),
-		StealthUDPPort:          firstEnv("STEALTH_UDP_PORT", "HYSTERIA2_PORT", "443"),
-		WGIPv4Subnet:            env("WG_IPv4_SUBNET", "10.0.0.1/16"),
-		WGDNS:                   env("WG_DNS", "1.1.1.1"),
-		WGPostUp:                os.Getenv("WG_POST_UP"),
-		WGPostDown:              os.Getenv("WG_POST_DOWN"),
-		WGPreUp:                 os.Getenv("WG_PRE_UP"),
-		WGPreDown:               os.Getenv("WG_PRE_DOWN"),
-		EnableStealth:           boolEnv("ENABLE_STEALTH", true),
-		VLESSPort:               "", // synced from StealthTCPPort below
-		Hysteria2Port:           "", // synced from StealthUDPPort below
-		RealityServerNames:      splitCSV(env("REALITY_SERVER_NAMES", "www.microsoft.com")),
-		RealityHandshakeServer:  env("REALITY_HANDSHAKE_SERVER", ""),
-		Hysteria2ObfsPassword:   os.Getenv("HYSTERIA2_OBFS_PASSWORD"),
-		EnableTUIC:              boolEnv("ENABLE_TUIC", false),
-		StateDir:                env("STATE_DIR", "/var/lib/erebrus"),
-		DropEnabled:             boolEnv("DROP_ENABLED", false),
-		DropStorageMax:          env("DROP_STORAGE_MAX", "10GB"),
-		DropSwarmPort:           env("DROP_SWARM_PORT", "4001"),
-		DropWebUIEnabled:        boolEnv("DROP_WEBUI_ENABLED", false),
-		ChainRegistration:       env("CHAIN_REGISTRATION", "off"),
-		PrivateDNSEnabled:       boolEnv("PRIVATE_DNS_ENABLED", false),
-		PrivateDNSDomain:        env("PRIVATE_DNS_DOMAIN", "ere"),
-		PrivateDNSAddr:          os.Getenv("PRIVATE_DNS_ADDR"),
-		UpstreamDNS:             env("UPSTREAM_DNS", "1.1.1.1"),
-		DNSQueryLogs:            boolEnv("DNS_QUERY_LOGS", false),
-		ErebrusProfile:          env("EREBRUS_PROFILE", ProfileStandard),
-		FirewallProvider:        env("FIREWALL_PROVIDER", ""),
-		FirewallDNSAddr:         os.Getenv("FIREWALL_DNS_ADDR"),
-		ShieldAdminURL:          os.Getenv("SHIELD_ADMIN_URL"),
-		ShieldAdminUser:         env("SHIELD_ADMIN_USER", "admin"),
-		ShieldAdminPassword:     os.Getenv("SHIELD_ADMIN_PASSWORD"),
-		ShieldUpstreamDNS:       env("SHIELD_UPSTREAM_DNS", "1.1.1.1,1.0.0.1"),
-		SentinelAPIURL:          os.Getenv("SENTINEL_API_URL"),
-		SentinelImage:           env("SENTINEL_IMAGE", "ghcr.io/netsepio/erebrus-sentinel:latest"),
+		RunType:                env("RUNTYPE", "release"),
+		BindAddr:               bindAddr,
+		HTTPPort:               env("HTTP_PORT", "9080"),
+		UnsafePublicAPI:        boolEnv("UNSAFE_PUBLIC_API", false),
+		NodeName:               env("NODE_NAME", hostnameOr("erebrus-node")),
+		Region:                 env("REGION", "unknown"),
+		Zone:                   env("ZONE", ""),
+		Version:                Version,
+		Mnemonic:               os.Getenv("MNEMONIC"),
+		GatewayURL:             env("GATEWAY_URL", ""),
+		GatewayPeerMultiaddr:   env("GATEWAY_PEER_MULTIADDR", ""),
+		P2PListenPort:          env("P2P_LISTEN_PORT", "9002"),
+		NodeID:                 os.Getenv("NODE_ID"),
+		NodeToken:              os.Getenv("NODE_TOKEN"),
+		WalletChain:            env("WALLET_CHAIN", "SOLANA"),
+		NodeRegistrationToken:  firstEnv("EREBRUS_NODE_REGISTRATION_TOKEN", "EREBRUS_ORG_ENROLLMENT_SECRET", "ORG_ENROLLMENT_SECRET", ""),
+		APIPublicURL:           os.Getenv("API_PUBLIC_URL"),
+		GatewayAutoRegister:    boolEnv("GATEWAY_AUTO_REGISTER", true),
+		GatewayPublicKey:       os.Getenv("GATEWAY_PUBLIC_KEY"),
+		NodeKey:                firstEnv("NODE_KEY", "NODE_API_TOKEN", ""),
+		NodeAPIToken:           firstEnv("NODE_KEY", "NODE_API_TOKEN", ""),
+		WGConfDir:              env("WG_CONF_DIR", "/etc/wireguard"),
+		WGInterface:            normalizeInterface(env("WG_INTERFACE_NAME", "wg0")),
+		WGEndpointHost:         os.Getenv("WG_ENDPOINT_HOST"),
+		WGEndpointPort:         firstEnv("WG_PORT", "WG_ENDPOINT_PORT", "51820"),
+		StealthTCPPort:         firstEnv("STEALTH_TCP_PORT", "VLESS_PORT", "443"),
+		StealthUDPPort:         firstEnv("STEALTH_UDP_PORT", "HYSTERIA2_PORT", "443"),
+		WGIPv4Subnet:           env("WG_IPv4_SUBNET", "10.0.0.1/16"),
+		WGDNS:                  env("WG_DNS", "1.1.1.1"),
+		WGPostUp:               os.Getenv("WG_POST_UP"),
+		WGPostDown:             os.Getenv("WG_POST_DOWN"),
+		WGPreUp:                os.Getenv("WG_PRE_UP"),
+		WGPreDown:              os.Getenv("WG_PRE_DOWN"),
+		EnableStealth:          boolEnv("ENABLE_STEALTH", true),
+		VLESSPort:              "", // synced from StealthTCPPort below
+		Hysteria2Port:          "", // synced from StealthUDPPort below
+		RealityServerNames:     splitCSV(env("REALITY_SERVER_NAMES", "www.microsoft.com")),
+		RealityHandshakeServer: env("REALITY_HANDSHAKE_SERVER", ""),
+		Hysteria2ObfsPassword:  os.Getenv("HYSTERIA2_OBFS_PASSWORD"),
+		EnableTUIC:             boolEnv("ENABLE_TUIC", false),
+		StateDir:               env("STATE_DIR", "/var/lib/erebrus"),
+		DropEnabled:            boolEnv("DROP_ENABLED", false),
+		DropStorageMax:         env("DROP_STORAGE_MAX", "10GB"),
+		DropSwarmPort:          env("DROP_SWARM_PORT", "4001"),
+		DropWebUIEnabled:       boolEnv("DROP_WEBUI_ENABLED", false),
+		ChainRegistration:      env("CHAIN_REGISTRATION", "off"),
+		PrivateDNSEnabled:      boolEnv("PRIVATE_DNS_ENABLED", false),
+		PrivateDNSDomain:       env("PRIVATE_DNS_DOMAIN", "ere"),
+		PrivateDNSAddr:         os.Getenv("PRIVATE_DNS_ADDR"),
+		UpstreamDNS:            env("UPSTREAM_DNS", "1.1.1.1"),
+		DNSQueryLogs:           boolEnv("DNS_QUERY_LOGS", false),
+		ErebrusProfile:         env("EREBRUS_PROFILE", ProfileStandard),
+		FirewallProvider:       env("FIREWALL_PROVIDER", ""),
+		FirewallDNSAddr:        os.Getenv("FIREWALL_DNS_ADDR"),
+		ShieldAdminURL:         os.Getenv("SHIELD_ADMIN_URL"),
+		ShieldAdminUser:        env("SHIELD_ADMIN_USER", "admin"),
+		ShieldAdminPassword:    os.Getenv("SHIELD_ADMIN_PASSWORD"),
+		ShieldUpstreamDNS:      env("SHIELD_UPSTREAM_DNS", "1.1.1.1,1.0.0.1"),
+		SentinelAPIURL:         os.Getenv("SENTINEL_API_URL"),
+		SentinelImage:          env("SENTINEL_IMAGE", "ghcr.io/netsepio/erebrus-sentinel:latest"),
 	}
 	c.ApplyProfileDefaults()
 	if mode, err := ParseModeSettingsFromEnv(); err == nil {
@@ -222,6 +221,21 @@ func (c *Config) Validate() error {
 	if len(missing) > 0 {
 		return fmt.Errorf("missing required config: %s", strings.Join(missing, ", "))
 	}
+	for name, value := range map[string]string{
+		"HTTP_PORT":        c.HTTPPort,
+		"P2P_LISTEN_PORT":  c.P2PListenPort,
+		"WG_ENDPOINT_PORT": c.WGEndpointPort,
+		"STEALTH_TCP_PORT": c.StealthTCPPort,
+		"STEALTH_UDP_PORT": c.StealthUDPPort,
+	} {
+		port, err := strconv.Atoi(value)
+		if err != nil || port < 1 || port > 65535 {
+			return fmt.Errorf("%s must be a valid port", name)
+		}
+	}
+	if !validInterfaceName(c.WGInterface) {
+		return fmt.Errorf("WG_INTERFACE_NAME contains invalid characters")
+	}
 	if c.StealthTCPPort != "443" || c.StealthUDPPort != "443" {
 		c.Mode.Warnings = append(c.Mode.Warnings,
 			"WARNING: Stealth should expose 443/tcp and 443/udp (STEALTH_TCP_PORT/STEALTH_UDP_PORT) for reachability through restrictive networks.")
@@ -239,6 +253,20 @@ func (c *Config) Validate() error {
 		}
 	}
 	return c.ValidateProfile()
+}
+
+func validInterfaceName(value string) bool {
+	if value == "" || len(value) > 15 {
+		return false
+	}
+	for _, r := range value {
+		if (r >= 'a' && r <= 'z') || (r >= 'A' && r <= 'Z') ||
+			(r >= '0' && r <= '9') || r == '_' || r == '-' || r == '.' {
+			continue
+		}
+		return false
+	}
+	return true
 }
 
 // DBPath is the SQLite file path.
@@ -405,4 +433,3 @@ func hostnameOr(def string) string {
 	}
 	return def
 }
-

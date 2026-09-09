@@ -49,7 +49,7 @@ func (p *LocalProber) Probe(_ context.Context, kinds []transport.Kind) []transpo
 		default:
 			r.Error = "not implemented"
 		}
-		transport.Score(r, false, false)
+		r.Score = transport.Score(r, false, false)
 		out = append(out, r)
 	}
 	return out

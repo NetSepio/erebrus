@@ -46,31 +46,27 @@ type Client struct {
 	cmds   CommandHandler
 	status func() string
 
-	mu           sync.Mutex
-	heartbeatSec int
-	lastUsage    map[string]peerCounters
-	onReconnect  func()
-	refreshToken func(context.Context) (string, error)
-	connected    atomic.Bool
-}
-
-type peerCounters struct {
-	rx int64
-	tx int64
+	mu               sync.Mutex
+	writeMu          sync.Mutex
+	heartbeatSec     int
+	heartbeatUpdates chan time.Duration
+	onReconnect      func()
+	refreshToken     func(context.Context) (string, error)
+	connected        atomic.Bool
 }
 
 // New constructs a gateway WebSocket client.
 func New(gatewayURL, nodeID, nodeToken string, snap SnapshotProvider, cmds CommandHandler, status func() string) *Client {
 	return &Client{
-		gatewayURL:   strings.TrimRight(gatewayURL, "/"),
-		nodeID:       nodeID,
-		nodeToken:    nodeToken,
-		snap:         snap,
-		cmds:         cmds,
-		status:       status,
-		heartbeatSec: defaultHeartbeatSec,
-		lastUsage:    map[string]peerCounters{},
-		log:          slog.Default(),
+		gatewayURL:       strings.TrimRight(gatewayURL, "/"),
+		nodeID:           nodeID,
+		nodeToken:        nodeToken,
+		snap:             snap,
+		cmds:             cmds,
+		status:           status,
+		heartbeatSec:     defaultHeartbeatSec,
+		heartbeatUpdates: make(chan time.Duration, 1),
+		log:              slog.Default(),
 	}
 }
 
@@ -172,7 +168,7 @@ func (c *Client) session(ctx context.Context) error {
 
 	select {
 	case <-ctx.Done():
-		_ = ws.WriteMessage(websocket.CloseMessage, websocket.FormatCloseMessage(websocket.CloseNormalClosure, ""))
+		_ = c.writeMessage(ws, websocket.CloseMessage, websocket.FormatCloseMessage(websocket.CloseNormalClosure, ""))
 		return ctx.Err()
 	case err := <-errCh:
 		return err
@@ -185,8 +181,7 @@ func (c *Client) sendHello(ws *websocket.Conn) error {
 	if err != nil {
 		return err
 	}
-	_ = ws.SetWriteDeadline(time.Now().Add(writeWait))
-	return ws.WriteMessage(websocket.TextMessage, frame)
+	return c.writeMessage(ws, websocket.TextMessage, frame)
 }
 
 func (c *Client) readPump(ctx context.Context, ws *websocket.Conn) error {
@@ -219,9 +214,19 @@ func (c *Client) handleFrame(ctx context.Context, ws *websocket.Conn, raw []byte
 			return err
 		}
 		if ack.HeartbeatIntervalSec > 0 {
+			interval := time.Duration(ack.HeartbeatIntervalSec) * time.Second
 			c.mu.Lock()
 			c.heartbeatSec = ack.HeartbeatIntervalSec
 			c.mu.Unlock()
+			select {
+			case c.heartbeatUpdates <- interval:
+			default:
+				select {
+				case <-c.heartbeatUpdates:
+				default:
+				}
+				c.heartbeatUpdates <- interval
+			}
 		}
 		if c.onReconnect != nil {
 			c.onReconnect()
@@ -236,8 +241,7 @@ func (c *Client) handleFrame(ctx context.Context, ws *websocket.Conn, raw []byte
 		if err != nil {
 			return err
 		}
-		_ = ws.SetWriteDeadline(time.Now().Add(writeWait))
-		return ws.WriteMessage(websocket.TextMessage, frame)
+		return c.writeMessage(ws, websocket.TextMessage, frame)
 	default:
 		c.log.Debug("ignore gateway message", "type", env.Type)
 	}
@@ -254,7 +258,7 @@ func (c *Client) writePump(ctx context.Context, ws *websocket.Conn) error {
 	hbTicker := time.NewTicker(time.Duration(hbSec) * time.Second)
 	usageTicker := time.NewTicker(usageInterval)
 	pingTicker := time.NewTicker(pingPeriod)
-	defer hbTicker.Stop()
+	defer func() { hbTicker.Stop() }()
 	defer usageTicker.Stop()
 	defer pingTicker.Stop()
 
@@ -262,6 +266,11 @@ func (c *Client) writePump(ctx context.Context, ws *websocket.Conn) error {
 		select {
 		case <-ctx.Done():
 			return ctx.Err()
+		case interval := <-c.heartbeatUpdates:
+			if interval > 0 {
+				hbTicker.Stop()
+				hbTicker = time.NewTicker(interval)
+			}
 		case <-hbTicker.C:
 			status := "online"
 			if c.status != nil {
@@ -272,15 +281,17 @@ func (c *Client) writePump(ctx context.Context, ws *websocket.Conn) error {
 			if err != nil {
 				return err
 			}
-			_ = ws.SetWriteDeadline(time.Now().Add(writeWait))
-			if err := ws.WriteMessage(websocket.TextMessage, frame); err != nil {
+			if err := c.writeMessage(ws, websocket.TextMessage, frame); err != nil {
 				return err
 			}
+			c.mu.Lock()
+			nodeToken := c.nodeToken
+			c.mu.Unlock()
 			// Best-effort REST heartbeat keeps org_nodes.last_seen_at in sync when WS is up.
 			go func(h Heartbeat) {
 				ctx, cancel := context.WithTimeout(context.Background(), 8*time.Second)
 				defer cancel()
-				if err := PostRESTHeartbeat(ctx, c.gatewayURL, c.nodeID, c.nodeToken, h); err != nil {
+				if err := PostRESTHeartbeat(ctx, c.gatewayURL, c.nodeID, nodeToken, h); err != nil {
 					c.log.Debug("rest heartbeat failed", "err", err)
 				}
 			}(hb)
@@ -290,15 +301,20 @@ func (c *Client) writePump(ctx context.Context, ws *websocket.Conn) error {
 			if err != nil {
 				return err
 			}
-			_ = ws.SetWriteDeadline(time.Now().Add(writeWait))
-			if err := ws.WriteMessage(websocket.TextMessage, frame); err != nil {
+			if err := c.writeMessage(ws, websocket.TextMessage, frame); err != nil {
 				return err
 			}
 		case <-pingTicker.C:
-			_ = ws.SetWriteDeadline(time.Now().Add(writeWait))
-			if err := ws.WriteMessage(websocket.PingMessage, nil); err != nil {
+			if err := c.writeMessage(ws, websocket.PingMessage, nil); err != nil {
 				return err
 			}
 		}
 	}
+}
+
+func (c *Client) writeMessage(ws *websocket.Conn, messageType int, data []byte) error {
+	c.writeMu.Lock()
+	defer c.writeMu.Unlock()
+	_ = ws.SetWriteDeadline(time.Now().Add(writeWait))
+	return ws.WriteMessage(messageType, data)
 }

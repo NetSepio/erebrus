@@ -32,6 +32,7 @@ Add `--drop` to run the optional Kubo/IPFS storage sidecar. `--no-drop` stops Dr
 | 51820 | udp       | WireGuard fast path                         |
 | 443   | tcp       | VLESS + REALITY stealth carrier (all nodes) |
 | 443   | udp       | Hysteria2 stealth carrier (all nodes)       |
+| 9002  | tcp       | Erebrus libp2p/DHT listener                 |
 | 4001  | tcp + udp | Kubo swarm — **Drop only**                  |
 
 Open the ports required by the selected features in your cloud firewall / security group. `443/tcp` is not used by Drop. UDP can't be probed remotely, so double-check 51820, 443/udp, and Drop's 4001/udp when enabled. The installer probes `4001/tcp`. Kubo admin RPC `5001` and the raw Kubo gateway `8080` are internal-only and must not be published.
@@ -146,7 +147,7 @@ The bundle returns the WireGuard config plus `vless://` / `hysteria2://` share U
 
 ## Troubleshooting
 
-* **`reality server is not included in this build`** — the binary was built without `-tags with_reality_server`. Use `make build` / the provided Dockerfile.
+* **`reality server is not included in this build`** — the binary was built without `-tags with_utls`. Use `make build` / the provided Dockerfile.
 * **WireGuard interface won't come up** — the host needs the `wireguard` kernel module and `NET_ADMIN`. In containers, run with `--cap-add=NET_ADMIN` (compose already does). Load it on the host with `modprobe wireguard` if missing.
 * **Peer create returns 500 in local dev** — expected when there's no live WG device; the credentials endpoint still renders bundles. On a real host with `NET_ADMIN` it succeeds.
 * **Stealth ports not reachable** — confirm the cloud firewall allows 443/tcp and 443/udp; `ss -tlnp | grep 443` and `ss -ulnp | grep 443` show them locally.

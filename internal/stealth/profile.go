@@ -108,7 +108,7 @@ func (m *Manager) singboxProfile(p Params, serverWGPub, clientAddrCIDR, psk stri
 		"address":                       "127.0.0.1",
 		"port":                          m.cfg.WGEndpointPortInt(),
 		"public_key":                    serverWGPub,
-		"allowed_ips":                   []string{"0.0.0.0/0", "::/0"},
+		"allowed_ips":                   []string{"0.0.0.0/0"},
 		"persistent_keepalive_interval": 25,
 	}
 	if psk != "" {

@@ -1,9 +1,13 @@
 package stealth
 
 import (
+	"github.com/sagernet/sing-box/adapter/certificate"
 	"github.com/sagernet/sing-box/adapter/endpoint"
 	"github.com/sagernet/sing-box/adapter/inbound"
 	"github.com/sagernet/sing-box/adapter/outbound"
+	"github.com/sagernet/sing-box/adapter/service"
+	"github.com/sagernet/sing-box/dns"
+	"github.com/sagernet/sing-box/dns/transport/local"
 	"github.com/sagernet/sing-box/protocol/direct"
 	"github.com/sagernet/sing-box/protocol/hysteria2"
 	"github.com/sagernet/sing-box/protocol/vless"
@@ -30,4 +34,18 @@ func outboundRegistry() *outbound.Registry {
 
 func endpointRegistry() *endpoint.Registry {
 	return endpoint.NewRegistry()
+}
+
+func dnsTransportRegistry() *dns.TransportRegistry {
+	r := dns.NewTransportRegistry()
+	local.RegisterTransport(r)
+	return r
+}
+
+func serviceRegistry() *service.Registry {
+	return service.NewRegistry()
+}
+
+func certificateProviderRegistry() *certificate.Registry {
+	return certificate.NewRegistry()
 }

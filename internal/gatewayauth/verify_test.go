@@ -21,3 +21,22 @@ func TestValidatePurposeClaimsAcceptsPeerIDAlias(t *testing.T) {
 		t.Fatal(err)
 	}
 }
+
+func TestValidatePurposeClaimsRejectsMissingTarget(t *testing.T) {
+	claims := &Claims{Role: roleGatewayCall, Purpose: "drop_status"}
+	if err := validatePurposeClaims(claims, "12D3node", "drop_status"); err == nil {
+		t.Fatal("expected missing node target to be rejected")
+	}
+}
+
+func TestValidateNodeClaimsRequiresExactTarget(t *testing.T) {
+	if err := validateNodeClaims(&Claims{}, "12D3node"); err == nil {
+		t.Fatal("expected missing target rejection")
+	}
+	if err := validateNodeClaims(&Claims{PeerID: "12D3other"}, "12D3node"); err == nil {
+		t.Fatal("expected mismatched target rejection")
+	}
+	if err := validateNodeClaims(&Claims{PeerID: "12D3node"}, "12D3node"); err != nil {
+		t.Fatalf("peer_id alias rejected: %v", err)
+	}
+}

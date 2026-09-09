@@ -4,6 +4,7 @@ package policy
 import (
 	"encoding/json"
 	"fmt"
+	"net"
 	"os"
 	"path/filepath"
 	"strings"
@@ -33,6 +34,9 @@ type Writer struct {
 
 // Apply writes blocklist, allowlist, rewrites, and upstreams fragments.
 func (w *Writer) Apply(p Policy) error {
+	if err := Validate(p); err != nil {
+		return err
+	}
 	if err := os.MkdirAll(w.Dir, 0o755); err != nil {
 		return err
 	}
@@ -50,6 +54,61 @@ func (w *Writer) Apply(p Policy) error {
 		}
 	}
 	return nil
+}
+
+// Validate rejects values that cannot safely be rendered into Unbound config.
+func Validate(p Policy) error {
+	if len(p.Rules) > 10_000 || len(p.Upstreams) > 32 {
+		return fmt.Errorf("policy exceeds rule or upstream limit")
+	}
+	for _, rule := range p.Rules {
+		if !rule.Enabled {
+			continue
+		}
+		target := strings.TrimPrefix(strings.TrimSpace(rule.Target), "*.")
+		if !validDomain(target) {
+			return fmt.Errorf("invalid policy domain %q", rule.Target)
+		}
+		action := strings.ToLower(strings.TrimSpace(rule.Action))
+		if action == "rewrite" || action == "dns_rewrite" {
+			if net.ParseIP(strings.TrimSpace(rule.Value)) == nil {
+				return fmt.Errorf("invalid rewrite address for %q", rule.Target)
+			}
+		}
+	}
+	for _, upstream := range p.Upstreams {
+		value := strings.TrimPrefix(strings.TrimPrefix(strings.TrimSpace(upstream), "tls://"), "https://")
+		if value == "" || len(value) > 253 {
+			return fmt.Errorf("invalid upstream %q", upstream)
+		}
+		for _, r := range value {
+			if (r >= 'a' && r <= 'z') || (r >= 'A' && r <= 'Z') ||
+				(r >= '0' && r <= '9') || strings.ContainsRune(".:-_@#", r) {
+				continue
+			}
+			return fmt.Errorf("invalid upstream %q", upstream)
+		}
+	}
+	return nil
+}
+
+func validDomain(value string) bool {
+	value = strings.TrimSuffix(strings.ToLower(strings.TrimSpace(value)), ".")
+	if value == "" || len(value) > 253 {
+		return false
+	}
+	for _, label := range strings.Split(value, ".") {
+		if label == "" || len(label) > 63 || label[0] == '-' || label[len(label)-1] == '-' {
+			return false
+		}
+		for _, r := range label {
+			if (r >= 'a' && r <= 'z') || (r >= '0' && r <= '9') || r == '-' {
+				continue
+			}
+			return false
+		}
+	}
+	return true
 }
 
 func (w *Writer) render(p Policy) (blocks, allows, rewrites, upstreams string) {
@@ -77,8 +136,12 @@ func (w *Writer) render(p Policy) (blocks, allows, rewrites, upstreams string) {
 			if val == "" || val == "rewrite" || val == "dns_rewrite" {
 				continue
 			}
+			recordType := "A"
+			if ip := net.ParseIP(val); ip != nil && ip.To4() == nil {
+				recordType = "AAAA"
+			}
 			rewrites += fmt.Sprintf("local-zone: %q static\n", target)
-			rewrites += fmt.Sprintf("local-data: %q 60 IN A %s\n", target, val)
+			rewrites += fmt.Sprintf("local-data: %q 60 IN %s %s\n", target, recordType, val)
 		}
 	}
 	if len(p.Upstreams) > 0 {

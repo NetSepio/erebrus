@@ -14,16 +14,25 @@ jobs:
         with:
           go-version-file: go.mod
           cache: true
-      # with_reality_server enables the sing-box REALITY server (stealth carrier);
+      - name: Verify formatting
+        run: test -z "$(gofmt -l $(git ls-files '*.go'))"
+      # with_utls enables the sing-box REALITY server (stealth carrier);
       # required or the stealth start-test fails. Keep in sync with Makefile/Dockerfile.
-      - run: go vet -tags with_reality_server ./...
-      - run: go build -tags with_reality_server ./...
-      - run: go test -tags with_reality_server ./...
+      - run: go vet -tags with_utls ./...
+      - run: go build -tags with_utls ./...
+      - run: go test -tags with_utls ./...
+      - name: Check reachable Go vulnerabilities
+        # Non-blocking while GO-2024-3218 (Kademlia censorship) has no upstream
+        # fixed version. The report still makes any new findings visible in CI.
+        continue-on-error: true
+        run: go run golang.org/x/vuln/cmd/govulncheck@v1.8.0 -tags with_utls ./...
       - uses: golangci/golangci-lint-action@v6
+        # Existing repository-wide lint debt is tracked separately; keep the
+        # report visible while formatting, vet, build, and tests are blocking.
         continue-on-error: true
         with:
           version: latest
-          args: --build-tags with_reality_server
+          args: --build-tags with_utls
 
   gitleaks:
     runs-on: ubuntu-latest

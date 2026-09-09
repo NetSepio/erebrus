@@ -11,6 +11,7 @@ import (
 
 func (s *Server) handlePutPeer(c *gin.Context) {
 	id := c.Param("id")
+	c.Request.Body = http.MaxBytesReader(c.Writer, c.Request.Body, 1<<20)
 	var req PeerRequest
 	if err := c.ShouldBindJSON(&req); err != nil {
 		c.JSON(http.StatusBadRequest, gin.H{"error": "invalid JSON body"})
@@ -20,7 +21,7 @@ func (s *Server) handlePutPeer(c *gin.Context) {
 		c.JSON(http.StatusBadRequest, gin.H{"error": "name and wg_public_key are required"})
 		return
 	}
-	if s.status == "draining" {
+	if s.currentStatus() == "draining" {
 		c.JSON(http.StatusConflict, gin.H{"error": "node is draining"})
 		return
 	}

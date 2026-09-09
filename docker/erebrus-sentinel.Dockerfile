@@ -1,13 +1,13 @@
 # syntax=docker/dockerfile:1
 
-FROM golang:alpine AS build
+FROM golang:1.26.8-alpine3.23 AS build
 WORKDIR /app
 COPY go.mod go.sum ./
 RUN go mod download
 COPY . .
 RUN go build -o erebrus-sentinel ./cmd/erebrus-sentinel
 
-FROM alpine:latest
+FROM alpine:3.23.5
 RUN apk add --no-cache ca-certificates wget unbound
 WORKDIR /app
 COPY --from=build /app/erebrus-sentinel /usr/local/bin/erebrus-sentinel

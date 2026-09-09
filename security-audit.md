@@ -142,7 +142,7 @@ Kubo RPC `5001` controls pins, configuration, and repository operations. The sup
 
 ## 5. Release-readiness notes
 
-**Done:** reproducible `-tags with_reality_server` builds; gitleaks CI; `/healthz`; node self-speedtest on heartbeats (`internal/speedtest`).
+**Done:** reproducible `-tags with_utls` builds; gitleaks CI; `/healthz`; node self-speedtest on heartbeats (`internal/speedtest`).
 
 **Operator awareness (not blockers):**
 

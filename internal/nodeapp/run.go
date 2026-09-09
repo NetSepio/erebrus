@@ -87,7 +87,7 @@ func Run(cfg *config.Config) error {
 		defer stealthMgr.Close()
 	}
 
-	p2pNode, err := p2p.Start(ctx, cfg.Mnemonic, cfg.P2PListenPort, cfg.GatewayPeerMultiaddr)
+	p2pNode, err := p2p.Start(ctx, cfg.Mnemonic, cfg.P2PListenPort, cfg.WGEndpointHost, cfg.GatewayPeerMultiaddr)
 	if err != nil {
 		slog.Warn("libp2p host failed to start", "err", err)
 	} else {
@@ -109,7 +109,7 @@ func Run(cfg *config.Config) error {
 	if cfg.HasFirewallService() && cfg.FirewallProvider == config.FirewallUnboundErebrus {
 		if licensed, err := fwClient.CheckLicense(ctx); err != nil {
 			slog.Warn("sentinel license check failed", "err", err)
-			cfg.SentinelLicensed = true // dev fallback when sidecar not up yet
+			cfg.SentinelLicensed = false
 		} else {
 			cfg.SentinelLicensed = licensed
 		}
@@ -279,6 +279,8 @@ func Run(cfg *config.Config) error {
 	srv := &http.Server{
 		Addr: fmt.Sprintf("%s:%s", cfg.BindAddr, cfg.HTTPPort), Handler: apiServer.Router(),
 		ReadHeaderTimeout: 10 * time.Second,
+		IdleTimeout:       60 * time.Second,
+		MaxHeaderBytes:    1 << 20,
 	}
 
 	go func() {

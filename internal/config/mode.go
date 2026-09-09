@@ -139,7 +139,6 @@ func (m ModeSettings) IsPublic() bool { return m.RuntimeMode == ModePublic }
 // IsGateway is deprecated; use IsPublic.
 func (m ModeSettings) IsGateway() bool { return m.IsPublic() }
 
-
 // GatewayAccessMode maps local access policy to gateway public|private.
 func (m ModeSettings) GatewayAccessMode() string {
 	if m.RuntimeMode == ModePublic {
