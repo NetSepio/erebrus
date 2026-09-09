@@ -2,7 +2,6 @@ package wg
 
 import (
 	"fmt"
-	"net"
 	"os/exec"
 	"strings"
 	"time"
@@ -34,7 +33,9 @@ type PeerTransfer struct {
 type Controller interface {
 	// BringUp (re)creates the interface from the rendered conf file.
 	BringUp(iface, confPath string) error
-	// SyncPeers replaces the live peer set on iface to match peers.
+	// SyncPeers incrementally updates the live peer set on iface to match
+	// peers. Unchanged peers keep handshake state, learned endpoints, and
+	// transfer counters.
 	SyncPeers(iface string, peers []*store.Peer) error
 	// Stats reads live transfer counters and active-peer count from the device.
 	Stats(iface string) (DeviceStats, error)
@@ -65,36 +66,19 @@ func (r *realController) SyncPeers(iface string, peers []*store.Peer) error {
 	}
 	defer cl.Close()
 
-	cfgs := make([]wgtypes.PeerConfig, 0, len(peers))
-	for _, p := range peers {
-		if !p.Enabled {
-			continue
-		}
-		pub, err := wgtypes.ParseKey(p.WGPublicKey)
-		if err != nil {
-			return fmt.Errorf("peer %s bad public key: %w", p.ID, err)
-		}
-		pc := wgtypes.PeerConfig{
-			PublicKey:         pub,
-			ReplaceAllowedIPs: true,
-		}
-		if p.WGPresharedKey != "" {
-			psk, err := wgtypes.ParseKey(p.WGPresharedKey)
-			if err != nil {
-				return fmt.Errorf("peer %s bad preshared key: %w", p.ID, err)
-			}
-			pc.PresharedKey = &psk
-		}
-		_, ipnet, err := net.ParseCIDR(p.WGAllowedIP)
-		if err != nil {
-			return fmt.Errorf("peer %s bad allowed ip: %w", p.ID, err)
-		}
-		pc.AllowedIPs = []net.IPNet{*ipnet}
-		cfgs = append(cfgs, pc)
+	dev, err := cl.Device(iface)
+	if err != nil {
+		return fmt.Errorf("read live peers: %w", err)
 	}
-
+	cfgs, err := peerSyncDiff(dev.Peers, peers)
+	if err != nil {
+		return err
+	}
+	if len(cfgs) == 0 {
+		return nil
+	}
 	return cl.ConfigureDevice(iface, wgtypes.Config{
-		ReplacePeers: true,
+		ReplacePeers: false,
 		Peers:        cfgs,
 	})
 }

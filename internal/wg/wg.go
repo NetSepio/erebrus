@@ -225,11 +225,32 @@ func (m *Manager) expiryLoop(ctx context.Context) {
 		case <-ctx.Done():
 			return
 		case <-ticker.C:
-			if err := m.Apply(ctx); err != nil && ctx.Err() == nil {
+			if err := m.expireOnce(ctx); err != nil && ctx.Err() == nil {
 				slog.Warn("wireguard expiry sync failed", "err", err)
 			}
 		}
 	}
+}
+
+func (m *Manager) expireOnce(ctx context.Context) error {
+	peers, err := m.st.ListPeers(ctx)
+	if err != nil {
+		return err
+	}
+	if !hasExpiredEnabledPeer(peers, time.Now()) {
+		return nil
+	}
+	return m.Apply(ctx)
+}
+
+func hasExpiredEnabledPeer(peers []*store.Peer, now time.Time) bool {
+	cutoff := now.Unix()
+	for _, peer := range peers {
+		if peer.Enabled && peer.ExpiresAt > 0 && peer.ExpiresAt <= cutoff {
+			return true
+		}
+	}
+	return false
 }
 
 // serverAddress returns the server's own address inside the subnet as a CIDR,
