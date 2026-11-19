@@ -3,9 +3,11 @@ package firewall
 import (
 	"context"
 	"encoding/json"
+	"fmt"
 	"net/http"
 	"net/http/httptest"
 	"slices"
+	"strings"
 	"testing"
 
 	"github.com/NetSepio/erebrus/internal/config"
@@ -279,5 +281,100 @@ func TestSyncShieldRejectsInvalidSnapshotsBeforeApplying(t *testing.T) {
 		if v, err := c.Sync(context.Background(), json.RawMessage(input)); err == nil || v != nil {
 			t.Errorf("Sync(%q) returned version %v, error %v", input, v, err)
 		}
+	}
+}
+
+func TestConfigureAdminSeedsBlocklistsOnFirstInstall(t *testing.T) {
+	// Exercise both an empty installation and AdGuard's bundled ads filter.
+	for _, test := range []struct {
+		name    string
+		bundled bool
+	}{{"empty", false}, {"bundled", true}} {
+		t.Run(test.name, func(t *testing.T) {
+			const ads = "https://adguardteam.github.io/HostlistsRegistry/assets/filter_1.txt"
+			const malware = "https://adguardteam.github.io/HostlistsRegistry/assets/filter_11.txt"
+			subscriptions := map[string]bool{}
+			if test.bundled {
+				subscriptions[ads] = true
+			}
+			installs, statusReads, additions := 0, 0, 0
+			failMalware := true
+			server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+				if !strings.HasPrefix(r.URL.Path, "/control/install/") {
+					if u, p, ok := r.BasicAuth(); !ok || u != "admin" || p != "secret" {
+						t.Error("missing admin credentials")
+						http.Error(w, "forbidden", 403)
+						return
+					}
+				}
+				switch r.Method + " " + r.URL.Path {
+				case "GET /control/install/get_addresses":
+					if installs > 0 {
+						http.NotFound(w, r)
+						return
+					}
+					fmt.Fprint(w, `{"web_port":3000}`)
+				case "POST /control/install/configure":
+					installs++
+				case "GET /control/dns_info":
+					fmt.Fprint(w, `{"upstream_dns":["192.0.2.53"]}`)
+				case "GET /control/filtering/status":
+					statusReads++
+					var filters []map[string]string
+					for url := range subscriptions {
+						filters = append(filters, map[string]string{"url": url})
+					}
+					json.NewEncoder(w).Encode(map[string]any{"filters": filters})
+				case "POST /control/filtering/add_url":
+					var req struct {
+						Name      string
+						URL       string
+						Whitelist bool
+					}
+					if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+						t.Error(err)
+						http.Error(w, "invalid", 400)
+						return
+					}
+					if subscriptions[req.URL] || req.Name == "" || req.Whitelist || (req.URL != ads && req.URL != malware) {
+						t.Errorf("unexpected subscription %+v", req)
+					}
+					if req.URL == malware && failMalware {
+						failMalware = false
+						http.Error(w, "download unavailable", 502)
+						return
+					}
+					additions++
+					subscriptions[req.URL] = true
+				default:
+					t.Errorf("unexpected %s %s", r.Method, r.URL.Path)
+					http.NotFound(w, r)
+				}
+			}))
+			defer server.Close()
+			c := shieldClient(server.URL)
+			if err := c.ConfigureAdmin(context.Background()); err == nil {
+				t.Fatal("expected first download to fail")
+			}
+			c = New(c.cfg, c.settings)
+			if err := c.ConfigureAdmin(context.Background()); err != nil {
+				t.Fatal(err)
+			}
+			wantAdds := 2
+			if test.bundled {
+				wantAdds = 1
+			}
+			if !subscriptions[ads] || !subscriptions[malware] || additions != wantAdds {
+				t.Fatalf("subscriptions %v, additions %d", subscriptions, additions)
+			}
+			// An operator can unsubscribe after setup; a restart must honor that.
+			delete(subscriptions, malware)
+			if err := c.ConfigureAdmin(context.Background()); err != nil {
+				t.Fatal(err)
+			}
+			if subscriptions[malware] || installs != 1 || statusReads != 2 {
+				t.Fatalf("installs=%d reads=%d subscriptions=%v", installs, statusReads, subscriptions)
+			}
+		})
 	}
 }

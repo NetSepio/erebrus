@@ -178,10 +178,8 @@ func (c *Client) configureBody(user, password string) []byte {
 	return body
 }
 
-// ConfigureAdmin sets the AdGuard admin credentials on a freshly-installed Shield
-// node via the install API, then swaps AdGuard's stock upstream for fast UDP
-// resolvers. No-op for non-Shield or when no password is set. Best-effort: an
-// already-configured AdGuard rejects the install call, which is ignored.
+// ConfigureAdmin finishes fresh AdGuard installs and resumes interrupted seeding.
+// Existing installations retain the operator's blocklist choices.
 func (c *Client) ConfigureAdmin(ctx context.Context) error {
 	c.shieldMu.Lock()
 	defer c.shieldMu.Unlock()
@@ -190,10 +188,64 @@ func (c *Client) ConfigureAdmin(ctx context.Context) error {
 	}
 	base := strings.TrimRight(c.cfg.ShieldAdminURL, "/")
 	if base == "" {
-		return nil
+		return fmt.Errorf("Shield admin URL is missing")
 	}
-	_ = c.post(ctx, base+"/control/install/configure", c.configureBody(c.adminUser(), c.cfg.ShieldAdminPassword))
-	return c.ensureShieldUpstreams(ctx)
+	// The install API is only available before setup. Record intent before
+	// configuring: once AdGuard accepts the credentials this API disappears.
+	const pending = "shield_initial_blocklists_pending"
+	if err := c.getAuthJSON(ctx, base+"/control/install/get_addresses", &struct{}{}); err == nil {
+		if err := c.settings.SetSetting(ctx, pending, "true"); err != nil {
+			return err
+		}
+		if err := c.post(ctx, base+"/control/install/configure", c.configureBody(c.adminUser(), c.cfg.ShieldAdminPassword)); err != nil {
+			return err
+		}
+	}
+	if err := c.ensureShieldUpstreams(ctx); err != nil {
+		return err
+	}
+	seed, err := c.settings.GetSetting(ctx, pending)
+	if err != nil || seed == "" {
+		return err
+	}
+	if err := c.seedShieldBlocklists(ctx, base); err != nil {
+		return err
+	}
+	return c.settings.SetSetting(ctx, pending, "")
+}
+
+// URLs from the AdGuard Hostlists Registry. Some AdGuard versions ship with
+// the DNS filter already subscribed.
+var defaultShieldBlocklists = []struct {
+	Name string `json:"name"`
+	URL  string `json:"url"`
+}{
+	{"AdGuard DNS filter", "https://adguardteam.github.io/HostlistsRegistry/assets/filter_1.txt"},
+	{"Malicious URL Blocklist (URLHaus)", "https://adguardteam.github.io/HostlistsRegistry/assets/filter_11.txt"},
+}
+
+func (c *Client) seedShieldBlocklists(ctx context.Context, base string) error {
+	var status struct {
+		Filters []struct {
+			URL string `json:"url"`
+		} `json:"filters"`
+	}
+	if err := c.getAuthJSON(ctx, base+"/control/filtering/status", &status); err != nil {
+		return err
+	}
+	subscribed := make(map[string]bool, len(status.Filters))
+	for _, filter := range status.Filters {
+		subscribed[filter.URL] = true
+	}
+	for _, list := range defaultShieldBlocklists {
+		if subscribed[list.URL] {
+			continue
+		}
+		if err := c.postAuthJSON(ctx, base+"/control/filtering/add_url", list); err != nil {
+			return fmt.Errorf("subscribe to %s: %w", list.Name, err)
+		}
+	}
+	return nil
 }
 
 func (c *Client) shieldUpstreams() []string {
@@ -222,11 +274,6 @@ func (c *Client) ensureShieldUpstreams(ctx context.Context) error {
 	if base == "" {
 		return nil
 	}
-	// A gateway policy can explicitly choose even the stock resolver.
-	saved, err := c.settings.GetSetting(ctx, settingPreviousResolvers)
-	if err != nil || saved != "" {
-		return err
-	}
 	var dnsCfg map[string]any
 	if err := c.getAuthJSON(ctx, base+"/control/dns_info", &dnsCfg); err != nil {
 		return err
@@ -236,6 +283,11 @@ func (c *Client) ensureShieldUpstreams(ctx context.Context) error {
 	}
 	if !isStockUpstreams(dnsCfg["upstream_dns"]) {
 		return nil
+	}
+	// A gateway policy may explicitly choose the stock resolver.
+	saved, err := c.settings.GetSetting(ctx, settingPreviousResolvers)
+	if err != nil || saved != "" {
+		return err
 	}
 	dnsCfg["upstream_dns"] = c.shieldUpstreams()
 	return c.postAuthJSON(ctx, base+"/control/dns_config", dnsCfg)
