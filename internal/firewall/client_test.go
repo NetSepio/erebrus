@@ -5,13 +5,14 @@ import (
 	"encoding/json"
 	"net/http"
 	"net/http/httptest"
+	"slices"
 	"testing"
 
 	"github.com/NetSepio/erebrus/internal/config"
 )
 
 func TestShieldUpstreamsDefaults(t *testing.T) {
-	c := New(&config.Config{})
+	c := New(&config.Config{}, nil)
 	got := c.shieldUpstreams()
 	want := []string{"1.1.1.1", "1.0.0.1"}
 	if len(got) != len(want) {
@@ -25,7 +26,7 @@ func TestShieldUpstreamsDefaults(t *testing.T) {
 }
 
 func TestShieldUpstreamsFromEnv(t *testing.T) {
-	c := New(&config.Config{ShieldUpstreamDNS: "9.9.9.9, 149.112.112.112"})
+	c := New(&config.Config{ShieldUpstreamDNS: "9.9.9.9, 149.112.112.112"}, nil)
 	got := c.shieldUpstreams()
 	want := []string{"9.9.9.9", "149.112.112.112"}
 	if len(got) != len(want) {
@@ -120,7 +121,7 @@ func shieldClient(url string) *Client {
 		ShieldAdminURL:      url,
 		ShieldAdminUser:     "admin",
 		ShieldAdminPassword: "secret",
-	})
+	}, testSettings{})
 }
 
 func TestConfigureAdminReplacesStockUpstreams(t *testing.T) {
@@ -154,20 +155,129 @@ func TestConfigureAdminKeepsOperatorUpstreams(t *testing.T) {
 	}
 }
 
-func TestSyncShieldOnlyClearsCache(t *testing.T) {
-	var got []string
-	configured, cleared := 0, 0
-	srv := fakeAdGuard(t, []string{"https://dns10.quad9.net/dns-query"}, &got,
-		map[string]*int{"/control/dns_config": &configured, "/control/cache_clear": &cleared})
+type testSettings map[string]string
 
-	raw := json.RawMessage(`{"licensed":true,"upstreams":["8.8.8.8"]}`)
-	if err := shieldClient(srv.URL).Sync(context.Background(), raw); err != nil {
-		t.Fatalf("Sync: %v", err)
+func (s testSettings) GetSetting(_ context.Context, key string) (string, error) {
+	return s[key], nil
+}
+func (s testSettings) SetSetting(_ context.Context, key, value string) error {
+	s[key] = value
+	return nil
+}
+
+func TestSyncShieldReconcilesSnapshot(t *testing.T) {
+	stale := shieldRewrite{"old.example", "192.0.2.1"}
+	alias := shieldRewrite{"internal.example", "2001:db8::1"}
+	rewrites := []shieldRewrite{stale}
+	var rules []string
+	resolvers := []string{"192.0.2.53"}
+	sets, adds, deletes, clears := 0, 0, 0, 0
+	failAdd := true
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if user, pass, _ := r.BasicAuth(); user != "admin" || pass != "secret" {
+			http.Error(w, "unauthorized", http.StatusUnauthorized)
+			return
+		}
+		read := func(dst any) {
+			if err := json.NewDecoder(r.Body).Decode(dst); err != nil {
+				t.Error(err)
+			}
+		}
+		switch r.Method + " " + r.URL.Path {
+		case "GET /control/dns_info":
+			json.NewEncoder(w).Encode(map[string]any{"upstream_dns": resolvers})
+		case "POST /control/dns_config":
+			var body struct {
+				Upstreams []string `json:"upstream_dns"`
+			}
+			read(&body)
+			resolvers = body.Upstreams
+		case "POST /control/filtering/set_rules":
+			var body struct {
+				Rules []string `json:"rules"`
+			}
+			read(&body)
+			if body.Rules == nil {
+				t.Error("set_rules requires a JSON array")
+			}
+			rules = body.Rules
+			sets++
+		case "GET /control/rewrite/list":
+			json.NewEncoder(w).Encode(rewrites)
+		case "POST /control/rewrite/delete":
+			var entry shieldRewrite
+			read(&entry)
+			rewrites = slices.DeleteFunc(rewrites, func(r shieldRewrite) bool { return r == entry })
+			deletes++
+		case "POST /control/rewrite/add":
+			if failAdd {
+				failAdd = false
+				http.Error(w, "temporarily unavailable", http.StatusServiceUnavailable)
+				return
+			}
+			var entry shieldRewrite
+			read(&entry)
+			rewrites = append(rewrites, entry)
+			adds++
+		case "POST /control/cache_clear":
+			clears++
+		default:
+			t.Errorf("unexpected %s %s", r.Method, r.URL.Path)
+			http.NotFound(w, r)
+		}
+	}))
+	defer srv.Close()
+	ctx := context.Background()
+	c := shieldClient(srv.URL)
+	p := json.RawMessage(`{"policy_version":42,"upstreams":["https://resolver.example/dns-query"],"rules":[
+  {"action":"block","target":"bad.example","enabled":true},
+  {"action":"domain_block","target":"bad2.example","enabled":true},
+  {"action":"block","target":"*.WILD.example.","enabled":true},
+  {"action":"wildcard_domain_block","target":"*.wild2.example","enabled":true},
+  {"action":"allow","target":"ok.example","enabled":true},
+  {"action":"domain_allow","target":"ok2.example","enabled":true},
+  {"action":"dns_rewrite","target":"internal.example","value":"2001:db8::1","enabled":true},
+  {"action":"rewrite","target":"internal.example","value":"2001:db8::1","enabled":true},
+  {"action":"block","target":"disabled.example","enabled":false}
+ ]}`)
+	if v, err := c.Sync(ctx, p); err == nil || v != nil || clears != 0 {
+		t.Fatalf("partial sync returned version %v, error %v, clears %d", v, err, clears)
 	}
-	if cleared != 1 {
-		t.Fatalf("cache_clear called %d times, want 1", cleared)
+	// Simulate a restart between attempts. Only the settings and AdGuard persist.
+	c = New(c.cfg, c.settings)
+	for i := 0; i < 2; i++ {
+		if v, err := c.Sync(ctx, p); err != nil || v == nil || *v != 42 {
+			t.Fatalf("retry returned version %v, error %v", v, err)
+		}
 	}
-	if configured != 0 {
-		t.Fatalf("dns_config called %d times from Sync, want 0", configured)
+	want := []string{"||bad.example^", "||bad2.example^", "||wild.example^", "||wild2.example^", "@@||ok.example^", "@@||ok2.example^"}
+	if !slices.Equal(rules, want) || !slices.Equal(rewrites, []shieldRewrite{alias}) || !slices.Equal(resolvers, []string{"https://resolver.example/dns-query"}) {
+		t.Fatalf("got rules %v, rewrites %v, resolvers %v", rules, rewrites, resolvers)
+	}
+	if sets != 3 || adds != 1 || deletes != 1 || clears != 2 {
+		t.Fatalf("sets=%d adds=%d deletes=%d clears=%d", sets, adds, deletes, clears)
+	}
+
+	if v, err := c.Sync(ctx, json.RawMessage(`{"rules":null,"upstreams":null}`)); err != nil || v != nil {
+		t.Fatalf("legacy empty snapshot returned version %v, error %v", v, err)
+	}
+	if len(rules) != 0 || len(rewrites) != 0 || !slices.Equal(resolvers, []string{"192.0.2.53"}) || sets != 4 || clears != 3 {
+		t.Fatalf("empty snapshot left rules %v, rewrites %v, resolvers %v, sets %d, clears %d", rules, rewrites, resolvers, sets, clears)
+	}
+}
+
+func TestSyncShieldRejectsInvalidSnapshotsBeforeApplying(t *testing.T) {
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		t.Errorf("unexpected AdGuard request %s", r.URL.Path)
+	}))
+	defer srv.Close()
+	c := shieldClient(srv.URL)
+	for _, input := range []string{"", "null", "{}", `{"policy_version":1}`, `{"rules":"block"}`,
+		`{"rules":[{"action":"block","enabled":true,"target":"bad.example^$important"}]}`,
+		`{"rules":[{"action":"block","enabled":true,"target":"*.\nexample.com"}]}`,
+		`{"rules":[{"action":"rewrite","enabled":true,"target":"host.example","value":"not-an-address"}]}`} {
+		if v, err := c.Sync(context.Background(), json.RawMessage(input)); err == nil || v != nil {
+			t.Errorf("Sync(%q) returned version %v, error %v", input, v, err)
+		}
 	}
 }

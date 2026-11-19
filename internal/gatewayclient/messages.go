@@ -170,9 +170,10 @@ type Command struct {
 
 // CommandResult is node → gateway.
 type CommandResult struct {
-	RequestID string `json:"request_id"`
-	OK        bool   `json:"ok"`
-	Error     string `json:"error"`
+	PolicyVersion *int64 `json:"policy_version,omitempty"`
+	RequestID     string `json:"request_id"`
+	OK            bool   `json:"ok"`
+	Error         string `json:"error"`
 }
 
 func wrap(msgType string, payload any) ([]byte, error) {

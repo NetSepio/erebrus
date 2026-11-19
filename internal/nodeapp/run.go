@@ -105,7 +105,7 @@ func Run(cfg *config.Config) error {
 	svcReg := &services.Registry{St: st}
 	tunnelDNS := dnspkg.DefaultListenAddr(cfg.WGIPv4Subnet, cfg.PrivateDNSAddr)
 
-	fwClient := firewall.New(cfg)
+	fwClient := firewall.New(cfg, st)
 	if cfg.HasFirewallService() && cfg.FirewallProvider == config.FirewallUnboundErebrus {
 		if licensed, err := fwClient.CheckLicense(ctx); err != nil {
 			slog.Warn("sentinel license check failed", "err", err)

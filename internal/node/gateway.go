@@ -283,7 +283,9 @@ func (g *GatewayBridge) HandleCommand(ctx context.Context, cmd gatewayclient.Com
 			res.Error = "firewall not configured"
 			return res
 		}
-		if err := g.fw.Sync(ctx, cmd.Args); err != nil {
+		var err error
+		res.PolicyVersion, err = g.fw.Sync(ctx, cmd.Args)
+		if err != nil {
 			res.OK = false
 			res.Error = err.Error()
 		}
