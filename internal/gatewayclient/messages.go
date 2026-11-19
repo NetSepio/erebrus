@@ -80,10 +80,11 @@ type WireGuardEndpoint struct {
 }
 
 type VLESSEndpoint struct {
-	Port      int      `json:"port"`
-	PublicKey string   `json:"public_key"`
-	ShortIDs  []string `json:"short_ids"`
-	SNI       string   `json:"sni"`
+	BootstrapUUID string   `json:"bootstrap_uuid,omitempty"`
+	Port          int      `json:"port"`
+	PublicKey     string   `json:"public_key"`
+	ShortIDs      []string `json:"short_ids"`
+	SNI           string   `json:"sni"`
 }
 
 type Hysteria2Endpoint struct {

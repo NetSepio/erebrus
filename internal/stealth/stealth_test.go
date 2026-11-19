@@ -1,18 +1,27 @@
 package stealth
 
 import (
+	"bytes"
 	"context"
 	"crypto/tls"
 	"encoding/base64"
 	"encoding/json"
 	"fmt"
+	"maps"
 	"net"
+	"reflect"
 	"strconv"
 	"strings"
 	"testing"
 	"time"
 
 	"github.com/NetSepio/erebrus/internal/config"
+	"github.com/google/uuid"
+	"github.com/sagernet/sing-box/adapter"
+	C "github.com/sagernet/sing-box/constant"
+	"github.com/sagernet/sing-box/option"
+	"github.com/sagernet/sing-box/route/rule"
+	M "github.com/sagernet/sing/common/metadata"
 )
 
 // memStore is an in-memory SettingsStore for tests.
@@ -22,6 +31,11 @@ func newMemStore() *memStore { return &memStore{m: map[string]string{}} }
 
 func (s *memStore) GetSetting(_ context.Context, k string) (string, error) { return s.m[k], nil }
 func (s *memStore) SetSetting(_ context.Context, k, v string) error        { s.m[k] = v; return nil }
+
+func (s *memStore) SetSettings(_ context.Context, values map[string]string) error {
+	maps.Copy(s.m, values)
+	return nil
+}
 
 func testConfig(vlessPort, hy2Port int) *config.Config {
 	return &config.Config{
@@ -173,5 +187,142 @@ func TestBuildPeerArtifacts(t *testing.T) {
 		if !strings.Contains(s, want) {
 			t.Fatalf("profile missing %q: %s", want, s)
 		}
+	}
+}
+
+func TestBootstrapRoute(t *testing.T) {
+	cfg := testConfig(8443, 4443)
+	cfg.GatewayURL = "https://Gateway.Example:443/api"
+	cfg.WGEndpointPort = "51973"
+	m := New(cfg, newMemStore())
+	if err := m.Init(t.Context()); err != nil {
+		t.Fatal(err)
+	}
+	routes := m.serverOptions().Route
+	if len(routes.Rules) != 2 || routes.Final != "direct" {
+		t.Fatal("expected the bootstrap rule, then the WireGuard override")
+	}
+	first := routes.Rules[0]
+	allow := first.DefaultOptions.RuleAction
+	if allow.Action != C.RuleActionTypeRoute || allow.RouteOptions.Outbound != "direct" || allow.RouteOptions.OverrideAddress != "gateway.example" || allow.RouteOptions.OverridePort != 443 {
+		t.Fatal("bootstrap route must terminate at the configured gateway")
+	}
+	// Exercise sing-box's matcher so its rule combination semantics are covered.
+	matcher, err := rule.NewRule(t.Context(), nil, first, true)
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, tc := range []struct {
+		user, inbound, network, destination string
+		allowed                             bool
+	}{
+		{"bootstrap", "vless-reality", "tcp", "gateway.example:443", true},
+		{"bootstrap", "vless-reality", "tcp", "sub.gateway.example:443", false},
+		{"bootstrap", "vless-reality", "tcp", "gateway.example.invalid:443", false},
+		{"bootstrap", "vless-reality", "tcp", "192.0.2.1:443", false},
+		{"bootstrap", "vless-reality", "tcp", "gateway.example:8443", false},
+		{"bootstrap", "vless-reality", "udp", "gateway.example:443", false},
+		{"erebrus", "vless-reality", "tcp", "gateway.example:443", false},
+		{"bootstrap", "hysteria2", "tcp", "gateway.example:443", false},
+	} {
+		metadata := adapter.InboundContext{User: tc.user, Inbound: tc.inbound, Network: tc.network, Destination: M.ParseSocksaddr(tc.destination)}
+		if got := matcher.Match(&metadata); got != tc.allowed {
+			t.Errorf("%+v matched=%v", tc, got)
+		}
+	}
+	fallback := routes.Rules[1].DefaultOptions
+	if !reflect.DeepEqual(fallback.RawDefaultRule, option.RawDefaultRule{}) || fallback.Action != C.RuleActionTypeRouteOptions || fallback.RouteOptionsOptions.OverrideAddress != "127.0.0.1" || fallback.RouteOptionsOptions.OverridePort != 51973 {
+		t.Fatal("fallback must pin every remaining request to the configured WireGuard port")
+	}
+	for _, raw := range []string{"", "gateway.example", "https://", "https://*.example", "http://gateway.example:8080", "https://gateway.example:8443"} {
+		cfg.GatewayURL = raw
+		standalone := New(cfg, m.st)
+		if err := standalone.Init(t.Context()); err != nil {
+			t.Fatal(err)
+		}
+		if got := standalone.serverOptions().Route.Rules; len(got) != 1 || !reflect.DeepEqual(got[0].DefaultOptions, fallback) {
+			t.Errorf("unexpected routes for %q", raw)
+		}
+	}
+}
+
+func TestBootstrapIPGatewayMatchesOneAddress(t *testing.T) {
+	for _, tc := range []struct{ configured, allowed, adjacent string }{
+		{"https://192.0.2.7", "192.0.2.7:443", "192.0.2.8:443"},
+		{"https://[2001:db8::7]:443", "[2001:db8::7]:443", "[2001:db8::8]:443"},
+	} {
+		r, err := rule.NewRule(t.Context(), nil, bootstrapRule(bootstrapHost(tc.configured)), true)
+		if err != nil {
+			t.Fatal(err)
+		}
+		for _, dst := range []string{tc.allowed, tc.adjacent} {
+			m := adapter.InboundContext{Inbound: "vless-reality", User: "bootstrap", Network: "tcp", Destination: M.ParseSocksaddr(dst)}
+			if r.Match(&m) != (dst == tc.allowed) {
+				t.Errorf("wrong match for %s on %s", dst, tc.configured)
+			}
+		}
+	}
+}
+
+func TestBootstrapCredentialLifecycle(t *testing.T) {
+	ctx := t.Context()
+	cfg := testConfig(freePort(t), freePort(t))
+	cfg.GatewayURL = "https://gateway.example"
+	st := newMemStore()
+	legacy, err := loadOrCreateSecrets(ctx, st)
+	if err != nil {
+		t.Fatal(err)
+	}
+	delete(st.m, keyVLESSBootstrapUUID) // Upgrade a pre-bootstrap settings store.
+	m := New(cfg, st)
+	if err := m.Init(ctx); err != nil {
+		t.Fatal(err)
+	}
+	before := m.Params()
+	if _, err := uuid.Parse(before.VLESSBootstrapUUID); err != nil || before.VLESSBootstrapUUID == before.VLESSUUID || before.VLESSUUID != legacy.VLESSUUID {
+		t.Fatal("upgrade must preserve the VPN UUID and provision a distinct bootstrap UUID")
+	}
+	if m.ActiveParams().Enabled {
+		t.Fatal("advertised a stopped listener")
+	}
+	if err := m.Start(ctx); err != nil {
+		t.Fatal(err)
+	}
+	defer m.Close()
+	if got := m.ActiveParams().VLESSBootstrapUUID; got != before.VLESSBootstrapUUID {
+		t.Fatal("running listener did not advertise its credential")
+	}
+
+	if _, err := m.RotateReality(ctx); err != nil {
+		t.Fatal(err)
+	}
+	if got := m.ActiveParams(); got.VLESSBootstrapUUID != before.VLESSBootstrapUUID || got.RealityShortID == before.RealityShortID {
+		t.Fatal("short-ID rotation changed the bootstrap UUID or failed to change the short ID")
+	}
+	if err := m.RotateAllSecrets(ctx); err != nil {
+		t.Fatal(err)
+	}
+	active := m.ActiveParams()
+	reloaded, err := loadOrCreateSecrets(ctx, st)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if active.VLESSBootstrapUUID == "" || active.VLESSBootstrapUUID == before.VLESSBootstrapUUID || active.VLESSBootstrapUUID != reloaded.VLESSBootstrapUUID || active.VLESSUUID == before.VLESSUUID || active.VLESSUUID == active.VLESSBootstrapUUID {
+		t.Fatal("full rotation did not persist and activate distinct fresh credentials")
+	}
+	for _, obj := range []any{active, m.BuildPeer("alice", "key", "10.0.0.2/32", "")} {
+		data, err := json.Marshal(obj)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if bytes.Contains(data, []byte(active.VLESSBootstrapUUID)) {
+			t.Fatal("bootstrap UUID leaked into peer credentials")
+		}
+	}
+	if err := m.Close(); err != nil {
+		t.Fatal(err)
+	}
+	if got := m.ActiveParams().VLESSBootstrapUUID; got != "" {
+		t.Fatal("advertised a credential after close")
 	}
 }

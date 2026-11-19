@@ -53,10 +53,12 @@ func (r *Rotator) Rotate(ctx context.Context, opt Options) error {
 	}
 
 	// Record new active credentials (hashes only).
+	p := r.Stealth.Params()
 	for _, item := range []struct{ transport, material string }{
-		{"vless_reality", r.Stealth.Params().VLESSUUID},
-		{"hysteria2", r.Stealth.Params().Hysteria2Password},
-		{"reality_short_id", r.Stealth.Params().RealityShortID},
+		{"vless_reality", p.VLESSUUID},
+		{"vless_bootstrap", p.VLESSBootstrapUUID},
+		{"hysteria2", p.Hysteria2Password},
+		{"reality_short_id", p.RealityShortID},
 	} {
 		if item.material == "" {
 			continue
@@ -89,6 +91,7 @@ func (r *Rotator) archiveCurrent(ctx context.Context, scope, peerID string, expi
 	now := time.Now().Unix()
 	for _, item := range []struct{ transport, material string }{
 		{"vless_reality", p.VLESSUUID},
+		{"vless_bootstrap", p.VLESSBootstrapUUID},
 		{"hysteria2", p.Hysteria2Password},
 		{"reality_short_id", p.RealityShortID},
 	} {

@@ -12,28 +12,31 @@ import (
 
 // settings keys for the node-wide stealth carrier secrets.
 const (
-	keyRealityPrivate = "stealth_reality_private_key"
-	keyRealityPublic  = "stealth_reality_public_key"
-	keyRealityShortID = "stealth_reality_short_id"
-	keyVLESSUUID      = "stealth_vless_uuid"
-	keyHysteria2Pass  = "stealth_hysteria2_password"
+	keyRealityPrivate     = "stealth_reality_private_key"
+	keyRealityPublic      = "stealth_reality_public_key"
+	keyRealityShortID     = "stealth_reality_short_id"
+	keyVLESSUUID          = "stealth_vless_uuid"
+	keyVLESSBootstrapUUID = "stealth_vless_bootstrap_uuid"
+	keyHysteria2Pass      = "stealth_hysteria2_password"
 )
 
 // SettingsStore is the subset of the node store the stealth manager needs.
 type SettingsStore interface {
 	GetSetting(ctx context.Context, key string) (string, error)
 	SetSetting(ctx context.Context, key, value string) error
+	SetSettings(ctx context.Context, values map[string]string) error
 }
 
 // Secrets are the node-wide credentials shared by every client of the stealth
 // carriers. Per-client authentication still happens inside WireGuard, so these
 // secrets only gate access to the obfuscated transport, not to the VPN itself.
 type Secrets struct {
-	RealityPrivateKey string // base64 RawURL, x25519
-	RealityPublicKey  string // base64 RawURL, x25519
-	RealityShortID    string // 8 hex chars
-	VLESSUUID         string
-	Hysteria2Password string
+	RealityPrivateKey  string // base64 RawURL, x25519
+	RealityPublicKey   string // base64 RawURL, x25519
+	RealityShortID     string // 8 hex chars
+	VLESSUUID          string
+	VLESSBootstrapUUID string
+	Hysteria2Password  string
 }
 
 // loadOrCreateSecrets reads the stealth secrets from the store, generating and
@@ -69,6 +72,10 @@ func loadOrCreateSecrets(ctx context.Context, st SettingsStore) (*Secrets, error
 		return nil, err
 	}
 	if s.VLESSUUID, err = getOrSet(ctx, st, keyVLESSUUID, uuid.NewString()); err != nil {
+		return nil, err
+	}
+
+	if s.VLESSBootstrapUUID, err = getOrSet(ctx, st, keyVLESSBootstrapUUID, uuid.NewString()); err != nil {
 		return nil, err
 	}
 

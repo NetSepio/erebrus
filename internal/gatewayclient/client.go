@@ -241,7 +241,14 @@ func (c *Client) handleFrame(ctx context.Context, ws *websocket.Conn, raw []byte
 		if err != nil {
 			return err
 		}
-		return c.writeMessage(ws, websocket.TextMessage, frame)
+		if err := c.writeMessage(ws, websocket.TextMessage, frame); err != nil {
+			return err
+		}
+		// Publish the current short ID, or withdraw endpoints if the restart failed.
+		if cmd.Action == ActionRotateReality {
+			return c.sendHello(ws)
+		}
+		return nil
 	default:
 		c.log.Debug("ignore gateway message", "type", env.Type)
 	}

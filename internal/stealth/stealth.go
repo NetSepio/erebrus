@@ -7,16 +7,15 @@
 //     to a borrowed SNI (no fake cert; the handshake is proxied to a real site).
 //   - Hysteria2 on udp/:443 — QUIC/HTTP3 with optional Salamander obfuscation.
 //
-// Both carriers terminate on a single node-wide credential and route to a
-// direct outbound; per-client authentication stays in the inner WireGuard
-// tunnel, so the sing-box instance never restarts on peer churn (Topology A —
-// "WireGuard as the endpoint").
+// VPN carrier traffic is pinned to the local WireGuard listener. A dedicated
+// VLESS bootstrap credential can also reach the configured HTTPS gateway.
 package stealth
 
 import (
 	"context"
 	"fmt"
 	"net/netip"
+	"net/url"
 	"strconv"
 	"strings"
 	"sync"
@@ -27,26 +26,31 @@ import (
 	C "github.com/sagernet/sing-box/constant"
 	"github.com/sagernet/sing-box/option"
 	"github.com/sagernet/sing/common/json/badoption"
+	M "github.com/sagernet/sing/common/metadata"
 )
 
-const vlessFlowVision = "xtls-rprx-vision"
+const (
+	vlessFlowVision = "xtls-rprx-vision"
+	vlessInboundTag = "vless-reality"
+	bootstrapUser   = "bootstrap"
+)
 
 // Manager owns the embedded sing-box instance and the node-wide carrier secrets.
 type Manager struct {
-	cfg     *config.Config
-	st      SettingsStore
-	secrets *Secrets
-	certPEM string
-	keyPEM  string
+	cfg         *config.Config
+	st          SettingsStore
+	gatewayHost string
+	secrets     *Secrets
+	certPEM     string
+	keyPEM      string
 
 	mu       sync.Mutex
 	instance *box.Box
-	running  bool
 }
 
 // New constructs a Manager. Call Init before Start or Params.
 func New(cfg *config.Config, st SettingsStore) *Manager {
-	return &Manager{cfg: cfg, st: st}
+	return &Manager{cfg: cfg, st: st, gatewayHost: bootstrapHost(cfg.GatewayURL)}
 }
 
 // Enabled reports whether the stealth carriers are turned on.
@@ -56,6 +60,15 @@ func (m *Manager) Enabled() bool { return m.cfg.EnableStealth }
 // Hysteria2 self-signed certificate. Safe to call even when stealth is disabled
 // — it makes Params usable without starting the listeners.
 func (m *Manager) Init(ctx context.Context) error {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	if m.instance != nil {
+		return nil
+	}
+	return m.init(ctx)
+}
+
+func (m *Manager) init(ctx context.Context) error {
 	secrets, err := loadOrCreateSecrets(ctx, m.st)
 	if err != nil {
 		return fmt.Errorf("stealth secrets: %w", err)
@@ -73,6 +86,12 @@ func (m *Manager) Init(ctx context.Context) error {
 // Start builds and starts the embedded sing-box instance. No-op when stealth is
 // disabled. Init must have been called first.
 func (m *Manager) Start(ctx context.Context) error {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	return m.start(ctx)
+}
+
+func (m *Manager) start(ctx context.Context) error {
 	if !m.cfg.EnableStealth {
 		return nil
 	}
@@ -80,6 +99,9 @@ func (m *Manager) Start(ctx context.Context) error {
 		return fmt.Errorf("stealth: Init not called")
 	}
 
+	if m.instance != nil {
+		return nil
+	}
 	opts := m.serverOptions()
 	boxCtx := box.Context(
 		ctx,
@@ -99,51 +121,45 @@ func (m *Manager) Start(ctx context.Context) error {
 		return fmt.Errorf("stealth: start sing-box: %w", err)
 	}
 
-	m.mu.Lock()
 	m.instance = instance
-	m.running = true
-	m.mu.Unlock()
 	return nil
 }
 
-// RotateAllSecrets regenerates VLESS UUID, REALITY short-id, and Hysteria2
+// RotateAllSecrets regenerates both VLESS UUIDs, the REALITY short-id, and Hysteria2
 // password, then restarts sing-box if it was running.
 func (m *Manager) RotateAllSecrets(ctx context.Context) error {
+	m.mu.Lock()
+	defer m.mu.Unlock()
 	if m.st == nil {
 		return fmt.Errorf("stealth: not initialized")
 	}
 	if m.secrets == nil {
-		if err := m.Init(ctx); err != nil {
+		if err := m.init(ctx); err != nil {
 			return err
 		}
 	}
-	if err := m.st.SetSetting(ctx, keyVLESSUUID, uuid.NewString()); err != nil {
+	next := *m.secrets
+	next.VLESSUUID = uuid.NewString()
+	next.VLESSBootstrapUUID = uuid.NewString()
+	next.RealityShortID = randHex(4)
+	next.Hysteria2Password = randToken(24)
+	if err := m.st.SetSettings(ctx, map[string]string{
+		keyVLESSUUID:          next.VLESSUUID,
+		keyVLESSBootstrapUUID: next.VLESSBootstrapUUID,
+		keyRealityShortID:     next.RealityShortID,
+		keyHysteria2Pass:      next.Hysteria2Password,
+	}); err != nil {
 		return err
 	}
-	if err := m.st.SetSetting(ctx, keyRealityShortID, randHex(4)); err != nil {
-		return err
-	}
-	if err := m.st.SetSetting(ctx, keyHysteria2Pass, randToken(24)); err != nil {
-		return err
-	}
-	secrets, err := loadOrCreateSecrets(ctx, m.st)
-	if err != nil {
-		return err
-	}
-	m.secrets = secrets
-	wasRunning := m.running
-	if wasRunning {
-		_ = m.Close()
-	}
-	if wasRunning && m.cfg.EnableStealth {
-		return m.Start(ctx)
-	}
-	return nil
+	m.secrets = &next
+	return m.restartIfRunning(ctx)
 }
 
 // RotateReality regenerates the REALITY short-id, restarts sing-box, and returns
 // the new short-id. The keypair is kept per ws-protocol rotate_reality semantics.
 func (m *Manager) RotateReality(ctx context.Context) (string, error) {
+	m.mu.Lock()
+	defer m.mu.Unlock()
 	if m.st == nil || m.secrets == nil {
 		return "", fmt.Errorf("stealth: not initialized")
 	}
@@ -152,22 +168,32 @@ func (m *Manager) RotateReality(ctx context.Context) (string, error) {
 		return "", err
 	}
 	m.secrets.RealityShortID = shortID
-	if m.running {
-		_ = m.Close()
-		if err := m.Start(ctx); err != nil {
-			return "", err
-		}
+	if err := m.restartIfRunning(ctx); err != nil {
+		return "", err
 	}
 	return shortID, nil
+}
+
+func (m *Manager) restartIfRunning(ctx context.Context) error {
+	if m.instance == nil {
+		return nil
+	}
+	if err := m.close(); err != nil {
+		return err
+	}
+	return m.start(ctx)
 }
 
 // Close stops the embedded sing-box instance. Idempotent.
 func (m *Manager) Close() error {
 	m.mu.Lock()
+	defer m.mu.Unlock()
+	return m.close()
+}
+
+func (m *Manager) close() error {
 	inst := m.instance
 	m.instance = nil
-	m.running = false
-	m.mu.Unlock()
 	if inst == nil {
 		return nil
 	}
@@ -187,12 +213,21 @@ func (m *Manager) serverOptions() option.Options {
 		inbounds = append(inbounds, h2)
 	}
 
-	// The direct outbound is pinned to the node's local WireGuard listener:
-	// every connection the carriers accept is forced to 127.0.0.1:<wg-port>,
-	// regardless of the inner destination. This keeps the node from acting as
-	// an open proxy for anyone holding the (shared) carrier secret — the
-	// carriers can only ever deliver packets to WireGuard, where the real
-	// per-client authentication happens.
+	var rules []option.Rule
+	if m.gatewayHost != "" {
+		rules = append(rules, bootstrapRule(m.gatewayHost))
+	}
+	// Every other request, including misses from the bootstrap user, goes to WireGuard.
+	rules = append(rules, option.Rule{
+		Type: C.RuleTypeDefault,
+		DefaultOptions: option.DefaultRule{RuleAction: option.RuleAction{
+			Action: C.RuleActionTypeRouteOptions,
+			RouteOptionsOptions: option.RouteOptionsActionOptions{
+				OverrideAddress: "127.0.0.1",
+				OverridePort:    uint16(m.cfg.WGEndpointPortInt()),
+			},
+		}},
+	})
 	return option.Options{
 		Log:      &option.LogOptions{Level: logLevel, Timestamp: true},
 		Inbounds: inbounds,
@@ -202,33 +237,67 @@ func (m *Manager) serverOptions() option.Options {
 			Options: &option.DirectOutboundOptions{},
 		}},
 		Route: &option.RouteOptions{
-			Rules: []option.Rule{{
-				Type: C.RuleTypeDefault,
-				DefaultOptions: option.DefaultRule{RuleAction: option.RuleAction{
-					Action: C.RuleActionTypeRouteOptions,
-					RouteOptionsOptions: option.RouteOptionsActionOptions{
-						OverrideAddress: "127.0.0.1",
-						OverridePort:    uint16(m.cfg.WGEndpointPortInt()),
-					},
-				}},
-			}},
+			Rules: rules,
 			Final: "direct",
 		},
 	}
+}
+
+func bootstrapRule(gateway string) option.Rule {
+	match := option.RawDefaultRule{
+		Inbound:  []string{vlessInboundTag},
+		Network:  []string{"tcp"},
+		AuthUser: []string{bootstrapUser},
+		Port:     []uint16{443},
+	}
+	if ip, err := netip.ParseAddr(gateway); err == nil {
+		match.IPCIDR = []string{netip.PrefixFrom(ip, ip.BitLen()).String()}
+	} else {
+		match.Domain = []string{gateway}
+	}
+	return option.Rule{
+		Type: C.RuleTypeDefault,
+		DefaultOptions: option.DefaultRule{
+			RawDefaultRule: match,
+			RuleAction: option.RuleAction{
+				Action: C.RuleActionTypeRoute,
+				RouteOptions: option.RouteActionOptions{
+					Outbound: "direct",
+					// Always dial the configured authority, including when metadata carries a sniffed name.
+					RawRouteOptionsActionOptions: option.RawRouteOptionsActionOptions{OverrideAddress: gateway, OverridePort: 443},
+				},
+			},
+		},
+	}
+}
+
+// bootstrapHost returns the exact control-plane host for the HTTPS/443 carrier.
+func bootstrapHost(rawURL string) string {
+	u, err := url.Parse(strings.TrimSpace(rawURL))
+	if err != nil || u.Scheme != "https" || u.User != nil || (u.Port() != "" && u.Port() != "443") {
+		return ""
+	}
+	host := strings.ToLower(strings.TrimSuffix(u.Hostname(), "."))
+	if ip, err := netip.ParseAddr(host); err == nil && ip.Zone() == "" {
+		return ip.Unmap().String()
+	}
+	if host == "" || !M.IsDomainName(host) {
+		return ""
+	}
+	return host
 }
 
 func (m *Manager) vlessInbound() option.Inbound {
 	host, port := splitHostPort(m.cfg.RealityHandshakeTarget(), 443)
 	return option.Inbound{
 		Type: C.TypeVLESS,
-		Tag:  "vless-reality",
+		Tag:  vlessInboundTag,
 		Options: &option.VLESSInboundOptions{
 			ListenOptions: listenOn(m.cfg.VLESSPortInt()),
-			Users: []option.VLESSUser{{
-				Name: "erebrus",
-				UUID: m.secrets.VLESSUUID,
-				Flow: vlessFlowVision,
-			}},
+			Users: []option.VLESSUser{
+				{Name: "erebrus", UUID: m.secrets.VLESSUUID, Flow: vlessFlowVision},
+				{Name: bootstrapUser, UUID: m.secrets.VLESSBootstrapUUID, Flow: vlessFlowVision},
+			},
 			InboundTLSOptionsContainer: option.InboundTLSOptionsContainer{
 				TLS: &option.InboundTLSOptions{
 					Enabled:    true,

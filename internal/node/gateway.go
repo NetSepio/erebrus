@@ -82,17 +82,17 @@ func (g *GatewayBridge) BuildHello(_ string) gatewayclient.Hello {
 			PublicKey: g.svc.wg.ServerPublicKey(),
 		},
 	}
-	if g.svc.stealth != nil && g.svc.stealth.Enabled() {
-		p := g.svc.stealth.Params()
+	if p := g.svc.stealth.ActiveParams(); p.Enabled {
 		obfs := ""
 		if cfg.Hysteria2ObfsPassword != "" {
 			obfs = "salamander"
 		}
 		eps.VLESSReality = gatewayclient.VLESSEndpoint{
-			Port:      cfg.VLESSPortInt(),
-			PublicKey: p.RealityPublicKey,
-			ShortIDs:  []string{p.RealityShortID},
-			SNI:       p.SNI,
+			BootstrapUUID: p.VLESSBootstrapUUID,
+			Port:          cfg.VLESSPortInt(),
+			PublicKey:     p.RealityPublicKey,
+			ShortIDs:      []string{p.RealityShortID},
+			SNI:           p.SNI,
 		}
 		eps.Hysteria2 = gatewayclient.Hysteria2Endpoint{
 			Port: cfg.Hysteria2PortInt(),
