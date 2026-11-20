@@ -57,11 +57,17 @@ func TestBootstrapRealityTransport(t *testing.T) {
 	if err := m.Init(t.Context()); err != nil {
 		t.Fatal(err)
 	}
-	// Rotate first: a client holding the retired credential must still reach the
+	// Rotate first: a client holding the retired descriptor must still reach the
 	// gateway, or rotation locks out exactly the clients the carrier exists for.
-	retired := m.secrets.VLESSBootstrapUUID
+	// The descriptor is captured whole, before the rotation — a retired UUID
+	// paired with the new short-id would prove nothing, since the short-id is
+	// what the handshake checks first.
+	retired, retiredShortID := m.secrets.VLESSBootstrapUUID, m.secrets.RealityShortID
 	if err := m.RotateAllSecrets(t.Context(), time.Hour); err != nil {
 		t.Fatal(err)
+	}
+	if retiredShortID == m.secrets.RealityShortID {
+		t.Fatal("rotation left the short-id unchanged, so this proves nothing")
 	}
 	opts := m.serverOptions()
 	registry := outboundRegistry()
@@ -69,13 +75,17 @@ func TestBootstrapRealityTransport(t *testing.T) {
 		return &echoDestination{outbound.NewAdapter(C.TypeDirect, tag, []string{"tcp", "udp"}, nil)}, nil
 	})
 	vless.RegisterOutbound(registry)
-	for tag, id := range map[string]string{"bootstrap-client": m.secrets.VLESSBootstrapUUID, "retired-client": retired, "vpn-client": m.secrets.VLESSUUID} {
-		opts.Outbounds = append(opts.Outbounds, option.Outbound{Tag: tag, Type: C.TypeVLESS, Options: &option.VLESSOutboundOptions{
+	for _, client := range []struct{ tag, id, shortID string }{
+		{"bootstrap-client", m.secrets.VLESSBootstrapUUID, m.secrets.RealityShortID},
+		{"retired-client", retired, retiredShortID},
+		{"vpn-client", m.secrets.VLESSUUID, m.secrets.RealityShortID},
+	} {
+		opts.Outbounds = append(opts.Outbounds, option.Outbound{Tag: client.tag, Type: C.TypeVLESS, Options: &option.VLESSOutboundOptions{
 			ServerOptions: option.ServerOptions{Server: "127.0.0.1", ServerPort: uint16(cfg.VLESSPortInt())},
-			UUID:          id, Flow: vlessFlowVision,
+			UUID:          client.id, Flow: vlessFlowVision,
 			OutboundTLSOptionsContainer: option.OutboundTLSOptionsContainer{TLS: &option.OutboundTLSOptions{
 				Enabled: true, ServerName: cfg.RealitySNI(), UTLS: &option.OutboundUTLSOptions{Enabled: true, Fingerprint: "chrome"},
-				Reality: &option.OutboundRealityOptions{Enabled: true, PublicKey: m.secrets.RealityPublicKey, ShortID: m.secrets.RealityShortID},
+				Reality: &option.OutboundRealityOptions{Enabled: true, PublicKey: m.secrets.RealityPublicKey, ShortID: client.shortID},
 			}},
 		}})
 	}

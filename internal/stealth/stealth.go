@@ -14,6 +14,7 @@ package stealth
 import (
 	"context"
 	"fmt"
+	"log/slog"
 	"net/netip"
 	"net/url"
 	"strconv"
@@ -37,6 +38,10 @@ const (
 	// The retired bootstrap identity. Routed exactly like bootstrapUser, so a
 	// client still holding it reaches the gateway rather than WireGuard.
 	bootstrapPrevUser = "bootstrap-previous"
+	// How long a descriptor retired by a short-id rotation keeps working. The
+	// gateway's rotate_reality command carries no window of its own, and the
+	// scheduled carrier rotation defaults to the same 24 hours.
+	descriptorGrace = 24 * time.Hour
 )
 
 // Manager owns the embedded sing-box instance and the node-wide carrier secrets.
@@ -56,6 +61,12 @@ type Manager struct {
 	// bind, so restarts keyed on instance alone turned into no-ops after one
 	// failure: the carrier stayed offline while rotation reported success.
 	want bool
+	// graceExpiry rebuilds the listener when the retired descriptor's window
+	// closes. Without it the deadline is advisory only: the retired identity
+	// lives on the running listener until something else rebuilds it, which is
+	// the next rotation — days after the window the descriptor was retired
+	// with, and under an operator's nose who was told it had expired.
+	graceExpiry *time.Timer
 }
 
 // New constructs a Manager. Call Init before Start or Params.
@@ -90,6 +101,8 @@ func (m *Manager) init(ctx context.Context) error {
 	m.secrets = secrets
 	m.certPEM = certPEM
 	m.keyPEM = keyPEM
+	// A node restarted inside a grace window still has to expire it on time.
+	m.scheduleGraceExpiry()
 	return nil
 }
 
@@ -155,11 +168,14 @@ func (m *Manager) RotateAllSecrets(ctx context.Context, grace time.Duration) err
 		}
 	}
 	next := *m.secrets
-	// Only one generation overlaps: the credential retired now replaces whatever
-	// the previous rotation left behind.
-	next.VLESSBootstrapPrevUUID, next.VLESSBootstrapPrevUntil = m.secrets.VLESSBootstrapUUID, time.Now().Add(grace).Unix()
+	// A descriptor is only usable whole, so the retired bootstrap UUID is kept
+	// together with the short-id it was published alongside. Only one
+	// generation overlaps: what is retired now replaces whatever the previous
+	// rotation left behind.
+	next.VLESSBootstrapPrevUUID, next.RealityShortIDPrev = m.secrets.VLESSBootstrapUUID, m.secrets.RealityShortID
+	next.VLESSBootstrapPrevUntil = time.Now().Add(grace).Unix()
 	if grace <= 0 {
-		next.VLESSBootstrapPrevUUID, next.VLESSBootstrapPrevUntil = "", 0
+		next.VLESSBootstrapPrevUUID, next.RealityShortIDPrev, next.VLESSBootstrapPrevUntil = "", "", 0
 	}
 	next.VLESSUUID = uuid.NewString()
 	next.VLESSBootstrapUUID = uuid.NewString()
@@ -169,6 +185,7 @@ func (m *Manager) RotateAllSecrets(ctx context.Context, grace time.Duration) err
 		keyVLESSUUID:               next.VLESSUUID,
 		keyVLESSBootstrapUUID:      next.VLESSBootstrapUUID,
 		keyVLESSBootstrapPrev:      next.VLESSBootstrapPrevUUID,
+		keyRealityShortIDPrev:      next.RealityShortIDPrev,
 		keyVLESSBootstrapPrevUntil: strconv.FormatInt(next.VLESSBootstrapPrevUntil, 10),
 		keyRealityShortID:          next.RealityShortID,
 		keyHysteria2Pass:           next.Hysteria2Password,
@@ -176,11 +193,18 @@ func (m *Manager) RotateAllSecrets(ctx context.Context, grace time.Duration) err
 		return err
 	}
 	m.secrets = &next
+	m.scheduleGraceExpiry()
 	return m.restartIfRunning(ctx)
 }
 
 // RotateReality regenerates the REALITY short-id, restarts sing-box, and returns
 // the new short-id. The keypair is kept per ws-protocol rotate_reality semantics.
+//
+// The published bootstrap descriptor names the short-id, and a client holding
+// one cannot complete the handshake without it, so the outgoing short-id is
+// retired exactly as a full rotation retires a credential: a command meant only
+// to change an identifier must not lock out the blocked clients the bootstrap
+// carrier exists for.
 func (m *Manager) RotateReality(ctx context.Context) (string, error) {
 	m.mu.Lock()
 	defer m.mu.Unlock()
@@ -188,14 +212,60 @@ func (m *Manager) RotateReality(ctx context.Context) (string, error) {
 		return "", fmt.Errorf("stealth: not initialized")
 	}
 	shortID := randHex(4)
-	if err := m.st.SetSetting(ctx, keyRealityShortID, shortID); err != nil {
+	retired, until := m.secrets.RealityShortID, time.Now().Add(descriptorGrace).Unix()
+	if err := m.st.SetSettings(ctx, map[string]string{
+		keyRealityShortID:          shortID,
+		keyRealityShortIDPrev:      retired,
+		keyVLESSBootstrapPrev:      m.secrets.VLESSBootstrapUUID,
+		keyVLESSBootstrapPrevUntil: strconv.FormatInt(until, 10),
+	}); err != nil {
 		return "", err
 	}
 	m.secrets.RealityShortID = shortID
+	m.secrets.RealityShortIDPrev = retired
+	m.secrets.VLESSBootstrapPrevUUID = m.secrets.VLESSBootstrapUUID
+	m.secrets.VLESSBootstrapPrevUntil = until
+	m.scheduleGraceExpiry()
 	if err := m.restartIfRunning(ctx); err != nil {
 		return "", err
 	}
 	return shortID, nil
+}
+
+// scheduleGraceExpiry arms the rebuild that drops a retired descriptor at its
+// deadline. Call with the lock held, after m.secrets is in its new state.
+func (m *Manager) scheduleGraceExpiry() {
+	if m.graceExpiry != nil {
+		m.graceExpiry.Stop()
+		m.graceExpiry = nil
+	}
+	if _, _, ok := m.secrets.PreviousDescriptor(time.Now()); !ok {
+		return
+	}
+	// Deadlines are stored to the second, so a timer armed from a sub-second
+	// remainder can fire while the window still reads as open. A small floor
+	// keeps that from turning into a retry spin.
+	delay := time.Until(time.Unix(m.secrets.VLESSBootstrapPrevUntil, 0))
+	if delay < 50*time.Millisecond {
+		delay = 50 * time.Millisecond
+	}
+	m.graceExpiry = time.AfterFunc(delay, m.expireGrace)
+}
+
+func (m *Manager) expireGrace() {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	if m.secrets == nil {
+		return
+	}
+	if _, _, ok := m.secrets.PreviousDescriptor(time.Now()); ok {
+		// A rotation moved the deadline out while this timer was waiting.
+		m.scheduleGraceExpiry()
+		return
+	}
+	if err := m.restartIfRunning(context.Background()); err != nil {
+		slog.Warn("stealth: carrier not rebuilt after the grace window closed", "err", err)
+	}
 }
 
 func (m *Manager) restartIfRunning(ctx context.Context) error {
@@ -214,6 +284,10 @@ func (m *Manager) Close() error {
 	defer m.mu.Unlock()
 	// A deliberate stop, unlike the close inside a restart.
 	m.want = false
+	if m.graceExpiry != nil {
+		m.graceExpiry.Stop()
+		m.graceExpiry = nil
+	}
 	return m.close()
 }
 
@@ -313,18 +387,30 @@ func bootstrapHost(rawURL string) string {
 	return host
 }
 
-// vlessUsers lists the carrier identities the listener accepts. The retired
-// bootstrap credential is dropped the next time the listener is built, which a
-// scheduled rotation guarantees within one cycle.
+// vlessUsers lists the carrier identities the listener accepts. A retired
+// bootstrap credential is offered only while its window is open; the rebuild
+// armed by scheduleGraceExpiry drops it at the deadline.
 func (m *Manager) vlessUsers() []option.VLESSUser {
 	users := []option.VLESSUser{
 		{Name: "erebrus", UUID: m.secrets.VLESSUUID, Flow: vlessFlowVision},
 		{Name: bootstrapUser, UUID: m.secrets.VLESSBootstrapUUID, Flow: vlessFlowVision},
 	}
-	if prev, ok := m.secrets.BootstrapGrace(time.Now()); ok {
+	if prev, _, ok := m.secrets.PreviousDescriptor(time.Now()); ok && prev != "" && prev != m.secrets.VLESSBootstrapUUID {
 		users = append(users, option.VLESSUser{Name: bootstrapPrevUser, UUID: prev, Flow: vlessFlowVision})
 	}
 	return users
+}
+
+// realityShortIDs lists the short-ids the handshake accepts. The retired one
+// belongs here for as long as the descriptor that names it is honoured: it is
+// checked before VLESS authentication, so leaving it out makes the retired
+// credential unusable however long it is kept.
+func (m *Manager) realityShortIDs() badoption.Listable[string] {
+	ids := badoption.Listable[string]{m.secrets.RealityShortID}
+	if _, prev, ok := m.secrets.PreviousDescriptor(time.Now()); ok && prev != "" && prev != m.secrets.RealityShortID {
+		ids = append(ids, prev)
+	}
+	return ids
 }
 
 func (m *Manager) vlessInbound() option.Inbound {
@@ -345,7 +431,7 @@ func (m *Manager) vlessInbound() option.Inbound {
 							ServerOptions: option.ServerOptions{Server: host, ServerPort: port},
 						},
 						PrivateKey: m.secrets.RealityPrivateKey,
-						ShortID:    badoption.Listable[string]{m.secrets.RealityShortID},
+						ShortID:    m.realityShortIDs(),
 					},
 				},
 			},

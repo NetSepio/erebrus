@@ -48,14 +48,34 @@ Dates are the day the work landed on `main`. Entries under **Unreleased** are on
   `WALLET_CHAIN`. An existing node that upgrades keeps its current behaviour
   until the operator turns it on. **No new environment variables.**
 - Carrier rotation takes a grace period and keeps the retired bootstrap
-  credential valid for it. A client whose only route to the gateway is that
-  carrier cannot fetch a replacement descriptor once its credential stops being
-  accepted, and the audit archive holds hashes only, so it cannot serve one. The
-  retired identity is routed exactly like the live one — to the gateway, not
-  WireGuard — and only one generation ever overlaps.
+  descriptor valid for it. A client whose only route to the gateway is that
+  carrier cannot fetch a replacement once its own stops being accepted, and the
+  audit archive holds hashes only, so it cannot serve one. The descriptor is
+  kept whole — the credential *and* the REALITY short-id it was published with —
+  routed exactly like the live one, to the gateway rather than WireGuard, and
+  only one generation ever overlaps. A short-id rotation on its own now retires
+  the outgoing descriptor the same way, so a command meant to change an
+  identifier does not lock out the clients the carrier exists for.
 
 ### Fixed
 
+- **A rotated bootstrap descriptor was unusable.** Rotation kept the retired
+  credential but replaced the REALITY short-id it had been published with, and
+  the short-id is checked during the handshake — before VLESS authentication is
+  reached at all. So the grace window held a credential that could not connect,
+  which is the one case it exists for: the client that has no other way to
+  collect the new descriptor.
+- **The grace window did not expire on the running listener.** A retired
+  descriptor was dropped only the next time something rebuilt the carrier, which
+  in practice meant the next rotation — days past the deadline it was retired
+  with. The deadline now rebuilds the listener itself.
+- **A reconnect asked the gateway to sponsor a second registry write.** The
+  nonce of a registration in flight was per connection, so reconnecting started
+  over: the gateway sponsored another paid write of the same facts and charged
+  it to the operator's allowance of six a day, which a handful of reconnects
+  could exhaust — leaving the node unable to register at all. The nonce is now
+  kept with the identity it covers, across connections and restarts, and a
+  reconnecting node asks after that job instead.
 - **A failed restart left the carrier down while rotation reported success.**
   Restarts were keyed on the live sing-box instance, which a start that could not
   bind had already cleared, so every later attempt became a no-op. The manager

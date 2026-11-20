@@ -26,6 +26,11 @@ type Attester interface {
 	// once a registration is confirmed for the current identity, so a node that
 	// reconnects does not spend the operator's sponsorship budget again.
 	Pending() bool
+	// PendingNonce returns the nonce of a registration already asked for and
+	// not yet settled, which a reconnecting node resumes instead of replacing.
+	PendingNonce() string
+	// Queue records the nonce a registration went out under; "" forgets it.
+	Queue(nonce string)
 	// SignRegistry returns the signature and the challenge nonce.
 	SignRegistry(message string) (signature, nonce string, err error)
 	// Settled records a terminal gateway result (confirmed or failed).
@@ -88,6 +93,29 @@ func (c *Client) requestRegistryChallenge(ws *websocket.Conn) {
 	}
 }
 
+// resumeRegistry picks up where the last session left off. The gateway answers
+// registry frames on the connection they arrive on, so the per-session state is
+// reset — but a registration it has already been asked to sponsor stays its to
+// finish. Starting over mints a second nonce, which the gateway sponsors as a
+// separate paid job and charges to the operator's daily allowance of six, so a
+// handful of reconnects could spend the budget on one node's registration and
+// then leave it unable to register at all.
+func (c *Client) resumeRegistry(ws *websocket.Conn) {
+	a := c.registryAttester()
+	c.mu.Lock()
+	c.uptimeBucket, c.registryNonce = 0, ""
+	if a != nil {
+		c.registryNonce = a.PendingNonce()
+	}
+	queued := c.registryNonce
+	c.mu.Unlock()
+	if queued != "" {
+		c.pollRegistry(ws)
+		return
+	}
+	c.requestRegistryChallenge(ws)
+}
+
 // onRegistryChallenge verifies the challenge against this node's own identity
 // before signing it, then returns the proof.
 func (c *Client) onRegistryChallenge(ws *websocket.Conn, data json.RawMessage) {
@@ -116,6 +144,10 @@ func (c *Client) onRegistryChallenge(ws *websocket.Conn, data json.RawMessage) {
 	c.mu.Lock()
 	c.registryNonce = nonce
 	c.mu.Unlock()
+	// Persisted before any answer comes back: the sponsorship is spent the
+	// moment the gateway accepts this frame, so a disconnect in between must
+	// not leave the node ready to ask for another one.
+	a.Queue(nonce)
 }
 
 func (c *Client) onRegistryResult(data json.RawMessage) {
@@ -137,11 +169,15 @@ func (c *Client) onRegistryResult(data json.RawMessage) {
 	case "queued":
 		c.log.Debug("node registry write queued")
 	default:
-		// The gateway has no enabled registry contract, or this node's record is
-		// not complete enough to register. Stop asking for this session.
+		// The gateway has no enabled registry contract, this node's record is
+		// not complete enough to register, or it has no record of the nonce we
+		// asked about. Nothing was sponsored in any of those cases, so the
+		// queued nonce is dropped rather than resumed for ever, and the node
+		// stops asking for this session.
 		c.mu.Lock()
 		c.registryNonce = ""
 		c.mu.Unlock()
+		a.Queue("")
 		c.log.Debug("node registry unavailable", "state", result.State)
 	}
 }

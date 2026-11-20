@@ -300,7 +300,7 @@ func TestBootstrapCredentialLifecycle(t *testing.T) {
 	if got := m.ActiveParams(); got.VLESSBootstrapUUID != before.VLESSBootstrapUUID || got.RealityShortID == before.RealityShortID {
 		t.Fatal("short-ID rotation changed the bootstrap UUID or failed to change the short ID")
 	}
-	retired := m.Params().VLESSBootstrapUUID
+	retired, retiredShortID := m.Params().VLESSBootstrapUUID, m.Params().RealityShortID
 	if err := m.RotateAllSecrets(ctx, time.Hour); err != nil {
 		t.Fatal(err)
 	}
@@ -328,13 +328,16 @@ func TestBootstrapCredentialLifecycle(t *testing.T) {
 		t.Fatal("advertised a credential after close")
 	}
 
-	// The retired credential survives the rotation that replaced it, otherwise a
+	// The retired descriptor survives the rotation that replaced it, otherwise a
 	// client reachable only through this carrier can never collect the new one.
-	if prev, ok := reloaded.BootstrapGrace(time.Now()); !ok || prev != retired {
-		t.Fatalf("grace credential = %q (%v), want the retired %q", prev, ok, retired)
+	// Both halves have to survive: the short-id is checked in the handshake, so
+	// a retired UUID kept without it is a credential that cannot be used.
+	prev, prevShortID, ok := reloaded.PreviousDescriptor(time.Now())
+	if !ok || prev != retired || prevShortID != retiredShortID {
+		t.Fatalf("grace descriptor = %q/%q (%v), want the retired %q/%q", prev, prevShortID, ok, retired, retiredShortID)
 	}
-	if _, ok := reloaded.BootstrapGrace(time.Now().Add(2 * time.Hour)); ok {
-		t.Fatal("grace credential outlived its window")
+	if _, _, ok := reloaded.PreviousDescriptor(time.Now().Add(2 * time.Hour)); ok {
+		t.Fatal("grace descriptor outlived its window")
 	}
 }
 

@@ -168,11 +168,7 @@ func (c *Client) session(ctx context.Context) error {
 	if err := c.sendHello(ws); err != nil {
 		return err
 	}
-	// Per-session registry state; the gateway answers on this connection only.
-	c.mu.Lock()
-	c.registryNonce, c.uptimeBucket = "", 0
-	c.mu.Unlock()
-	c.requestRegistryChallenge(ws)
+	c.resumeRegistry(ws)
 
 	errCh := make(chan error, 2)
 	go func() { errCh <- c.readPump(ctx, ws) }()

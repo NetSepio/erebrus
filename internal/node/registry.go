@@ -17,11 +17,15 @@ import (
 
 const settingRegistryAttestation = "registry_attestation"
 
-// attestation is the persisted outcome of the last sponsored registration.
+// attestation is the persisted outcome of the last sponsored registration, and
+// the nonce of one still in flight. The nonce outlives the connection on
+// purpose: the gateway sponsors per nonce, so a node that forgets it and asks
+// again is asking for a second paid write of the same facts.
 type attestation struct {
 	Fingerprint string `json:"fingerprint"`
 	State       string `json:"state"`
 	TxHash      string `json:"tx_hash,omitempty"`
+	Nonce       string `json:"nonce,omitempty"`
 }
 
 // Attester adapts the signing primitives to the gateway client, adding the
@@ -35,7 +39,7 @@ type Attester struct {
 
 	mu     sync.Mutex
 	loaded bool
-	state  string
+	saved  attestation
 }
 
 // NewAttester returns nil when chain registration is switched off, which keeps
@@ -76,39 +80,69 @@ func (a *Attester) Operator() string { return a.inner.Operator() }
 func (a *Attester) Pending() bool {
 	a.mu.Lock()
 	defer a.mu.Unlock()
-	if !a.loaded {
-		a.state = a.read()
-		a.loaded = true
-	}
-	return a.state != "confirmed"
+	return a.load().State != "confirmed"
 }
 
-func (a *Attester) read() string {
+// PendingNonce returns the nonce of a registration the gateway has already been
+// asked to sponsor and has not settled, so a reconnecting node can ask after
+// that job instead of starting another one. Empty when there is nothing in
+// flight for this identity.
+func (a *Attester) PendingNonce() string {
+	a.mu.Lock()
+	defer a.mu.Unlock()
+	saved := a.load()
+	if saved.State == "confirmed" || saved.State == "failed" {
+		return ""
+	}
+	return saved.Nonce
+}
+
+// Queue records the nonce a registration went out under. An empty nonce forgets
+// it, which is right when the gateway reports no job for it: there is nothing
+// to resume and nothing was spent.
+func (a *Attester) Queue(nonce string) {
+	a.update(func(s *attestation) {
+		s.Nonce = nonce
+		if nonce != "" {
+			s.State = "queued"
+		}
+	})
+}
+
+// load reads the persisted attestation once. Caller holds the lock.
+func (a *Attester) load() attestation {
+	if !a.loaded {
+		a.saved, a.loaded = a.read(), true
+	}
+	return a.saved
+}
+
+func (a *Attester) read() attestation {
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer cancel()
 	raw, err := a.st.GetSetting(ctx, settingRegistryAttestation)
 	if err != nil || raw == "" {
-		return ""
+		return attestation{}
 	}
 	var saved attestation
 	if json.Unmarshal([]byte(raw), &saved) != nil || saved.Fingerprint != a.fingerprint {
-		// A different identity was registered; this one still needs to.
-		return ""
+		// A different identity was registered; this one still needs to, and
+		// the other one's nonce is none of its business.
+		return attestation{}
 	}
-	return saved.State
+	return saved
 }
 
-// SignRegistry verifies the challenge describes this node before signing it.
-func (a *Attester) SignRegistry(message string) (string, string, error) {
-	return a.inner.SignRegistry(message)
-}
-
-// Settled persists a terminal result so the node stops asking.
-func (a *Attester) Settled(state, txHash string) {
+// update mutates the persisted attestation and writes it back. Persisting
+// outside the lock keeps a slow store from blocking Pending on the read pump.
+func (a *Attester) update(f func(*attestation)) {
 	a.mu.Lock()
-	a.state = state
+	next := a.load()
+	f(&next)
+	next.Fingerprint = a.fingerprint
+	a.saved, a.loaded = next, true
 	a.mu.Unlock()
-	body, err := json.Marshal(attestation{Fingerprint: a.fingerprint, State: state, TxHash: txHash})
+	body, err := json.Marshal(next)
 	if err != nil {
 		return
 	}
@@ -117,6 +151,17 @@ func (a *Attester) Settled(state, txHash string) {
 	if err := a.st.SetSetting(ctx, settingRegistryAttestation, string(body)); err != nil {
 		slog.Warn("persist registry attestation failed", "err", err)
 	}
+}
+
+// SignRegistry verifies the challenge describes this node before signing it.
+func (a *Attester) SignRegistry(message string) (string, string, error) {
+	return a.inner.SignRegistry(message)
+}
+
+// Settled persists a terminal result so the node stops asking, and drops the
+// nonce it was waiting on.
+func (a *Attester) Settled(state, txHash string) {
+	a.update(func(s *attestation) { s.State, s.TxHash, s.Nonce = state, txHash, "" })
 }
 
 func (a *Attester) SignUptime(bucket int64) (string, error) { return a.inner.SignUptime(bucket) }

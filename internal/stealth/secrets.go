@@ -23,10 +23,14 @@ const (
 	keyHysteria2Pass      = "stealth_hysteria2_password"
 
 	// A client whose only route to the gateway is the bootstrap carrier cannot
-	// fetch a fresh descriptor after its credential stops being accepted. The
-	// retired UUID is therefore kept in plaintext, and honoured, for one grace
-	// window. The audit archive holds hashes only and cannot serve this.
+	// fetch a fresh descriptor after its own stops being accepted. The retired
+	// descriptor is therefore kept in plaintext, and honoured, for one grace
+	// window. It takes both halves: the REALITY short-id is checked during the
+	// handshake, so a retired UUID offered without the short-id it was
+	// published alongside never reaches VLESS authentication at all. The audit
+	// archive holds hashes only and cannot serve this.
 	keyVLESSBootstrapPrev      = "stealth_vless_bootstrap_uuid_previous"
+	keyRealityShortIDPrev      = "stealth_reality_short_id_previous"
 	keyVLESSBootstrapPrevUntil = "stealth_vless_bootstrap_previous_until"
 )
 
@@ -48,22 +52,30 @@ type Secrets struct {
 	VLESSBootstrapUUID string
 	Hysteria2Password  string
 
-	// The previously active bootstrap UUID and the unix second it stops being
+	// The previously active bootstrap descriptor — its UUID and the REALITY
+	// short-id it was published with — and the unix second it stops being
 	// accepted. Empty until the first rotation.
 	VLESSBootstrapPrevUUID  string
+	RealityShortIDPrev      string
 	VLESSBootstrapPrevUntil int64
 }
 
-// BootstrapGrace returns the retired bootstrap credential while it is still
-// inside its grace window.
-func (s *Secrets) BootstrapGrace(now time.Time) (string, bool) {
-	if s == nil || s.VLESSBootstrapPrevUUID == "" || s.VLESSBootstrapPrevUUID == s.VLESSBootstrapUUID {
-		return "", false
+// PreviousDescriptor returns the retired bootstrap credential and the REALITY
+// short-id it was published with, while that descriptor is still inside its
+// grace window. Either half may be unchanged — rotating the short-id alone
+// keeps the UUID — but a descriptor identical to the live one is not a retired
+// one and nothing extra is kept for it.
+func (s *Secrets) PreviousDescriptor(now time.Time) (uuid, shortID string, ok bool) {
+	if s == nil || s.VLESSBootstrapPrevUntil == 0 || now.Unix() >= s.VLESSBootstrapPrevUntil {
+		return "", "", false
 	}
-	if now.Unix() >= s.VLESSBootstrapPrevUntil {
-		return "", false
+	if s.VLESSBootstrapPrevUUID == "" && s.RealityShortIDPrev == "" {
+		return "", "", false
 	}
-	return s.VLESSBootstrapPrevUUID, true
+	if s.VLESSBootstrapPrevUUID == s.VLESSBootstrapUUID && s.RealityShortIDPrev == s.RealityShortID {
+		return "", "", false
+	}
+	return s.VLESSBootstrapPrevUUID, s.RealityShortIDPrev, true
 }
 
 // loadOrCreateSecrets reads the stealth secrets from the store, generating and
@@ -107,6 +119,9 @@ func loadOrCreateSecrets(ctx context.Context, st SettingsStore) (*Secrets, error
 	}
 	// Absent before the first rotation, and never generated.
 	if s.VLESSBootstrapPrevUUID, err = st.GetSetting(ctx, keyVLESSBootstrapPrev); err != nil {
+		return nil, err
+	}
+	if s.RealityShortIDPrev, err = st.GetSetting(ctx, keyRealityShortIDPrev); err != nil {
 		return nil, err
 	}
 	until, err := st.GetSetting(ctx, keyVLESSBootstrapPrevUntil)
