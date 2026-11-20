@@ -5,6 +5,9 @@ import (
 	"crypto/rand"
 	"encoding/base64"
 	"encoding/hex"
+	"fmt"
+	"strconv"
+	"time"
 
 	"github.com/google/uuid"
 	"golang.zx2c4.com/wireguard/wgctrl/wgtypes"
@@ -18,6 +21,13 @@ const (
 	keyVLESSUUID          = "stealth_vless_uuid"
 	keyVLESSBootstrapUUID = "stealth_vless_bootstrap_uuid"
 	keyHysteria2Pass      = "stealth_hysteria2_password"
+
+	// A client whose only route to the gateway is the bootstrap carrier cannot
+	// fetch a fresh descriptor after its credential stops being accepted. The
+	// retired UUID is therefore kept in plaintext, and honoured, for one grace
+	// window. The audit archive holds hashes only and cannot serve this.
+	keyVLESSBootstrapPrev      = "stealth_vless_bootstrap_uuid_previous"
+	keyVLESSBootstrapPrevUntil = "stealth_vless_bootstrap_previous_until"
 )
 
 // SettingsStore is the subset of the node store the stealth manager needs.
@@ -37,6 +47,23 @@ type Secrets struct {
 	VLESSUUID          string
 	VLESSBootstrapUUID string
 	Hysteria2Password  string
+
+	// The previously active bootstrap UUID and the unix second it stops being
+	// accepted. Empty until the first rotation.
+	VLESSBootstrapPrevUUID  string
+	VLESSBootstrapPrevUntil int64
+}
+
+// BootstrapGrace returns the retired bootstrap credential while it is still
+// inside its grace window.
+func (s *Secrets) BootstrapGrace(now time.Time) (string, bool) {
+	if s == nil || s.VLESSBootstrapPrevUUID == "" || s.VLESSBootstrapPrevUUID == s.VLESSBootstrapUUID {
+		return "", false
+	}
+	if now.Unix() >= s.VLESSBootstrapPrevUntil {
+		return "", false
+	}
+	return s.VLESSBootstrapPrevUUID, true
 }
 
 // loadOrCreateSecrets reads the stealth secrets from the store, generating and
@@ -77,6 +104,19 @@ func loadOrCreateSecrets(ctx context.Context, st SettingsStore) (*Secrets, error
 
 	if s.VLESSBootstrapUUID, err = getOrSet(ctx, st, keyVLESSBootstrapUUID, uuid.NewString()); err != nil {
 		return nil, err
+	}
+	// Absent before the first rotation, and never generated.
+	if s.VLESSBootstrapPrevUUID, err = st.GetSetting(ctx, keyVLESSBootstrapPrev); err != nil {
+		return nil, err
+	}
+	until, err := st.GetSetting(ctx, keyVLESSBootstrapPrevUntil)
+	if err != nil {
+		return nil, err
+	}
+	if until != "" {
+		if s.VLESSBootstrapPrevUntil, err = strconv.ParseInt(until, 10, 64); err != nil {
+			return nil, fmt.Errorf("stealth bootstrap grace deadline: %w", err)
+		}
 	}
 
 	// Hysteria2 auth password is always node-generated and persisted; the

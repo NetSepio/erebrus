@@ -10,6 +10,7 @@ import (
 	"maps"
 	"net"
 	"reflect"
+	"slices"
 	"strconv"
 	"strings"
 	"testing"
@@ -299,7 +300,8 @@ func TestBootstrapCredentialLifecycle(t *testing.T) {
 	if got := m.ActiveParams(); got.VLESSBootstrapUUID != before.VLESSBootstrapUUID || got.RealityShortID == before.RealityShortID {
 		t.Fatal("short-ID rotation changed the bootstrap UUID or failed to change the short ID")
 	}
-	if err := m.RotateAllSecrets(ctx); err != nil {
+	retired := m.Params().VLESSBootstrapUUID
+	if err := m.RotateAllSecrets(ctx, time.Hour); err != nil {
 		t.Fatal(err)
 	}
 	active := m.ActiveParams()
@@ -324,5 +326,66 @@ func TestBootstrapCredentialLifecycle(t *testing.T) {
 	}
 	if got := m.ActiveParams().VLESSBootstrapUUID; got != "" {
 		t.Fatal("advertised a credential after close")
+	}
+
+	// The retired credential survives the rotation that replaced it, otherwise a
+	// client reachable only through this carrier can never collect the new one.
+	if prev, ok := reloaded.BootstrapGrace(time.Now()); !ok || prev != retired {
+		t.Fatalf("grace credential = %q (%v), want the retired %q", prev, ok, retired)
+	}
+	if _, ok := reloaded.BootstrapGrace(time.Now().Add(2 * time.Hour)); ok {
+		t.Fatal("grace credential outlived its window")
+	}
+}
+
+func TestBootstrapGraceServesTheRetiredCredential(t *testing.T) {
+	ctx := t.Context()
+	st := newMemStore()
+	m := New(testConfig(0, 0), st)
+	if err := m.Init(ctx); err != nil {
+		t.Fatal(err)
+	}
+	names := func() map[string]string {
+		m.mu.Lock()
+		defer m.mu.Unlock()
+		out := map[string]string{}
+		for _, u := range m.vlessUsers() {
+			out[u.Name] = u.UUID
+		}
+		return out
+	}
+	if got := names(); len(got) != 2 || got[bootstrapPrevUser] != "" {
+		t.Fatalf("a node that never rotated offered %v", got)
+	}
+
+	retired := m.Params().VLESSBootstrapUUID
+	if err := m.RotateAllSecrets(ctx, time.Hour); err != nil {
+		t.Fatal(err)
+	}
+	got := names()
+	if len(got) != 3 || got[bootstrapPrevUser] != retired || got[bootstrapUser] == retired {
+		t.Fatalf("after rotation the listener offered %v, want the retired %q kept apart", got, retired)
+	}
+
+	// The router must treat both identities alike; matching only the current one
+	// would authenticate the retired client and then pin it to WireGuard.
+	users := bootstrapRule("gateway.example").DefaultOptions.RawDefaultRule.AuthUser
+	if !slices.Contains(users, bootstrapUser) || !slices.Contains(users, bootstrapPrevUser) {
+		t.Fatalf("bootstrap rule matches %v", users)
+	}
+
+	// Only one generation overlaps, and a non-positive grace retires at once.
+	second := m.Params().VLESSBootstrapUUID
+	if err := m.RotateAllSecrets(ctx, time.Hour); err != nil {
+		t.Fatal(err)
+	}
+	if got = names(); got[bootstrapPrevUser] != second {
+		t.Fatalf("second rotation kept %q, want only the most recent %q", got[bootstrapPrevUser], second)
+	}
+	if err := m.RotateAllSecrets(ctx, 0); err != nil {
+		t.Fatal(err)
+	}
+	if got = names(); len(got) != 2 {
+		t.Fatalf("a zero grace still offered %v", got)
 	}
 }

@@ -27,6 +27,7 @@ import (
 	"github.com/NetSepio/erebrus/internal/store"
 	"github.com/NetSepio/erebrus/internal/telemetry"
 	"github.com/NetSepio/erebrus/internal/transport/probe"
+	"github.com/NetSepio/erebrus/internal/wallet"
 	"github.com/NetSepio/erebrus/internal/wg"
 )
 
@@ -237,6 +238,15 @@ func Run(cfg *config.Config) error {
 				}
 				return tok, nil
 			})
+			// Opt-in on-chain registry: the node signs a consent proof and the
+			// gateway submits and pays for the write. A node that is off, or
+			// whose identity is incomplete, simply never registers.
+			if attester, err := node.NewAttester(cfg, st, peerID, did); err != nil {
+				slog.Warn("chain registration disabled", "err", err)
+			} else if attester != nil {
+				gwClient.SetAttester(attester)
+				slog.Info("chain registration enabled", "operator", attester.Operator(), "chain", wallet.CanonicalChain(cfg.WalletChain))
+			}
 			go gwClient.Run(ctx)
 
 			// Report the Shield login to the gateway for org paid seats.

@@ -19,6 +19,7 @@ import (
 	"strconv"
 	"strings"
 	"sync"
+	"time"
 
 	"github.com/NetSepio/erebrus/internal/config"
 	"github.com/google/uuid"
@@ -33,6 +34,9 @@ const (
 	vlessFlowVision = "xtls-rprx-vision"
 	vlessInboundTag = "vless-reality"
 	bootstrapUser   = "bootstrap"
+	// The retired bootstrap identity. Routed exactly like bootstrapUser, so a
+	// client still holding it reaches the gateway rather than WireGuard.
+	bootstrapPrevUser = "bootstrap-previous"
 )
 
 // Manager owns the embedded sing-box instance and the node-wide carrier secrets.
@@ -44,8 +48,14 @@ type Manager struct {
 	certPEM     string
 	keyPEM      string
 
-	mu       sync.Mutex
+	mu sync.Mutex
+	// instance is the live sing-box, nil whenever nothing is listening.
 	instance *box.Box
+	// want records whether the carrier is supposed to be listening. instance is
+	// nil both when the carrier is deliberately down and when a start failed to
+	// bind, so restarts keyed on instance alone turned into no-ops after one
+	// failure: the carrier stayed offline while rotation reported success.
+	want bool
 }
 
 // New constructs a Manager. Call Init before Start or Params.
@@ -98,6 +108,9 @@ func (m *Manager) start(ctx context.Context) error {
 	if m.secrets == nil {
 		return fmt.Errorf("stealth: Init not called")
 	}
+	// Set before anything that can fail, so a start that cannot bind is still
+	// remembered as wanted and the next rotation retries it.
+	m.want = true
 
 	if m.instance != nil {
 		return nil
@@ -126,8 +139,11 @@ func (m *Manager) start(ctx context.Context) error {
 }
 
 // RotateAllSecrets regenerates both VLESS UUIDs, the REALITY short-id, and Hysteria2
-// password, then restarts sing-box if it was running.
-func (m *Manager) RotateAllSecrets(ctx context.Context) error {
+// password, then restarts sing-box if it was running. The outgoing bootstrap
+// credential stays valid for grace so clients that reach the gateway only
+// through this carrier can still collect the replacement descriptor; pass a
+// non-positive grace to retire it immediately.
+func (m *Manager) RotateAllSecrets(ctx context.Context, grace time.Duration) error {
 	m.mu.Lock()
 	defer m.mu.Unlock()
 	if m.st == nil {
@@ -139,15 +155,23 @@ func (m *Manager) RotateAllSecrets(ctx context.Context) error {
 		}
 	}
 	next := *m.secrets
+	// Only one generation overlaps: the credential retired now replaces whatever
+	// the previous rotation left behind.
+	next.VLESSBootstrapPrevUUID, next.VLESSBootstrapPrevUntil = m.secrets.VLESSBootstrapUUID, time.Now().Add(grace).Unix()
+	if grace <= 0 {
+		next.VLESSBootstrapPrevUUID, next.VLESSBootstrapPrevUntil = "", 0
+	}
 	next.VLESSUUID = uuid.NewString()
 	next.VLESSBootstrapUUID = uuid.NewString()
 	next.RealityShortID = randHex(4)
 	next.Hysteria2Password = randToken(24)
 	if err := m.st.SetSettings(ctx, map[string]string{
-		keyVLESSUUID:          next.VLESSUUID,
-		keyVLESSBootstrapUUID: next.VLESSBootstrapUUID,
-		keyRealityShortID:     next.RealityShortID,
-		keyHysteria2Pass:      next.Hysteria2Password,
+		keyVLESSUUID:               next.VLESSUUID,
+		keyVLESSBootstrapUUID:      next.VLESSBootstrapUUID,
+		keyVLESSBootstrapPrev:      next.VLESSBootstrapPrevUUID,
+		keyVLESSBootstrapPrevUntil: strconv.FormatInt(next.VLESSBootstrapPrevUntil, 10),
+		keyRealityShortID:          next.RealityShortID,
+		keyHysteria2Pass:           next.Hysteria2Password,
 	}); err != nil {
 		return err
 	}
@@ -175,7 +199,7 @@ func (m *Manager) RotateReality(ctx context.Context) (string, error) {
 }
 
 func (m *Manager) restartIfRunning(ctx context.Context) error {
-	if m.instance == nil {
+	if !m.want {
 		return nil
 	}
 	if err := m.close(); err != nil {
@@ -188,6 +212,8 @@ func (m *Manager) restartIfRunning(ctx context.Context) error {
 func (m *Manager) Close() error {
 	m.mu.Lock()
 	defer m.mu.Unlock()
+	// A deliberate stop, unlike the close inside a restart.
+	m.want = false
 	return m.close()
 }
 
@@ -247,7 +273,7 @@ func bootstrapRule(gateway string) option.Rule {
 	match := option.RawDefaultRule{
 		Inbound:  []string{vlessInboundTag},
 		Network:  []string{"tcp"},
-		AuthUser: []string{bootstrapUser},
+		AuthUser: []string{bootstrapUser, bootstrapPrevUser},
 		Port:     []uint16{443},
 	}
 	if ip, err := netip.ParseAddr(gateway); err == nil {
@@ -287,6 +313,20 @@ func bootstrapHost(rawURL string) string {
 	return host
 }
 
+// vlessUsers lists the carrier identities the listener accepts. The retired
+// bootstrap credential is dropped the next time the listener is built, which a
+// scheduled rotation guarantees within one cycle.
+func (m *Manager) vlessUsers() []option.VLESSUser {
+	users := []option.VLESSUser{
+		{Name: "erebrus", UUID: m.secrets.VLESSUUID, Flow: vlessFlowVision},
+		{Name: bootstrapUser, UUID: m.secrets.VLESSBootstrapUUID, Flow: vlessFlowVision},
+	}
+	if prev, ok := m.secrets.BootstrapGrace(time.Now()); ok {
+		users = append(users, option.VLESSUser{Name: bootstrapPrevUser, UUID: prev, Flow: vlessFlowVision})
+	}
+	return users
+}
+
 func (m *Manager) vlessInbound() option.Inbound {
 	host, port := splitHostPort(m.cfg.RealityHandshakeTarget(), 443)
 	return option.Inbound{
@@ -294,10 +334,7 @@ func (m *Manager) vlessInbound() option.Inbound {
 		Tag:  vlessInboundTag,
 		Options: &option.VLESSInboundOptions{
 			ListenOptions: listenOn(m.cfg.VLESSPortInt()),
-			Users: []option.VLESSUser{
-				{Name: "erebrus", UUID: m.secrets.VLESSUUID, Flow: vlessFlowVision},
-				{Name: bootstrapUser, UUID: m.secrets.VLESSBootstrapUUID, Flow: vlessFlowVision},
-			},
+			Users:         m.vlessUsers(),
 			InboundTLSOptionsContainer: option.InboundTLSOptionsContainer{
 				TLS: &option.InboundTLSOptions{
 					Enabled:    true,

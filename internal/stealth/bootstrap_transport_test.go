@@ -57,13 +57,19 @@ func TestBootstrapRealityTransport(t *testing.T) {
 	if err := m.Init(t.Context()); err != nil {
 		t.Fatal(err)
 	}
+	// Rotate first: a client holding the retired credential must still reach the
+	// gateway, or rotation locks out exactly the clients the carrier exists for.
+	retired := m.secrets.VLESSBootstrapUUID
+	if err := m.RotateAllSecrets(t.Context(), time.Hour); err != nil {
+		t.Fatal(err)
+	}
 	opts := m.serverOptions()
 	registry := outboundRegistry()
 	outbound.Register(registry, C.TypeDirect, func(_ context.Context, _ adapter.Router, _ log.ContextLogger, tag string, _ option.DirectOutboundOptions) (adapter.Outbound, error) {
 		return &echoDestination{outbound.NewAdapter(C.TypeDirect, tag, []string{"tcp", "udp"}, nil)}, nil
 	})
 	vless.RegisterOutbound(registry)
-	for tag, id := range map[string]string{"bootstrap-client": m.secrets.VLESSBootstrapUUID, "vpn-client": m.secrets.VLESSUUID} {
+	for tag, id := range map[string]string{"bootstrap-client": m.secrets.VLESSBootstrapUUID, "retired-client": retired, "vpn-client": m.secrets.VLESSUUID} {
 		opts.Outbounds = append(opts.Outbounds, option.Outbound{Tag: tag, Type: C.TypeVLESS, Options: &option.VLESSOutboundOptions{
 			ServerOptions: option.ServerOptions{Server: "127.0.0.1", ServerPort: uint16(cfg.VLESSPortInt())},
 			UUID:          id, Flow: vlessFlowVision,
@@ -87,6 +93,9 @@ func TestBootstrapRealityTransport(t *testing.T) {
 		{"bootstrap-client", "other.example:443", "127.0.0.1:51820"},
 		{"bootstrap-client", "gateway.example:80", "127.0.0.1:51820"},
 		{"vpn-client", "gateway.example:443", "127.0.0.1:51820"},
+		// The retired credential keeps the same narrow reach during its grace window.
+		{"retired-client", "gateway.example:443", "gateway.example:443"},
+		{"retired-client", "other.example:443", "127.0.0.1:51820"},
 	} {
 		t.Run(tc.client+"/"+tc.destination, func(t *testing.T) {
 			client, ok := instance.Outbound().Outbound(tc.client)

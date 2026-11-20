@@ -48,7 +48,10 @@ func (r *Rotator) Rotate(ctx context.Context, opt Options) error {
 		return err
 	}
 
-	if err := r.Stealth.RotateAllSecrets(ctx); err != nil {
+	// The retired bootstrap credential keeps working for the same window the
+	// archived hashes record, so clients can still reach the gateway for the
+	// replacement descriptor.
+	if err := r.Stealth.RotateAllSecrets(ctx, opt.GracePeriod); err != nil {
 		return fmt.Errorf("rotate secrets: %w", err)
 	}
 

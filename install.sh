@@ -515,6 +515,15 @@ detect_zone() {
 gather_config() {
   echo; info "${C_BOLD}Node configuration${C_RESET}"
   REGION="${REGION:-$(curl -fsS --max-time 6 https://ipinfo.io/country 2>/dev/null | tr -d '[:space:]' || echo unknown)}"
+  # Opt-in, defaulting to off: an existing node that upgrades keeps its current
+  # behaviour unless the operator says yes here or sets CHAIN_REGISTRATION.
+  if [[ -z "${CHAIN_REGISTRATION:-}" ]]; then
+    if [[ ${#REGION} -eq 2 ]] && confirm "Publish this node's identity to the on-chain registry? The gateway pays the transaction fee; your node never needs funds." n; then
+      CHAIN_REGISTRATION=on
+    else
+      CHAIN_REGISTRATION=off
+    fi
+  fi
   detect_zone
   if [[ -n "${ZONE:-}" ]]; then
     ok "Zone: ${ZONE}"
@@ -629,7 +638,7 @@ $(profile_env_block)
 
 # State
 STATE_DIR=${STATE_DIR}
-CHAIN_REGISTRATION=off
+CHAIN_REGISTRATION=${CHAIN_REGISTRATION:-off}
 EOF
   run chmod 600 "$f"
   ok "Wrote config: $f"
