@@ -234,3 +234,49 @@ func TestServedDescriptorSurvivesARestart(t *testing.T) {
 			uuid, shortID, served.VLESSBootstrapUUID, served.RealityShortID)
 	}
 }
+
+// The rotate-carriers CLI opens a manager over the node's store without
+// starting a listener of its own, and a restart is a no-op for a carrier that
+// is deliberately down — so recording the new credentials as served after it
+// put a descriptor no listener had ever published into the grace window. Two
+// such rotations dropped the descriptor clients were really holding while its
+// window was still open, which is exactly the lockout the window prevents.
+func TestRotationWithoutAListenerKeepsTheServedDescriptor(t *testing.T) {
+	ctx := context.Background()
+	vp, hp := freePort(t), freePort(t)
+	cfg, st := testConfig(vp, hp), newMemStore()
+
+	// The node process: it serves a descriptor, then goes away.
+	node := New(cfg, st)
+	if err := node.Init(ctx); err != nil {
+		t.Fatalf("init: %v", err)
+	}
+	if err := node.Start(ctx); err != nil {
+		t.Fatalf("start: %v", err)
+	}
+	waitListening(t, vp).Close()
+	served := node.Params()
+	if err := node.Close(); err != nil {
+		t.Fatalf("close: %v", err)
+	}
+
+	// The CLI, over the same store, with no listener of its own.
+	cli := New(cfg, st)
+	if err := cli.Init(ctx); err != nil {
+		t.Fatalf("init the tool: %v", err)
+	}
+	for i := range 2 {
+		if err := cli.RotateAllSecrets(ctx, descriptorGrace); err != nil {
+			t.Fatalf("rotation %d: %v", i+1, err)
+		}
+	}
+
+	uuid, shortID, ok := cli.secrets.PreviousDescriptor(time.Now())
+	if !ok {
+		t.Fatal("no descriptor is in its grace window after two rotations")
+	}
+	if uuid != served.VLESSBootstrapUUID || shortID != served.RealityShortID {
+		t.Fatalf("the grace window holds %q/%q, want the descriptor a listener published: %q/%q",
+			uuid, shortID, served.VLESSBootstrapUUID, served.RealityShortID)
+	}
+}

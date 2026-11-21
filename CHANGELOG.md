@@ -88,7 +88,13 @@ Dates are the day the work landed on `main`. Entries under **Unreleased** are on
   that came back after a rotation that could not bind read the unpublished
   credential as the served one — and retired it on the next rotation, dropping
   the descriptor clients were holding inside its grace window. It is recorded in
-  the node's own store now, and written on every successful start.
+  the node's own store now, and written on every successful start — and only
+  there. A rotation used to record its credentials as served once the restart
+  returned, and a restart is a no-op for a carrier that is deliberately down:
+  the rotate-carriers tool opens a manager over the node's store without a
+  listener of its own, so two rotations through it put a descriptor no listener
+  had ever published into the grace window and dropped the one clients were
+  really holding.
 - **A reconnect after a failed gateway lookup spent another sponsorship.** The
   gateway answered `unavailable` both for a sponsorship it has no record of and
   for a lookup it could not complete, and the node discarded its nonce on

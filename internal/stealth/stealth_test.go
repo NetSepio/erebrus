@@ -378,12 +378,16 @@ func TestBootstrapGraceServesTheRetiredCredential(t *testing.T) {
 	}
 
 	// Only one generation overlaps, and a non-positive grace retires at once.
-	second := m.Params().VLESSBootstrapUUID
+	// This manager has no listener, so it has published nothing: what stays in
+	// the window is the descriptor that was current when it started, the only
+	// one that can be in a client's hands. Which descriptor a rotation retires
+	// once a listener is involved is TestRotationKeepsTheLastServedDescriptor
+	// and TestRotationWithoutAListenerKeepsTheServedDescriptor.
 	if err := m.RotateAllSecrets(ctx, time.Hour); err != nil {
 		t.Fatal(err)
 	}
-	if got = names(); got[bootstrapPrevUser] != second {
-		t.Fatalf("second rotation kept %q, want only the most recent %q", got[bootstrapPrevUser], second)
+	if got = names(); len(got) != 3 || got[bootstrapPrevUser] != retired {
+		t.Fatalf("second rotation offered %v, want one retired descriptor: the published %q", got, retired)
 	}
 	if err := m.RotateAllSecrets(ctx, 0); err != nil {
 		t.Fatal(err)

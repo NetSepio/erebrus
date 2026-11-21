@@ -239,19 +239,7 @@ func (m *Manager) RotateAllSecrets(ctx context.Context, grace time.Duration) err
 	}
 	m.secrets = &next
 	m.scheduleGraceExpiry()
-	return m.rotated(ctx)
-}
-
-// rotated brings the listener up on the credentials just written and records
-// them as served. A restart that fails leaves the served descriptor where it
-// was: those credentials were never published, so the next rotation must retire
-// the older ones — the pair clients are actually holding — and not these.
-func (m *Manager) rotated(ctx context.Context) error {
-	if err := m.restartIfRunning(ctx); err != nil {
-		return err
-	}
-	m.markServed(ctx)
-	return nil
+	return m.restartIfRunning(ctx)
 }
 
 // RotateReality regenerates the REALITY short-id, restarts sing-box, and returns
@@ -283,7 +271,7 @@ func (m *Manager) RotateReality(ctx context.Context) (string, error) {
 	m.secrets.VLESSBootstrapPrevUUID = retiredUUID
 	m.secrets.VLESSBootstrapPrevUntil = until
 	m.scheduleGraceExpiry()
-	if err := m.rotated(ctx); err != nil {
+	if err := m.restartIfRunning(ctx); err != nil {
 		return "", err
 	}
 	return shortID, nil
@@ -325,6 +313,13 @@ func (m *Manager) expireGrace() {
 	}
 }
 
+// restartIfRunning brings the listener back up on whatever is in m.secrets, and
+// does nothing when the carrier is deliberately down. Only a successful start
+// records the descriptor as served, from inside start itself: a rotation whose
+// restart fails, and one run against a store by a tool with no listener of its
+// own, both leave the served descriptor where it was — those credentials were
+// never published, so the next rotation must retire the older pair, the one
+// clients are actually holding, and not these.
 func (m *Manager) restartIfRunning(ctx context.Context) error {
 	if !m.want {
 		return nil
