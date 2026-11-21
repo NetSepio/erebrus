@@ -108,11 +108,10 @@ func (m *Manager) init(ctx context.Context) error {
 	m.secrets = secrets
 	m.certPEM = certPEM
 	m.keyPEM = keyPEM
-	// The stored descriptor counts as served: it is what the gateway was told
-	// while this process, or the one before it, was running. Only a rotation
-	// that fails to bind leaves this pointing at the older descriptor, which is
+	// What the listener last bound with, which outlives the process: a rotation
+	// that failed to bind leaves the current descriptor unpublished, and this is
 	// the one still in clients' hands.
-	m.servedUUID, m.servedShortID = secrets.VLESSBootstrapUUID, secrets.RealityShortID
+	m.servedUUID, m.servedShortID = secrets.ServedUUID, secrets.ServedShortID
 	// A node restarted inside a grace window still has to expire it on time.
 	m.scheduleGraceExpiry()
 	return nil
@@ -160,8 +159,28 @@ func (m *Manager) start(ctx context.Context) error {
 	}
 
 	m.instance = instance
-	m.servedUUID, m.servedShortID = m.secrets.VLESSBootstrapUUID, m.secrets.RealityShortID
+	m.markServed(ctx)
 	return nil
+}
+
+// markServed records the descriptor the listener is now accepting, in memory
+// and in the store, so a rotation after a process restart still knows which
+// descriptor was actually published.
+func (m *Manager) markServed(ctx context.Context) {
+	// Written on every successful start, even when it matches what is already
+	// held: on a node that has not recorded one yet, the fallback is what is
+	// current, and skipping the write would leave nothing to distinguish a
+	// published descriptor from one a failed rotation left behind.
+	m.servedUUID, m.servedShortID = m.secrets.VLESSBootstrapUUID, m.secrets.RealityShortID
+	if m.st == nil {
+		return
+	}
+	if err := m.st.SetSettings(ctx, map[string]string{
+		keyServedBootstrapUUID: m.servedUUID,
+		keyServedShortID:       m.servedShortID,
+	}); err != nil {
+		slog.Warn("stealth: could not record the descriptor the carrier is serving", "err", err)
+	}
 }
 
 // retire returns the descriptor a rotation should keep working, and the second
@@ -231,7 +250,7 @@ func (m *Manager) rotated(ctx context.Context) error {
 	if err := m.restartIfRunning(ctx); err != nil {
 		return err
 	}
-	m.servedUUID, m.servedShortID = m.secrets.VLESSBootstrapUUID, m.secrets.RealityShortID
+	m.markServed(ctx)
 	return nil
 }
 

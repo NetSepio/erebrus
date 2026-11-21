@@ -32,6 +32,14 @@ const (
 	keyVLESSBootstrapPrev      = "stealth_vless_bootstrap_uuid_previous"
 	keyRealityShortIDPrev      = "stealth_reality_short_id_previous"
 	keyVLESSBootstrapPrevUntil = "stealth_vless_bootstrap_previous_until"
+
+	// The descriptor the listener last bound with. A rotation whose restart
+	// fails leaves a credential the network never saw as the current one, and
+	// across a process restart there is otherwise nothing to tell the two
+	// apart: the next rotation would retire the unpublished one and drop the
+	// descriptor clients are actually holding.
+	keyServedBootstrapUUID = "stealth_served_bootstrap_uuid"
+	keyServedShortID       = "stealth_served_reality_short_id"
 )
 
 // SettingsStore is the subset of the node store the stealth manager needs.
@@ -58,6 +66,13 @@ type Secrets struct {
 	VLESSBootstrapPrevUUID  string
 	RealityShortIDPrev      string
 	VLESSBootstrapPrevUntil int64
+
+	// The descriptor the listener last bound with, which is what a rotation
+	// retires. Falls back to the current one on a node that has not served
+	// since this was recorded, where the current descriptor is what it has
+	// been publishing all along.
+	ServedUUID    string
+	ServedShortID string
 }
 
 // PreviousDescriptor returns the retired bootstrap credential and the REALITY
@@ -123,6 +138,15 @@ func loadOrCreateSecrets(ctx context.Context, st SettingsStore) (*Secrets, error
 	}
 	if s.RealityShortIDPrev, err = st.GetSetting(ctx, keyRealityShortIDPrev); err != nil {
 		return nil, err
+	}
+	if s.ServedUUID, err = st.GetSetting(ctx, keyServedBootstrapUUID); err != nil {
+		return nil, err
+	}
+	if s.ServedShortID, err = st.GetSetting(ctx, keyServedShortID); err != nil {
+		return nil, err
+	}
+	if s.ServedUUID == "" && s.ServedShortID == "" {
+		s.ServedUUID, s.ServedShortID = s.VLESSBootstrapUUID, s.RealityShortID
 	}
 	until, err := st.GetSetting(ctx, keyVLESSBootstrapPrevUntil)
 	if err != nil {

@@ -163,3 +163,74 @@ func TestRotationKeepsTheLastServedDescriptor(t *testing.T) {
 		t.Fatalf("the listener offers short-ids %v and users %v, without the descriptor it published", shortIDs, users)
 	}
 }
+
+// Which descriptor was actually published has to outlive the process. A
+// rotation that cannot bind leaves the new credential as the current one
+// without the network ever seeing it, and a restart that read the current
+// credential as served would retire it next time — dropping the descriptor
+// clients are holding, inside its grace window.
+func TestServedDescriptorSurvivesARestart(t *testing.T) {
+	ctx := context.Background()
+	vp, hp := freePort(t), freePort(t)
+	cfg, st := testConfig(vp, hp), newMemStore()
+
+	first := New(cfg, st)
+	if err := first.Init(ctx); err != nil {
+		t.Fatalf("init: %v", err)
+	}
+	if err := first.Start(ctx); err != nil {
+		t.Fatalf("start: %v", err)
+	}
+	waitListening(t, vp).Close()
+	served := first.Params()
+
+	// A rotation that cannot bind, then the process goes away.
+	first.mu.Lock()
+	err := first.close()
+	first.mu.Unlock()
+	if err != nil {
+		t.Fatalf("close: %v", err)
+	}
+	squatter, err := net.Listen("tcp", net.JoinHostPort("0.0.0.0", strconv.Itoa(vp)))
+	if err != nil {
+		t.Fatalf("could not occupy the carrier port: %v", err)
+	}
+	if _, err = first.RotateReality(ctx); err == nil {
+		squatter.Close()
+		t.Fatal("rotation reported success while the carrier port was taken")
+	}
+	if err = first.Close(); err != nil {
+		squatter.Close()
+		t.Fatalf("close: %v", err)
+	}
+
+	// A new process over the same store, still unable to bind.
+	second := New(cfg, st)
+	if err = second.Init(ctx); err != nil {
+		squatter.Close()
+		t.Fatalf("init after restart: %v", err)
+	}
+	if err = second.Start(ctx); err == nil {
+		squatter.Close()
+		t.Fatal("the carrier started while its port was still taken")
+	}
+	if err = squatter.Close(); err != nil {
+		t.Fatalf("releasing the port: %v", err)
+	}
+	defer second.Close()
+
+	// Now it recovers. The descriptor that keeps working is the one that was
+	// published before the restart, not the one that never bound.
+	if _, err = second.RotateReality(ctx); err != nil {
+		t.Fatalf("rotation did not recover once the port was free: %v", err)
+	}
+	waitListening(t, vp).Close()
+	uuid, shortID, ok := second.secrets.PreviousDescriptor(time.Now())
+	if !ok {
+		t.Fatal("no descriptor is in its grace window after the restart")
+	}
+	if uuid != served.VLESSBootstrapUUID || shortID != served.RealityShortID {
+		t.Fatalf("the grace window holds %q/%q, want the descriptor served before the restart: %q/%q",
+			uuid, shortID, served.VLESSBootstrapUUID, served.RealityShortID)
+	}
+}

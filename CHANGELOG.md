@@ -83,6 +83,12 @@ Dates are the day the work landed on `main`. Entries under **Unreleased** are on
   grace window — so a successful retry locked out exactly the blocked clients
   the window exists for. What gets a window is now the descriptor the listener
   actually served.
+- **A restart after a failed rotation dropped the published descriptor.** Which
+  descriptor the listener last bound with lived only in memory, so a process
+  that came back after a rotation that could not bind read the unpublished
+  credential as the served one — and retired it on the next rotation, dropping
+  the descriptor clients were holding inside its grace window. It is recorded in
+  the node's own store now, and written on every successful start.
 - **A reconnect after a failed gateway lookup spent another sponsorship.** The
   gateway answered `unavailable` both for a sponsorship it has no record of and
   for a lookup it could not complete, and the node discarded its nonce on
