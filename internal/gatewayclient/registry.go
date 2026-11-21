@@ -168,6 +168,12 @@ func (c *Client) onRegistryResult(data json.RawMessage) {
 		c.log.Info("node registry write settled", "state", result.State, "tx", result.Hash)
 	case "queued":
 		c.log.Debug("node registry write queued")
+	case "deferred":
+		// The gateway could not look the job up, which says nothing about
+		// whether it exists. Keep the nonce and ask again: forgetting it here
+		// had a reconnect request a second sponsored write for a registration
+		// already queued, and spend another of the operator's daily allowance.
+		c.log.Debug("node registry lookup deferred")
 	default:
 		// The gateway has no enabled registry contract, this node's record is
 		// not complete enough to register, or it has no record of the nonce we

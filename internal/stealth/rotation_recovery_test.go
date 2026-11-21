@@ -3,6 +3,7 @@ package stealth
 import (
 	"context"
 	"net"
+	"slices"
 	"strconv"
 	"testing"
 	"time"
@@ -103,4 +104,62 @@ func waitListening(t *testing.T, port int) net.Conn {
 	}
 	t.Fatalf("carrier not listening on %s: %v", addr, err)
 	return nil
+}
+
+// A rotation writes the new short-id before the listener restarts, so a restart
+// that cannot bind leaves a credential the network never saw. Retiring that one
+// on the next rotation dropped the descriptor clients were actually holding —
+// inside its own grace window — so a successful retry locked out exactly the
+// blocked clients the grace window exists for.
+func TestRotationKeepsTheLastServedDescriptor(t *testing.T) {
+	ctx := context.Background()
+	vp, hp := freePort(t), freePort(t)
+	m := New(testConfig(vp, hp), newMemStore())
+	if err := m.Init(ctx); err != nil {
+		t.Fatalf("init: %v", err)
+	}
+	if err := m.Start(ctx); err != nil {
+		t.Fatalf("start: %v", err)
+	}
+	defer m.Close()
+	waitListening(t, vp).Close()
+	served := m.Params()
+
+	// A rotation whose restart cannot bind: the port is taken while it is down.
+	m.mu.Lock()
+	err := m.close()
+	m.mu.Unlock()
+	if err != nil {
+		t.Fatalf("close: %v", err)
+	}
+	squatter, err := net.Listen("tcp", net.JoinHostPort("0.0.0.0", strconv.Itoa(vp)))
+	if err != nil {
+		t.Fatalf("could not occupy the carrier port: %v", err)
+	}
+	if _, err = m.RotateReality(ctx); err == nil {
+		squatter.Close()
+		t.Fatal("rotation reported success while the carrier port was taken")
+	}
+	if err = squatter.Close(); err != nil {
+		t.Fatalf("releasing the port: %v", err)
+	}
+
+	// The retry succeeds. The descriptor that was actually published is the one
+	// that has to keep working.
+	if _, err = m.RotateReality(ctx); err != nil {
+		t.Fatalf("rotation did not recover once the port was free: %v", err)
+	}
+	waitListening(t, vp).Close()
+	uuid, shortID, ok := m.secrets.PreviousDescriptor(time.Now())
+	if !ok {
+		t.Fatal("no descriptor is in its grace window after two rotations")
+	}
+	if shortID != served.RealityShortID || uuid != served.VLESSBootstrapUUID {
+		t.Fatalf("the grace window holds %q/%q, want the descriptor that was served: %q/%q",
+			uuid, shortID, served.VLESSBootstrapUUID, served.RealityShortID)
+	}
+	shortIDs, users := m.listenerIdentities()
+	if !slices.Contains(shortIDs, served.RealityShortID) || !slices.Contains(users, served.VLESSBootstrapUUID) {
+		t.Fatalf("the listener offers short-ids %v and users %v, without the descriptor it published", shortIDs, users)
+	}
 }

@@ -61,6 +61,13 @@ type Manager struct {
 	// bind, so restarts keyed on instance alone turned into no-ops after one
 	// failure: the carrier stayed offline while rotation reported success.
 	want bool
+	// servedUUID and servedShortID are the descriptor the running listener last
+	// accepted, which is not always the one the settings hold: a rotation whose
+	// restart failed has written a credential the network never saw. Retiring
+	// that one would drop the descriptor clients are actually holding, inside
+	// its own grace window.
+	servedUUID    string
+	servedShortID string
 	// graceExpiry rebuilds the listener when the retired descriptor's window
 	// closes. Without it the deadline is advisory only: the retired identity
 	// lives on the running listener until something else rebuilds it, which is
@@ -101,6 +108,11 @@ func (m *Manager) init(ctx context.Context) error {
 	m.secrets = secrets
 	m.certPEM = certPEM
 	m.keyPEM = keyPEM
+	// The stored descriptor counts as served: it is what the gateway was told
+	// while this process, or the one before it, was running. Only a rotation
+	// that fails to bind leaves this pointing at the older descriptor, which is
+	// the one still in clients' hands.
+	m.servedUUID, m.servedShortID = secrets.VLESSBootstrapUUID, secrets.RealityShortID
 	// A node restarted inside a grace window still has to expire it on time.
 	m.scheduleGraceExpiry()
 	return nil
@@ -148,7 +160,25 @@ func (m *Manager) start(ctx context.Context) error {
 	}
 
 	m.instance = instance
+	m.servedUUID, m.servedShortID = m.secrets.VLESSBootstrapUUID, m.secrets.RealityShortID
 	return nil
+}
+
+// retire returns the descriptor a rotation should keep working, and the second
+// it stops being accepted. It is the one the listener actually served: pass a
+// non-positive grace to retire it at once. When nothing has been served — a
+// carrier that has never come up, or whose last rotation could not bind — the
+// window already open is left exactly as it is.
+func (m *Manager) retire(grace time.Duration) (uuid, shortID string, until int64) {
+	if grace <= 0 {
+		return "", "", 0
+	}
+	if m.servedUUID == "" && m.servedShortID == "" {
+		// Nothing has ever been served, so there is nothing new to retire and
+		// any window already open stays exactly as it is.
+		return m.secrets.VLESSBootstrapPrevUUID, m.secrets.RealityShortIDPrev, m.secrets.VLESSBootstrapPrevUntil
+	}
+	return m.servedUUID, m.servedShortID, time.Now().Add(grace).Unix()
 }
 
 // RotateAllSecrets regenerates both VLESS UUIDs, the REALITY short-id, and Hysteria2
@@ -172,11 +202,7 @@ func (m *Manager) RotateAllSecrets(ctx context.Context, grace time.Duration) err
 	// together with the short-id it was published alongside. Only one
 	// generation overlaps: what is retired now replaces whatever the previous
 	// rotation left behind.
-	next.VLESSBootstrapPrevUUID, next.RealityShortIDPrev = m.secrets.VLESSBootstrapUUID, m.secrets.RealityShortID
-	next.VLESSBootstrapPrevUntil = time.Now().Add(grace).Unix()
-	if grace <= 0 {
-		next.VLESSBootstrapPrevUUID, next.RealityShortIDPrev, next.VLESSBootstrapPrevUntil = "", "", 0
-	}
+	next.VLESSBootstrapPrevUUID, next.RealityShortIDPrev, next.VLESSBootstrapPrevUntil = m.retire(grace)
 	next.VLESSUUID = uuid.NewString()
 	next.VLESSBootstrapUUID = uuid.NewString()
 	next.RealityShortID = randHex(4)
@@ -194,7 +220,19 @@ func (m *Manager) RotateAllSecrets(ctx context.Context, grace time.Duration) err
 	}
 	m.secrets = &next
 	m.scheduleGraceExpiry()
-	return m.restartIfRunning(ctx)
+	return m.rotated(ctx)
+}
+
+// rotated brings the listener up on the credentials just written and records
+// them as served. A restart that fails leaves the served descriptor where it
+// was: those credentials were never published, so the next rotation must retire
+// the older ones — the pair clients are actually holding — and not these.
+func (m *Manager) rotated(ctx context.Context) error {
+	if err := m.restartIfRunning(ctx); err != nil {
+		return err
+	}
+	m.servedUUID, m.servedShortID = m.secrets.VLESSBootstrapUUID, m.secrets.RealityShortID
+	return nil
 }
 
 // RotateReality regenerates the REALITY short-id, restarts sing-box, and returns
@@ -212,21 +250,21 @@ func (m *Manager) RotateReality(ctx context.Context) (string, error) {
 		return "", fmt.Errorf("stealth: not initialized")
 	}
 	shortID := randHex(4)
-	retired, until := m.secrets.RealityShortID, time.Now().Add(descriptorGrace).Unix()
+	retiredUUID, retiredShortID, until := m.retire(descriptorGrace)
 	if err := m.st.SetSettings(ctx, map[string]string{
 		keyRealityShortID:          shortID,
-		keyRealityShortIDPrev:      retired,
-		keyVLESSBootstrapPrev:      m.secrets.VLESSBootstrapUUID,
+		keyRealityShortIDPrev:      retiredShortID,
+		keyVLESSBootstrapPrev:      retiredUUID,
 		keyVLESSBootstrapPrevUntil: strconv.FormatInt(until, 10),
 	}); err != nil {
 		return "", err
 	}
 	m.secrets.RealityShortID = shortID
-	m.secrets.RealityShortIDPrev = retired
-	m.secrets.VLESSBootstrapPrevUUID = m.secrets.VLESSBootstrapUUID
+	m.secrets.RealityShortIDPrev = retiredShortID
+	m.secrets.VLESSBootstrapPrevUUID = retiredUUID
 	m.secrets.VLESSBootstrapPrevUntil = until
 	m.scheduleGraceExpiry()
-	if err := m.restartIfRunning(ctx); err != nil {
+	if err := m.rotated(ctx); err != nil {
 		return "", err
 	}
 	return shortID, nil

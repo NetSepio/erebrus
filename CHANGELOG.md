@@ -76,6 +76,19 @@ Dates are the day the work landed on `main`. Entries under **Unreleased** are on
   could exhaust — leaving the node unable to register at all. The nonce is now
   kept with the identity it covers, across connections and restarts, and a
   reconnecting node asks after that job instead.
+- **A failed rotation dropped the descriptor clients were holding.** A rotation
+  writes the new short-id before the listener restarts, so a restart that cannot
+  bind leaves a credential the network never saw. Retiring that one on the next
+  rotation discarded the descriptor still in clients' hands — inside its own
+  grace window — so a successful retry locked out exactly the blocked clients
+  the window exists for. What gets a window is now the descriptor the listener
+  actually served.
+- **A reconnect after a failed gateway lookup spent another sponsorship.** The
+  gateway answered `unavailable` both for a sponsorship it has no record of and
+  for a lookup it could not complete, and the node discarded its nonce on
+  either. A transient database error therefore had the node ask for a second
+  paid write of a registration already queued. A lookup that failed now answers
+  `deferred`, which the node keeps polling.
 - **A failed restart left the carrier down while rotation reported success.**
   Restarts were keyed on the live sing-box instance, which a start that could not
   bind had already cleared, so every later attempt became a no-op. The manager

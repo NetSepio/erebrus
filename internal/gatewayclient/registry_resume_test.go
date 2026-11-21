@@ -121,6 +121,19 @@ func TestReconnectResumesTheQueuedSponsorship(t *testing.T) {
 		t.Fatalf("with nothing in flight the node sent %q", env.Type)
 	}
 
+	// A lookup the gateway could not complete says nothing about the job, so
+	// the nonce stays: forgetting it here spent another sponsorship.
+	c.onRegistryChallenge(client, json.RawMessage(`{"message":"challenge"}`))
+	readFrame(t, server)
+	c.onRegistryResult(json.RawMessage(`{"state":"deferred"}`))
+	if a.PendingNonce() == "" {
+		t.Fatal("a deferred lookup discarded the queued nonce")
+	}
+	c.resumeRegistry(client)
+	if env = readFrame(t, server); env.Type != TypeRegistryStatus {
+		t.Fatalf("after a deferred lookup the node sent %q", env.Type)
+	}
+
 	// A gateway with no record of the job must not be polled for ever either.
 	c.onRegistryChallenge(client, json.RawMessage(`{"message":"challenge"}`))
 	readFrame(t, server)
