@@ -1,6 +1,6 @@
 # Backward-compatible alias — builds erebrus-node (also installs `erebrus` symlink binary).
 # syntax=docker/dockerfile:1
-FROM golang:1.26.8-alpine3.23 AS build-app
+FROM golang:1.26.11-alpine3.23 AS build-app
 RUN apk update && apk add --no-cache git
 WORKDIR /app
 COPY go.mod go.sum ./

@@ -1,6 +1,6 @@
 module github.com/NetSepio/erebrus
 
-go 1.26.0
+go 1.26.11
 
 require (
 	github.com/blocto/solana-go-sdk v1.30.0

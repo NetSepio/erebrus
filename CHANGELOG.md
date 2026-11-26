@@ -137,3 +137,15 @@ Dates are the day the work landed on `main`. Entries under **Unreleased** are on
   version at any release; the brotli advisory above; and the gorilla/websocket
   mask key, whose only fix is an unreleased commit past v1.5.3 and whose masks
   never leave TLS.
+- **The Go toolchain moves to 1.26.11 everywhere that builds a binary.**
+  `net/http`'s `MaxBytesReader` sets `Connection: close` without
+  synchronization, so an HTTP/1 server that uses it can crash on a race with a
+  handler setting its own header (GO-2026-6859), reachable here from
+  `gatewayclient.Run`, `firewall.ConfigureAdmin` and `drop.Read`. This was not
+  a CI pin but three separate routes to shipping against the unpatched standard
+  library: `release.yml` builds the published `erebrus-linux-{amd64,arm64}`
+  binaries with whatever toolchain `go.mod` names, which was 1.26.0, and the
+  two Dockerfiles behind the GHCR node and sentinel images both pinned
+  `golang:1.26.8-alpine3.23`. `go.mod`, those two and the root alias Dockerfile
+  now all resolve to 1.26.11. Found by the gate above, which can only see it on
+  the toolchain CI installs and never on a developer's newer one.

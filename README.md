@@ -51,10 +51,14 @@ Every node serves a local dashboard at `http://<node>:9080/` — intro, live sta
 
 ## Docs
 
-* [docs/NODE.md](node.md) — running, configuring, and managing a node (ports, env reference, troubleshooting).
-* [docs/ARCHITECTURE.md](architecture.md) — package layout and the stealth carrier topology.
-* [docs/SECURITY-AUDIT.md](security-audit.md) — data-capture inventory, threat model, and operator hardening.
-* [docs/DROP.md](drop.md) — Drop installation, private APIs, metrics, and safe storage operations.
+* [architecture.md](architecture.md) — package layout and the stealth carrier topology.
+* [node.md](node.md) — running, configuring, and managing a node (ports, env reference, troubleshooting).
+* [drop.md](drop.md) — Drop installation, private APIs, metrics, and safe storage operations.
+* [cloud.md](cloud.md) — cloud deployment checklist.
+* [internal-env.md](internal-env.md) — internal environment reference for developers and installers.
+* [ws-protocol.md](ws-protocol.md) — node ↔ gateway WebSocket communication. The frozen v2.0 contract is maintained in the gateway repository; this copy is behind it.
+* [security-audit.md](security-audit.md) — data-capture inventory, threat model, and operator hardening.
+* [docs/ZTA_PLAN.md](docs/ZTA_PLAN.md) — zero-trust work order for the node runtime.
 * [docs/node-api.openapi.yaml](docs/node-api.openapi.yaml) — the `/api/v2` REST contract.
 
 The REST surface lives under `/api/v2` (status, stats, peers CRUD, credentials, and gateway-private Drop operations); node status is public at `GET /api/v2/status`.
