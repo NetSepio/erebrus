@@ -16,6 +16,8 @@ Dates are the day the work landed on `main`. Entries under **Unreleased** are on
   consent proof and the gateway submits and pays for the write. Off by default.
 - Carrier rotation recovers from a restart that could not bind, instead of
   leaving the carrier down while reporting success.
+- Dependencies are off the known-vulnerability list except where sing-box pins
+  them, and CI fails on a new reachable finding instead of printing it.
 
 ### Added
 
@@ -110,3 +112,28 @@ Dates are the day the work landed on `main`. Entries under **Unreleased** are on
   now translates a snapshot into AdGuard rules and rewrites, applies it
   atomically and reports the applied version back, so the gateway can tell drift
   from a policy that is in place.
+
+### Security
+
+- **Dependencies moved off the advisory list without touching the VPN stack.**
+  `google.golang.org/grpc` 1.81.1 -> 1.85.0, `go-ethereum` 1.17.5 -> 1.17.10,
+  `gin` 1.10.0 -> 1.12.0, `prometheus/client_golang` 1.24.1 -> 1.25.0,
+  `golang.org/x/crypto` 0.55.0 -> 0.59.0, `modernc.org/sqlite` 1.52.0 -> 1.63.0,
+  `go-libp2p` 0.49.0 -> 0.51.0, `go-multihash` 0.2.3 -> 0.3.0 and
+  `klauspost/compress` 1.20.1 -> 1.20.5, the last of which clears a reachable
+  panic on the `/metrics` zstd path. `sing-box`, `sing`, `sing-tun`,
+  `sing-quic`, `metacubex/utls`, `sagernet/quic-go` and `miekg/dns` are all
+  untouched: libp2p 0.52 would have pulled `miekg/dns` past the version
+  sing-box pins, so libp2p stops at 0.51. `andybalholm/brotli` also stays where
+  sing-box pins it, even though it carries a reachable advisory, because it sits
+  under `metacubex/utls` on the REALITY handshake path and the fixed v1.2 line
+  adds a new module there; it moves when sing-box moves.
+- **CI fails on a new reachable vulnerability instead of reporting it.**
+  `govulncheck` ran with `continue-on-error`, so a finding was printed and then
+  ignored. The step now reads the JSON output, compares the findings that have a
+  call path from our code against an allowlist that records why each known one
+  is still open, and fails the build on anything outside it. Three are
+  allowlisted today: the kad-dht record-censorship advisory, which has no fixed
+  version at any release; the brotli advisory above; and the gorilla/websocket
+  mask key, whose only fix is an unreleased commit past v1.5.3 and whose masks
+  never leave TLS.

@@ -26,11 +26,38 @@ jobs:
       - run: go vet -tags with_utls ./...
       - run: go build -tags with_utls ./...
       - run: go test -tags with_utls ./...
+      # Fails on any NEW reachable vulnerability. govulncheck has no ignore
+      # file of its own, so the allowlist below carries the reachable findings
+      # we have already looked at and cannot act on; every entry needs a reason
+      # and should be deleted as soon as an upstream fix ships. Findings that
+      # are only present in the module graph, with no call path from our code,
+      # are not reported here at all.
       - name: Check reachable Go vulnerabilities
-        # Non-blocking while GO-2024-3218 (Kademlia censorship) has no upstream
-        # fixed version. The report still makes any new findings visible in CI.
-        continue-on-error: true
-        run: go run golang.org/x/vuln/cmd/govulncheck@v1.8.0 -tags with_utls ./...
+        run: |
+          set -o pipefail
+          # GO-2024-3218 go-libp2p-kad-dht: DHT record censorship. No fixed
+          #   version exists at any release, so there is nothing to upgrade to.
+          # GO-2026-6888 andybalholm/brotli: decompression memory blow-up,
+          #   reached through metacubex/utls, i.e. the REALITY handshake path.
+          #   sing-box itself pins v1.1.0 and the fixed v1.2.x line pulls a new
+          #   module into the TLS stack, so this one waits for sing-box.
+          # GO-2026-6278 gorilla/websocket: the mask key comes from math/rand.
+          #   The only fix upstream is an unreleased commit 14 past v1.5.3, and
+          #   our websocket traffic is inside TLS, so the masks never travel in
+          #   the clear. Revisit when v1.5.4 is tagged.
+          allow="GO-2024-3218 GO-2026-6888 GO-2026-6278"
+          go run golang.org/x/vuln/cmd/govulncheck@v1.8.0 -tags with_utls -format json ./... > "${RUNNER_TEMP:-.}/govulncheck.json"
+          found=$(jq -r 'select(.finding and .finding.trace[0].function) | .finding.osv' "${RUNNER_TEMP:-.}/govulncheck.json" | sort -u)
+          echo "reachable findings: ${found:-none}"
+          new=""
+          for id in $found; do
+            case " $allow " in *" $id "*) ;; *) new="$new $id" ;; esac
+          done
+          if [ -n "$new" ]; then
+            echo "::error::new reachable vulnerabilities:$new"
+            go run golang.org/x/vuln/cmd/govulncheck@v1.8.0 -tags with_utls ./...
+            exit 1
+          fi
       - uses: golangci/golangci-lint-action@v6
         # Existing repository-wide lint debt is tracked separately; keep the
         # report visible while formatting, vet, build, and tests are blocking.
