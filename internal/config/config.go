@@ -84,8 +84,9 @@ type Config struct {
 	DropSwarmPort       string
 	DropWebUIEnabled    bool
 
-	// registrar
-	ChainRegistration string // off | solana
+	// registrar — "off" (default) or an opt-in value: on | true | 1 | yes, or a
+	// chain name. The chain itself always follows WALLET_CHAIN.
+	ChainRegistration string
 
 	// private DNS (Phase 2)
 	PrivateDNSEnabled bool
@@ -331,6 +332,19 @@ func (c *Config) PublicAPIBaseURL() string {
 
 // GatewayEnabled reports whether the node should connect to the gateway control plane.
 func (c *Config) GatewayEnabled() bool { return strings.TrimSpace(c.GatewayURL) != "" }
+
+// ChainRegistrationEnabled reports whether this node may attest its identity to
+// the on-chain registry. It is opt-in: the node signs a consent proof and the
+// gateway submits and pays for the transaction, so this never requires a funded
+// node wallet. Off by default, which leaves existing nodes untouched.
+func (c *Config) ChainRegistrationEnabled() bool {
+	switch strings.ToLower(strings.TrimSpace(c.ChainRegistration)) {
+	case "on", "true", "1", "yes", "enabled", "solana", "sol", "ethereum", "evm":
+		return true
+	default:
+		return false
+	}
+}
 
 // EffectiveRegistrationToken returns the scoped node registration token.
 func (c *Config) EffectiveRegistrationToken() string {

@@ -27,6 +27,7 @@ import (
 	"github.com/NetSepio/erebrus/internal/store"
 	"github.com/NetSepio/erebrus/internal/telemetry"
 	"github.com/NetSepio/erebrus/internal/transport/probe"
+	"github.com/NetSepio/erebrus/internal/wallet"
 	"github.com/NetSepio/erebrus/internal/wg"
 )
 
@@ -105,7 +106,11 @@ func Run(cfg *config.Config) error {
 	svcReg := &services.Registry{St: st}
 	tunnelDNS := dnspkg.DefaultListenAddr(cfg.WGIPv4Subnet, cfg.PrivateDNSAddr)
 
-	fwClient := firewall.New(cfg)
+	fwClient := firewall.New(cfg, st)
+	setupShield := cfg.FirewallProvider == config.FirewallAdGuardHome && cfg.ShieldAdminPassword != ""
+	if setupShield {
+		go configureShield(ctx, fwClient)
+	}
 	if cfg.HasFirewallService() && cfg.FirewallProvider == config.FirewallUnboundErebrus {
 		if licensed, err := fwClient.CheckLicense(ctx); err != nil {
 			slog.Warn("sentinel license check failed", "err", err)
@@ -233,16 +238,21 @@ func Run(cfg *config.Config) error {
 				}
 				return tok, nil
 			})
+			// Opt-in on-chain registry: the node signs a consent proof and the
+			// gateway submits and pays for the write. A node that is off, or
+			// whose identity is incomplete, simply never registers.
+			if attester, err := node.NewAttester(cfg, st, peerID, did); err != nil {
+				slog.Warn("chain registration disabled", "err", err)
+			} else if attester != nil {
+				gwClient.SetAttester(attester)
+				slog.Info("chain registration enabled", "operator", attester.Operator(), "chain", wallet.CanonicalChain(cfg.WalletChain))
+			}
 			go gwClient.Run(ctx)
 
-			// Shield: configure AdGuard's admin login and report it to the gateway
-			// (revealed to org paid seats). Best-effort — never blocks startup.
-			if cfg.FirewallProvider == config.FirewallAdGuardHome && cfg.ShieldAdminPassword != "" {
+			// Report the Shield login to the gateway for org paid seats.
+			if setupShield {
 				reportNodeID, reportToken := peerID, nodeToken
 				go func() {
-					if err := fwClient.ConfigureAdmin(ctx); err != nil {
-						slog.Warn("adguard admin configure failed", "err", err)
-					}
 					user, pass, url := fwClient.AdminCredentials()
 					if err := gatewayclient.PostFirewallCredentials(ctx, cfg.GatewayURL, reportNodeID, reportToken, user, pass, url); err != nil {
 						slog.Warn("report firewall credentials failed", "err", err)
@@ -296,4 +306,21 @@ func Run(cfg *config.Config) error {
 	shutCtx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 	defer cancel()
 	return srv.Shutdown(shutCtx)
+}
+
+// The AdGuard HTTP listener and its filter downloads may become available
+// after node startup. Setup can resume without blocking the VPN or the gateway.
+func configureShield(ctx context.Context, client *firewall.Client) {
+	for delay := time.Second; ctx.Err() == nil; delay = min(2*delay, 5*time.Minute) {
+		if err := client.ConfigureAdmin(ctx); err != nil {
+			slog.Warn("AdGuard setup failed", "err", err, "retry_in", delay)
+		} else {
+			return
+		}
+		select {
+		case <-ctx.Done():
+			return
+		case <-time.After(delay):
+		}
+	}
 }

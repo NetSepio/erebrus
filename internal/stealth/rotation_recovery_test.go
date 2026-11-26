@@ -1,0 +1,282 @@
+package stealth
+
+import (
+	"context"
+	"net"
+	"slices"
+	"strconv"
+	"testing"
+	"time"
+)
+
+// A rotation that cannot bind must stay failed and stay retryable. The sing-box
+// handle is nil both when the carrier is deliberately down and when a start
+// failed, so a restart gated on the handle alone reported success and skipped
+// every later attempt: the node then advertised a rotated short-id for a
+// carrier that was not listening at all, and only a process restart fixed it.
+func TestRotateRealityRecoversAfterAFailedRestart(t *testing.T) {
+	ctx := context.Background()
+	vp, hp := freePort(t), freePort(t)
+	m := New(testConfig(vp, hp), newMemStore())
+	if err := m.Init(ctx); err != nil {
+		t.Fatalf("init: %v", err)
+	}
+	if err := m.Start(ctx); err != nil {
+		t.Fatalf("start: %v", err)
+	}
+	defer m.Close()
+	waitListening(t, vp).Close()
+
+	// Take the carrier's own address while it is down mid-rotation, so the
+	// restart cannot bind. It has to be the wildcard address sing-box listens
+	// on: a loopback-only listener does not conflict with it.
+	m.mu.Lock()
+	err := m.close()
+	m.mu.Unlock()
+	if err != nil {
+		t.Fatalf("close: %v", err)
+	}
+	squatter, err := net.Listen("tcp", net.JoinHostPort("0.0.0.0", strconv.Itoa(vp)))
+	if err != nil {
+		t.Fatalf("could not occupy the carrier port: %v", err)
+	}
+	if _, err = m.RotateReality(ctx); err == nil {
+		squatter.Close()
+		t.Fatal("rotation reported success while the carrier port was taken")
+	}
+
+	// With the port free again, a retry must actually bring the carrier back.
+	if err = squatter.Close(); err != nil {
+		t.Fatalf("releasing the port: %v", err)
+	}
+	shortID, err := m.RotateReality(ctx)
+	if err != nil {
+		t.Fatalf("rotation did not recover once the port was free: %v", err)
+	}
+	if shortID == "" {
+		t.Fatal("recovered rotation returned no short-id")
+	}
+	waitListening(t, vp).Close()
+
+	// And the credentials the gateway is told about describe the live listener.
+	if got := m.ActiveParams(); got.RealityShortID != shortID {
+		t.Fatalf("advertised short-id %q, listener was rotated to %q", got.RealityShortID, shortID)
+	}
+}
+
+// A deliberate Close must not leave the carrier marked as wanted, or a later
+// rotation would quietly start a listener the operator had stopped.
+func TestRotateAfterCloseStaysDown(t *testing.T) {
+	ctx := context.Background()
+	vp, hp := freePort(t), freePort(t)
+	m := New(testConfig(vp, hp), newMemStore())
+	if err := m.Init(ctx); err != nil {
+		t.Fatalf("init: %v", err)
+	}
+	if err := m.Start(ctx); err != nil {
+		t.Fatalf("start: %v", err)
+	}
+	waitListening(t, vp).Close()
+	if err := m.Close(); err != nil {
+		t.Fatalf("close: %v", err)
+	}
+	if _, err := m.RotateReality(ctx); err != nil {
+		t.Fatalf("rotating a stopped carrier: %v", err)
+	}
+	if conn, err := net.DialTimeout("tcp", net.JoinHostPort("127.0.0.1", strconv.Itoa(vp)), 200*time.Millisecond); err == nil {
+		conn.Close()
+		t.Fatal("rotation restarted a carrier that had been deliberately stopped")
+	}
+}
+
+// waitListening dials the carrier until it answers, so assertions are about the
+// listener rather than about start-up timing.
+func waitListening(t *testing.T, port int) net.Conn {
+	t.Helper()
+	addr := net.JoinHostPort("127.0.0.1", strconv.Itoa(port))
+	var conn net.Conn
+	var err error
+	for range 50 {
+		if conn, err = net.DialTimeout("tcp", addr, 500*time.Millisecond); err == nil {
+			return conn
+		}
+		time.Sleep(20 * time.Millisecond)
+	}
+	t.Fatalf("carrier not listening on %s: %v", addr, err)
+	return nil
+}
+
+// A rotation writes the new short-id before the listener restarts, so a restart
+// that cannot bind leaves a credential the network never saw. Retiring that one
+// on the next rotation dropped the descriptor clients were actually holding —
+// inside its own grace window — so a successful retry locked out exactly the
+// blocked clients the grace window exists for.
+func TestRotationKeepsTheLastServedDescriptor(t *testing.T) {
+	ctx := context.Background()
+	vp, hp := freePort(t), freePort(t)
+	m := New(testConfig(vp, hp), newMemStore())
+	if err := m.Init(ctx); err != nil {
+		t.Fatalf("init: %v", err)
+	}
+	if err := m.Start(ctx); err != nil {
+		t.Fatalf("start: %v", err)
+	}
+	defer m.Close()
+	waitListening(t, vp).Close()
+	served := m.Params()
+
+	// A rotation whose restart cannot bind: the port is taken while it is down.
+	m.mu.Lock()
+	err := m.close()
+	m.mu.Unlock()
+	if err != nil {
+		t.Fatalf("close: %v", err)
+	}
+	squatter, err := net.Listen("tcp", net.JoinHostPort("0.0.0.0", strconv.Itoa(vp)))
+	if err != nil {
+		t.Fatalf("could not occupy the carrier port: %v", err)
+	}
+	if _, err = m.RotateReality(ctx); err == nil {
+		squatter.Close()
+		t.Fatal("rotation reported success while the carrier port was taken")
+	}
+	if err = squatter.Close(); err != nil {
+		t.Fatalf("releasing the port: %v", err)
+	}
+
+	// The retry succeeds. The descriptor that was actually published is the one
+	// that has to keep working.
+	if _, err = m.RotateReality(ctx); err != nil {
+		t.Fatalf("rotation did not recover once the port was free: %v", err)
+	}
+	waitListening(t, vp).Close()
+	uuid, shortID, ok := m.secrets.PreviousDescriptor(time.Now())
+	if !ok {
+		t.Fatal("no descriptor is in its grace window after two rotations")
+	}
+	if shortID != served.RealityShortID || uuid != served.VLESSBootstrapUUID {
+		t.Fatalf("the grace window holds %q/%q, want the descriptor that was served: %q/%q",
+			uuid, shortID, served.VLESSBootstrapUUID, served.RealityShortID)
+	}
+	shortIDs, users := m.listenerIdentities()
+	if !slices.Contains(shortIDs, served.RealityShortID) || !slices.Contains(users, served.VLESSBootstrapUUID) {
+		t.Fatalf("the listener offers short-ids %v and users %v, without the descriptor it published", shortIDs, users)
+	}
+}
+
+// Which descriptor was actually published has to outlive the process. A
+// rotation that cannot bind leaves the new credential as the current one
+// without the network ever seeing it, and a restart that read the current
+// credential as served would retire it next time — dropping the descriptor
+// clients are holding, inside its grace window.
+func TestServedDescriptorSurvivesARestart(t *testing.T) {
+	ctx := context.Background()
+	vp, hp := freePort(t), freePort(t)
+	cfg, st := testConfig(vp, hp), newMemStore()
+
+	first := New(cfg, st)
+	if err := first.Init(ctx); err != nil {
+		t.Fatalf("init: %v", err)
+	}
+	if err := first.Start(ctx); err != nil {
+		t.Fatalf("start: %v", err)
+	}
+	waitListening(t, vp).Close()
+	served := first.Params()
+
+	// A rotation that cannot bind, then the process goes away.
+	first.mu.Lock()
+	err := first.close()
+	first.mu.Unlock()
+	if err != nil {
+		t.Fatalf("close: %v", err)
+	}
+	squatter, err := net.Listen("tcp", net.JoinHostPort("0.0.0.0", strconv.Itoa(vp)))
+	if err != nil {
+		t.Fatalf("could not occupy the carrier port: %v", err)
+	}
+	if _, err = first.RotateReality(ctx); err == nil {
+		squatter.Close()
+		t.Fatal("rotation reported success while the carrier port was taken")
+	}
+	if err = first.Close(); err != nil {
+		squatter.Close()
+		t.Fatalf("close: %v", err)
+	}
+
+	// A new process over the same store, still unable to bind.
+	second := New(cfg, st)
+	if err = second.Init(ctx); err != nil {
+		squatter.Close()
+		t.Fatalf("init after restart: %v", err)
+	}
+	if err = second.Start(ctx); err == nil {
+		squatter.Close()
+		t.Fatal("the carrier started while its port was still taken")
+	}
+	if err = squatter.Close(); err != nil {
+		t.Fatalf("releasing the port: %v", err)
+	}
+	defer second.Close()
+
+	// Now it recovers. The descriptor that keeps working is the one that was
+	// published before the restart, not the one that never bound.
+	if _, err = second.RotateReality(ctx); err != nil {
+		t.Fatalf("rotation did not recover once the port was free: %v", err)
+	}
+	waitListening(t, vp).Close()
+	uuid, shortID, ok := second.secrets.PreviousDescriptor(time.Now())
+	if !ok {
+		t.Fatal("no descriptor is in its grace window after the restart")
+	}
+	if uuid != served.VLESSBootstrapUUID || shortID != served.RealityShortID {
+		t.Fatalf("the grace window holds %q/%q, want the descriptor served before the restart: %q/%q",
+			uuid, shortID, served.VLESSBootstrapUUID, served.RealityShortID)
+	}
+}
+
+// The rotate-carriers CLI opens a manager over the node's store without
+// starting a listener of its own, and a restart is a no-op for a carrier that
+// is deliberately down — so recording the new credentials as served after it
+// put a descriptor no listener had ever published into the grace window. Two
+// such rotations dropped the descriptor clients were really holding while its
+// window was still open, which is exactly the lockout the window prevents.
+func TestRotationWithoutAListenerKeepsTheServedDescriptor(t *testing.T) {
+	ctx := context.Background()
+	vp, hp := freePort(t), freePort(t)
+	cfg, st := testConfig(vp, hp), newMemStore()
+
+	// The node process: it serves a descriptor, then goes away.
+	node := New(cfg, st)
+	if err := node.Init(ctx); err != nil {
+		t.Fatalf("init: %v", err)
+	}
+	if err := node.Start(ctx); err != nil {
+		t.Fatalf("start: %v", err)
+	}
+	waitListening(t, vp).Close()
+	served := node.Params()
+	if err := node.Close(); err != nil {
+		t.Fatalf("close: %v", err)
+	}
+
+	// The CLI, over the same store, with no listener of its own.
+	cli := New(cfg, st)
+	if err := cli.Init(ctx); err != nil {
+		t.Fatalf("init the tool: %v", err)
+	}
+	for i := range 2 {
+		if err := cli.RotateAllSecrets(ctx, descriptorGrace); err != nil {
+			t.Fatalf("rotation %d: %v", i+1, err)
+		}
+	}
+
+	uuid, shortID, ok := cli.secrets.PreviousDescriptor(time.Now())
+	if !ok {
+		t.Fatal("no descriptor is in its grace window after two rotations")
+	}
+	if uuid != served.VLESSBootstrapUUID || shortID != served.RealityShortID {
+		t.Fatalf("the grace window holds %q/%q, want the descriptor a listener published: %q/%q",
+			uuid, shortID, served.VLESSBootstrapUUID, served.RealityShortID)
+	}
+}

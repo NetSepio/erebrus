@@ -18,9 +18,11 @@ import (
 const (
 	defaultHeartbeatSec = 30
 	usageInterval       = 60 * time.Second
-	writeWait           = 10 * time.Second
-	pongWait            = 95 * time.Second
-	pingPeriod          = 27 * time.Second
+	// Shorter than the gateway's 300s uptime bucket so each one is attested.
+	registryInterval = 30 * time.Second
+	writeWait        = 10 * time.Second
+	pongWait         = 95 * time.Second
+	pingPeriod       = 27 * time.Second
 )
 
 // SnapshotProvider supplies protocol payloads the gateway expects.
@@ -53,6 +55,11 @@ type Client struct {
 	onReconnect      func()
 	refreshToken     func(context.Context) (string, error)
 	connected        atomic.Bool
+
+	// Optional on-chain registry participation; nil keeps the node out of it.
+	attester      Attester
+	registryNonce string
+	uptimeBucket  int64
 }
 
 // New constructs a gateway WebSocket client.
@@ -161,6 +168,7 @@ func (c *Client) session(ctx context.Context) error {
 	if err := c.sendHello(ws); err != nil {
 		return err
 	}
+	c.resumeRegistry(ws)
 
 	errCh := make(chan error, 2)
 	go func() { errCh <- c.readPump(ctx, ws) }()
@@ -241,7 +249,18 @@ func (c *Client) handleFrame(ctx context.Context, ws *websocket.Conn, raw []byte
 		if err != nil {
 			return err
 		}
-		return c.writeMessage(ws, websocket.TextMessage, frame)
+		if err := c.writeMessage(ws, websocket.TextMessage, frame); err != nil {
+			return err
+		}
+		// Publish the current short ID, or withdraw endpoints if the restart failed.
+		if cmd.Action == ActionRotateReality {
+			return c.sendHello(ws)
+		}
+		return nil
+	case TypeRegistryChallenge:
+		c.onRegistryChallenge(ws, env.Data)
+	case TypeRegistryResult:
+		c.onRegistryResult(env.Data)
 	default:
 		c.log.Debug("ignore gateway message", "type", env.Type)
 	}
@@ -258,9 +277,13 @@ func (c *Client) writePump(ctx context.Context, ws *websocket.Conn) error {
 	hbTicker := time.NewTicker(time.Duration(hbSec) * time.Second)
 	usageTicker := time.NewTicker(usageInterval)
 	pingTicker := time.NewTicker(pingPeriod)
+	// Drives uptime attestations and queued-sponsorship polling; both no-op
+	// when the node is not taking part in the registry.
+	registryTicker := time.NewTicker(registryInterval)
 	defer func() { hbTicker.Stop() }()
 	defer usageTicker.Stop()
 	defer pingTicker.Stop()
+	defer registryTicker.Stop()
 
 	for {
 		select {
@@ -304,6 +327,9 @@ func (c *Client) writePump(ctx context.Context, ws *websocket.Conn) error {
 			if err := c.writeMessage(ws, websocket.TextMessage, frame); err != nil {
 				return err
 			}
+		case <-registryTicker.C:
+			c.attestUptime(ws)
+			c.pollRegistry(ws)
 		case <-pingTicker.C:
 			if err := c.writeMessage(ws, websocket.PingMessage, nil); err != nil {
 				return err

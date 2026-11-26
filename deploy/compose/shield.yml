@@ -24,7 +24,8 @@ services:
     restart: unless-stopped
     depends_on:
       adguardhome:
-        condition: service_healthy
+        # The node configures AdGuard before DNS can pass its health check.
+        condition: service_started
     env_file:
       - .env
     environment:

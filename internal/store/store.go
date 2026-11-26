@@ -109,12 +109,28 @@ func (s *Store) GetSetting(ctx context.Context, key string) (string, error) {
 	return v, err
 }
 
+const upsertSetting = `INSERT INTO node_settings(key, value) VALUES(?, ?)
+ ON CONFLICT(key) DO UPDATE SET value = excluded.value`
+
 // SetSetting upserts a setting.
 func (s *Store) SetSetting(ctx context.Context, key, value string) error {
-	_, err := s.db.ExecContext(ctx,
-		`INSERT INTO node_settings(key, value) VALUES(?, ?)
-		 ON CONFLICT(key) DO UPDATE SET value = excluded.value`, key, value)
+	_, err := s.db.ExecContext(ctx, upsertSetting, key, value)
 	return err
+}
+
+// SetSettings persists related settings together, including a full carrier rotation.
+func (s *Store) SetSettings(ctx context.Context, values map[string]string) error {
+	tx, err := s.db.BeginTx(ctx, nil)
+	if err != nil {
+		return err
+	}
+	defer tx.Rollback()
+	for key, value := range values {
+		if _, err := tx.ExecContext(ctx, upsertSetting, key, value); err != nil {
+			return err
+		}
+	}
+	return tx.Commit()
 }
 
 // --- peers ---

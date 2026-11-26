@@ -15,37 +15,62 @@ const ClientPrivateKeyPlaceholder = "REPLACE_WITH_CLIENT_PRIVATE_KEY"
 // Params are the node-wide carrier parameters a client needs to reach the
 // stealth transports. They contain no per-client data.
 type Params struct {
-	Enabled           bool   `json:"enabled"`
-	Host              string `json:"host"`
-	VLESSPort         int    `json:"vless_port"`
-	Hysteria2Port     int    `json:"hysteria2_port"`
-	SNI               string `json:"sni"`
-	VLESSUUID         string `json:"vless_uuid"`
-	VLESSFlow         string `json:"vless_flow"`
-	RealityPublicKey  string `json:"reality_public_key"`
-	RealityShortID    string `json:"reality_short_id"`
-	Hysteria2Password string `json:"hysteria2_password"`
-	Hysteria2Obfs     string `json:"hysteria2_obfs,omitempty"` // salamander password, "" = none
+	Enabled            bool   `json:"enabled"`
+	Host               string `json:"host"`
+	VLESSPort          int    `json:"vless_port"`
+	Hysteria2Port      int    `json:"hysteria2_port"`
+	SNI                string `json:"sni"`
+	VLESSUUID          string `json:"vless_uuid"`
+	VLESSBootstrapUUID string `json:"-"` // Used by gateway hello and the rotation audit.
+	VLESSFlow          string `json:"vless_flow"`
+	RealityPublicKey   string `json:"reality_public_key"`
+	RealityShortID     string `json:"reality_short_id"`
+	Hysteria2Password  string `json:"hysteria2_password"`
+	Hysteria2Obfs      string `json:"hysteria2_obfs,omitempty"` // salamander password, "" = none
 }
 
 // Params returns the carrier parameters. Returns Enabled=false (and no secrets)
 // when stealth is off or Init has not run.
 func (m *Manager) Params() Params {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	return m.params()
+}
+
+// ActiveParams snapshots the live listener credentials for the gateway hello.
+func (m *Manager) ActiveParams() Params {
+	if m == nil {
+		return Params{}
+	}
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	if m.instance == nil {
+		return Params{}
+	}
+	p := m.params()
+	if m.gatewayHost == "" {
+		p.VLESSBootstrapUUID = ""
+	}
+	return p
+}
+
+func (m *Manager) params() Params {
 	if !m.cfg.EnableStealth || m.secrets == nil {
 		return Params{Enabled: false}
 	}
 	return Params{
-		Enabled:           true,
-		Host:              m.cfg.WGEndpointHost,
-		VLESSPort:         m.cfg.VLESSPortInt(),
-		Hysteria2Port:     m.cfg.Hysteria2PortInt(),
-		SNI:               m.cfg.RealitySNI(),
-		VLESSUUID:         m.secrets.VLESSUUID,
-		VLESSFlow:         vlessFlowVision,
-		RealityPublicKey:  m.secrets.RealityPublicKey,
-		RealityShortID:    m.secrets.RealityShortID,
-		Hysteria2Password: m.secrets.Hysteria2Password,
-		Hysteria2Obfs:     m.cfg.Hysteria2ObfsPassword,
+		Enabled:            true,
+		Host:               m.cfg.WGEndpointHost,
+		VLESSPort:          m.cfg.VLESSPortInt(),
+		Hysteria2Port:      m.cfg.Hysteria2PortInt(),
+		SNI:                m.cfg.RealitySNI(),
+		VLESSUUID:          m.secrets.VLESSUUID,
+		VLESSBootstrapUUID: m.secrets.VLESSBootstrapUUID,
+		VLESSFlow:          vlessFlowVision,
+		RealityPublicKey:   m.secrets.RealityPublicKey,
+		RealityShortID:     m.secrets.RealityShortID,
+		Hysteria2Password:  m.secrets.Hysteria2Password,
+		Hysteria2Obfs:      m.cfg.Hysteria2ObfsPassword,
 	}
 }
 

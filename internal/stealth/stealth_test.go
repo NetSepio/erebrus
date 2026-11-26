@@ -1,18 +1,28 @@
 package stealth
 
 import (
+	"bytes"
 	"context"
 	"crypto/tls"
 	"encoding/base64"
 	"encoding/json"
 	"fmt"
+	"maps"
 	"net"
+	"reflect"
+	"slices"
 	"strconv"
 	"strings"
 	"testing"
 	"time"
 
 	"github.com/NetSepio/erebrus/internal/config"
+	"github.com/google/uuid"
+	"github.com/sagernet/sing-box/adapter"
+	C "github.com/sagernet/sing-box/constant"
+	"github.com/sagernet/sing-box/option"
+	"github.com/sagernet/sing-box/route/rule"
+	M "github.com/sagernet/sing/common/metadata"
 )
 
 // memStore is an in-memory SettingsStore for tests.
@@ -22,6 +32,11 @@ func newMemStore() *memStore { return &memStore{m: map[string]string{}} }
 
 func (s *memStore) GetSetting(_ context.Context, k string) (string, error) { return s.m[k], nil }
 func (s *memStore) SetSetting(_ context.Context, k, v string) error        { s.m[k] = v; return nil }
+
+func (s *memStore) SetSettings(_ context.Context, values map[string]string) error {
+	maps.Copy(s.m, values)
+	return nil
+}
 
 func testConfig(vlessPort, hy2Port int) *config.Config {
 	return &config.Config{
@@ -173,5 +188,211 @@ func TestBuildPeerArtifacts(t *testing.T) {
 		if !strings.Contains(s, want) {
 			t.Fatalf("profile missing %q: %s", want, s)
 		}
+	}
+}
+
+func TestBootstrapRoute(t *testing.T) {
+	cfg := testConfig(8443, 4443)
+	cfg.GatewayURL = "https://Gateway.Example:443/api"
+	cfg.WGEndpointPort = "51973"
+	m := New(cfg, newMemStore())
+	if err := m.Init(t.Context()); err != nil {
+		t.Fatal(err)
+	}
+	routes := m.serverOptions().Route
+	if len(routes.Rules) != 2 || routes.Final != "direct" {
+		t.Fatal("expected the bootstrap rule, then the WireGuard override")
+	}
+	first := routes.Rules[0]
+	allow := first.DefaultOptions.RuleAction
+	if allow.Action != C.RuleActionTypeRoute || allow.RouteOptions.Outbound != "direct" || allow.RouteOptions.OverrideAddress != "gateway.example" || allow.RouteOptions.OverridePort != 443 {
+		t.Fatal("bootstrap route must terminate at the configured gateway")
+	}
+	// Exercise sing-box's matcher so its rule combination semantics are covered.
+	matcher, err := rule.NewRule(t.Context(), nil, first, true)
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, tc := range []struct {
+		user, inbound, network, destination string
+		allowed                             bool
+	}{
+		{"bootstrap", "vless-reality", "tcp", "gateway.example:443", true},
+		{"bootstrap", "vless-reality", "tcp", "sub.gateway.example:443", false},
+		{"bootstrap", "vless-reality", "tcp", "gateway.example.invalid:443", false},
+		{"bootstrap", "vless-reality", "tcp", "192.0.2.1:443", false},
+		{"bootstrap", "vless-reality", "tcp", "gateway.example:8443", false},
+		{"bootstrap", "vless-reality", "udp", "gateway.example:443", false},
+		{"erebrus", "vless-reality", "tcp", "gateway.example:443", false},
+		{"bootstrap", "hysteria2", "tcp", "gateway.example:443", false},
+	} {
+		metadata := adapter.InboundContext{User: tc.user, Inbound: tc.inbound, Network: tc.network, Destination: M.ParseSocksaddr(tc.destination)}
+		if got := matcher.Match(&metadata); got != tc.allowed {
+			t.Errorf("%+v matched=%v", tc, got)
+		}
+	}
+	fallback := routes.Rules[1].DefaultOptions
+	if !reflect.DeepEqual(fallback.RawDefaultRule, option.RawDefaultRule{}) || fallback.Action != C.RuleActionTypeRouteOptions || fallback.RouteOptionsOptions.OverrideAddress != "127.0.0.1" || fallback.RouteOptionsOptions.OverridePort != 51973 {
+		t.Fatal("fallback must pin every remaining request to the configured WireGuard port")
+	}
+	for _, raw := range []string{"", "gateway.example", "https://", "https://*.example", "http://gateway.example:8080", "https://gateway.example:8443"} {
+		cfg.GatewayURL = raw
+		standalone := New(cfg, m.st)
+		if err := standalone.Init(t.Context()); err != nil {
+			t.Fatal(err)
+		}
+		if got := standalone.serverOptions().Route.Rules; len(got) != 1 || !reflect.DeepEqual(got[0].DefaultOptions, fallback) {
+			t.Errorf("unexpected routes for %q", raw)
+		}
+	}
+}
+
+func TestBootstrapIPGatewayMatchesOneAddress(t *testing.T) {
+	for _, tc := range []struct{ configured, allowed, adjacent string }{
+		{"https://192.0.2.7", "192.0.2.7:443", "192.0.2.8:443"},
+		{"https://[2001:db8::7]:443", "[2001:db8::7]:443", "[2001:db8::8]:443"},
+	} {
+		r, err := rule.NewRule(t.Context(), nil, bootstrapRule(bootstrapHost(tc.configured)), true)
+		if err != nil {
+			t.Fatal(err)
+		}
+		for _, dst := range []string{tc.allowed, tc.adjacent} {
+			m := adapter.InboundContext{Inbound: "vless-reality", User: "bootstrap", Network: "tcp", Destination: M.ParseSocksaddr(dst)}
+			if r.Match(&m) != (dst == tc.allowed) {
+				t.Errorf("wrong match for %s on %s", dst, tc.configured)
+			}
+		}
+	}
+}
+
+func TestBootstrapCredentialLifecycle(t *testing.T) {
+	ctx := t.Context()
+	cfg := testConfig(freePort(t), freePort(t))
+	cfg.GatewayURL = "https://gateway.example"
+	st := newMemStore()
+	legacy, err := loadOrCreateSecrets(ctx, st)
+	if err != nil {
+		t.Fatal(err)
+	}
+	delete(st.m, keyVLESSBootstrapUUID) // Upgrade a pre-bootstrap settings store.
+	m := New(cfg, st)
+	if err := m.Init(ctx); err != nil {
+		t.Fatal(err)
+	}
+	before := m.Params()
+	if _, err := uuid.Parse(before.VLESSBootstrapUUID); err != nil || before.VLESSBootstrapUUID == before.VLESSUUID || before.VLESSUUID != legacy.VLESSUUID {
+		t.Fatal("upgrade must preserve the VPN UUID and provision a distinct bootstrap UUID")
+	}
+	if m.ActiveParams().Enabled {
+		t.Fatal("advertised a stopped listener")
+	}
+	if err := m.Start(ctx); err != nil {
+		t.Fatal(err)
+	}
+	defer m.Close()
+	if got := m.ActiveParams().VLESSBootstrapUUID; got != before.VLESSBootstrapUUID {
+		t.Fatal("running listener did not advertise its credential")
+	}
+
+	if _, err := m.RotateReality(ctx); err != nil {
+		t.Fatal(err)
+	}
+	if got := m.ActiveParams(); got.VLESSBootstrapUUID != before.VLESSBootstrapUUID || got.RealityShortID == before.RealityShortID {
+		t.Fatal("short-ID rotation changed the bootstrap UUID or failed to change the short ID")
+	}
+	retired, retiredShortID := m.Params().VLESSBootstrapUUID, m.Params().RealityShortID
+	if err := m.RotateAllSecrets(ctx, time.Hour); err != nil {
+		t.Fatal(err)
+	}
+	active := m.ActiveParams()
+	reloaded, err := loadOrCreateSecrets(ctx, st)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if active.VLESSBootstrapUUID == "" || active.VLESSBootstrapUUID == before.VLESSBootstrapUUID || active.VLESSBootstrapUUID != reloaded.VLESSBootstrapUUID || active.VLESSUUID == before.VLESSUUID || active.VLESSUUID == active.VLESSBootstrapUUID {
+		t.Fatal("full rotation did not persist and activate distinct fresh credentials")
+	}
+	for _, obj := range []any{active, m.BuildPeer("alice", "key", "10.0.0.2/32", "")} {
+		data, err := json.Marshal(obj)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if bytes.Contains(data, []byte(active.VLESSBootstrapUUID)) {
+			t.Fatal("bootstrap UUID leaked into peer credentials")
+		}
+	}
+	if err := m.Close(); err != nil {
+		t.Fatal(err)
+	}
+	if got := m.ActiveParams().VLESSBootstrapUUID; got != "" {
+		t.Fatal("advertised a credential after close")
+	}
+
+	// The retired descriptor survives the rotation that replaced it, otherwise a
+	// client reachable only through this carrier can never collect the new one.
+	// Both halves have to survive: the short-id is checked in the handshake, so
+	// a retired UUID kept without it is a credential that cannot be used.
+	prev, prevShortID, ok := reloaded.PreviousDescriptor(time.Now())
+	if !ok || prev != retired || prevShortID != retiredShortID {
+		t.Fatalf("grace descriptor = %q/%q (%v), want the retired %q/%q", prev, prevShortID, ok, retired, retiredShortID)
+	}
+	if _, _, ok := reloaded.PreviousDescriptor(time.Now().Add(2 * time.Hour)); ok {
+		t.Fatal("grace descriptor outlived its window")
+	}
+}
+
+func TestBootstrapGraceServesTheRetiredCredential(t *testing.T) {
+	ctx := t.Context()
+	st := newMemStore()
+	m := New(testConfig(0, 0), st)
+	if err := m.Init(ctx); err != nil {
+		t.Fatal(err)
+	}
+	names := func() map[string]string {
+		m.mu.Lock()
+		defer m.mu.Unlock()
+		out := map[string]string{}
+		for _, u := range m.vlessUsers() {
+			out[u.Name] = u.UUID
+		}
+		return out
+	}
+	if got := names(); len(got) != 2 || got[bootstrapPrevUser] != "" {
+		t.Fatalf("a node that never rotated offered %v", got)
+	}
+
+	retired := m.Params().VLESSBootstrapUUID
+	if err := m.RotateAllSecrets(ctx, time.Hour); err != nil {
+		t.Fatal(err)
+	}
+	got := names()
+	if len(got) != 3 || got[bootstrapPrevUser] != retired || got[bootstrapUser] == retired {
+		t.Fatalf("after rotation the listener offered %v, want the retired %q kept apart", got, retired)
+	}
+
+	// The router must treat both identities alike; matching only the current one
+	// would authenticate the retired client and then pin it to WireGuard.
+	users := bootstrapRule("gateway.example").DefaultOptions.RawDefaultRule.AuthUser
+	if !slices.Contains(users, bootstrapUser) || !slices.Contains(users, bootstrapPrevUser) {
+		t.Fatalf("bootstrap rule matches %v", users)
+	}
+
+	// Only one generation overlaps, and a non-positive grace retires at once.
+	// This manager has no listener, so it has published nothing: what stays in
+	// the window is the descriptor that was current when it started, the only
+	// one that can be in a client's hands. Which descriptor a rotation retires
+	// once a listener is involved is TestRotationKeepsTheLastServedDescriptor
+	// and TestRotationWithoutAListenerKeepsTheServedDescriptor.
+	if err := m.RotateAllSecrets(ctx, time.Hour); err != nil {
+		t.Fatal(err)
+	}
+	if got = names(); len(got) != 3 || got[bootstrapPrevUser] != retired {
+		t.Fatalf("second rotation offered %v, want one retired descriptor: the published %q", got, retired)
+	}
+	if err := m.RotateAllSecrets(ctx, 0); err != nil {
+		t.Fatal(err)
+	}
+	if got = names(); len(got) != 2 {
+		t.Fatalf("a zero grace still offered %v", got)
 	}
 }

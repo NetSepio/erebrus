@@ -9,6 +9,8 @@ import (
 	"io"
 	"net/http"
 	"strings"
+	"sync"
+	"sync/atomic"
 	"time"
 
 	"github.com/NetSepio/erebrus/internal/config"
@@ -20,97 +22,119 @@ var defaultShieldUpstreams = []string{"1.1.1.1", "1.0.0.1"}
 
 // SyncPayload mirrors gateway store.FirewallSyncPayload.
 type SyncPayload struct {
-	OrgID       string     `json:"org_id"`
-	NodeID      string     `json:"node_id"`
-	ServiceKind string     `json:"service_kind"`
-	Rules       []SyncRule `json:"rules"`
-	Upstreams   []string   `json:"upstreams"`
-	Licensed    bool       `json:"licensed"`
-	ShieldAdmin string     `json:"shield_admin_url,omitempty"`
+	PolicyVersion *int64        `json:"policy_version,omitempty"`
+	OrgID         string        `json:"org_id"`
+	NodeID        string        `json:"node_id"`
+	ServiceKind   string        `json:"service_kind"`
+	Rules         snapshotRules `json:"rules"`
+	Upstreams     []string      `json:"upstreams"`
+	Licensed      bool          `json:"licensed"`
+	ShieldAdmin   string        `json:"shield_admin_url,omitempty"`
 }
 
 // SyncRule is one gateway firewall rule.
-type SyncRule struct {
-	RuleType string `json:"rule_type"`
-	Target   string `json:"target"`
-	Action   string `json:"action"`
-	Value    string `json:"value,omitempty"`
-	Enabled  bool   `json:"enabled"`
+type SyncRule = policy.Rule
+
+// Distinguish an omitted "rules" field from the gateway's explicit null or [].
+// Only an explicit empty set may clear Shield's custom rules.
+type snapshotRules []SyncRule
+
+func (rules *snapshotRules) UnmarshalJSON(raw []byte) error {
+	var parsed []SyncRule
+	if err := json.Unmarshal(raw, &parsed); err != nil {
+		return err
+	}
+	if parsed == nil {
+		parsed = []SyncRule{}
+	}
+	*rules = parsed
+	return nil
+}
+
+// SettingsStore holds Shield setup state across node restarts.
+type SettingsStore interface {
+	GetSetting(context.Context, string) (string, error)
+	SetSetting(context.Context, string, string) error
 }
 
 // Client applies firewall operations for the active profile.
 type Client struct {
 	cfg      *config.Config
+	settings SettingsStore
+	shieldMu sync.Mutex
 	http     *http.Client
-	licensed bool
+	licensed atomic.Bool
 }
 
 // New constructs a Client.
-func New(cfg *config.Config) *Client {
-	return &Client{cfg: cfg, licensed: true, http: &http.Client{Timeout: 10 * time.Second}}
+func New(cfg *config.Config, settings SettingsStore) *Client {
+	c := &Client{
+		cfg:      cfg,
+		settings: settings,
+		http: &http.Client{
+			Timeout: 10 * time.Second,
+			// A redirect to the AdGuard login or setup page is not an API success.
+			CheckRedirect: func(*http.Request, []*http.Request) error { return http.ErrUseLastResponse },
+		},
+	}
+	c.SetLicensed(true)
+	return c
 }
 
 // SetLicensed updates whether DNS enforcement is allowed (Sentinel).
-func (c *Client) SetLicensed(ok bool) { c.licensed = ok }
+func (c *Client) SetLicensed(ok bool) { c.licensed.Store(ok) }
 
 // Licensed reports current license state.
-func (c *Client) Licensed() bool { return c.licensed }
+func (c *Client) Licensed() bool { return c.licensed.Load() }
 
-// Sync applies a gateway policy payload.
-func (c *Client) Sync(ctx context.Context, raw json.RawMessage) error {
+// Sync applies a gateway snapshot and returns its version only after it succeeds.
+func (c *Client) Sync(ctx context.Context, raw json.RawMessage) (*int64, error) {
 	if !c.cfg.HasFirewallService() {
-		return fmt.Errorf("firewall service not configured")
+		return nil, fmt.Errorf("firewall service not configured")
 	}
 	var p SyncPayload
-	if len(raw) > 0 {
-		if err := json.Unmarshal(raw, &p); err != nil {
-			return fmt.Errorf("invalid sync args: %w", err)
-		}
+	if err := json.Unmarshal(raw, &p); err != nil {
+		return nil, fmt.Errorf("invalid sync args: %w", err)
+	}
+	if c.cfg.FirewallProvider == config.FirewallAdGuardHome && p.Rules == nil {
+		return nil, fmt.Errorf("firewall snapshot is missing rules")
 	}
 	c.SetLicensed(p.Licensed)
+	var err error
 	switch c.cfg.FirewallProvider {
 	case config.FirewallUnboundErebrus:
-		return c.syncSentinel(ctx, p)
+		err = c.syncSentinel(ctx, p)
 	case config.FirewallAdGuardHome:
-		return c.syncShield(ctx, p)
+		err = c.syncShield(ctx, p)
 	default:
-		return fmt.Errorf("unsupported firewall provider %q", c.cfg.FirewallProvider)
+		err = fmt.Errorf("unsupported firewall provider %q", c.cfg.FirewallProvider)
 	}
+	if err != nil {
+		return nil, err
+	}
+	return p.PolicyVersion, nil
 }
 
 func (c *Client) syncSentinel(ctx context.Context, p SyncPayload) error {
-	if !c.licensed {
+	if !c.Licensed() {
 		return fmt.Errorf("sentinel unlicensed")
 	}
 	pol := policy.Policy{
-		OrgID: p.OrgID, NodeID: p.NodeID, Upstreams: p.Upstreams,
-	}
-	for _, r := range p.Rules {
-		pol.Rules = append(pol.Rules, policy.Rule{
-			RuleType: r.RuleType, Target: r.Target, Action: r.Action, Value: r.Value, Enabled: r.Enabled,
-		})
+		OrgID: p.OrgID, NodeID: p.NodeID, Upstreams: p.Upstreams, Rules: p.Rules,
 	}
 	body, err := json.Marshal(pol)
 	if err != nil {
 		return err
 	}
-	licBody, _ := json.Marshal(map[string]bool{"licensed": c.licensed})
+	licBody, _ := json.Marshal(map[string]bool{"licensed": c.Licensed()})
 	_ = c.post(ctx, c.cfg.SentinelAPIURL+"/license/check", licBody)
-	if !c.licensed {
+	if !c.Licensed() {
 		return fmt.Errorf("sentinel unlicensed")
 	}
 	if err := c.post(ctx, c.cfg.SentinelAPIURL+"/policy/apply", body); err != nil {
 		return err
 	}
 	return c.post(ctx, c.cfg.SentinelAPIURL+"/reload", nil)
-}
-
-func (c *Client) syncShield(ctx context.Context, _ SyncPayload) error {
-	base := strings.TrimRight(c.cfg.ShieldAdminURL, "/")
-	if base == "" {
-		return nil
-	}
-	return c.postAuth(ctx, base+"/control/cache_clear", []byte(`{}`))
 }
 
 // Restart reloads the local firewall sidecar.
@@ -138,6 +162,8 @@ func (c *Client) adminUser() string {
 
 // AdminCredentials returns the configured Shield (AdGuard) admin login.
 func (c *Client) AdminCredentials() (user, password, url string) {
+	c.shieldMu.Lock()
+	defer c.shieldMu.Unlock()
 	return c.adminUser(), c.cfg.ShieldAdminPassword, strings.TrimRight(c.cfg.ShieldAdminURL, "/")
 }
 
@@ -152,20 +178,74 @@ func (c *Client) configureBody(user, password string) []byte {
 	return body
 }
 
-// ConfigureAdmin sets the AdGuard admin credentials on a freshly-installed Shield
-// node via the install API, then swaps AdGuard's stock upstream for fast UDP
-// resolvers. No-op for non-Shield or when no password is set. Best-effort: an
-// already-configured AdGuard rejects the install call, which is ignored.
+// ConfigureAdmin finishes fresh AdGuard installs and resumes interrupted seeding.
+// Existing installations retain the operator's blocklist choices.
 func (c *Client) ConfigureAdmin(ctx context.Context) error {
+	c.shieldMu.Lock()
+	defer c.shieldMu.Unlock()
 	if c.cfg.FirewallProvider != config.FirewallAdGuardHome || c.cfg.ShieldAdminPassword == "" {
 		return nil
 	}
 	base := strings.TrimRight(c.cfg.ShieldAdminURL, "/")
 	if base == "" {
-		return nil
+		return fmt.Errorf("Shield admin URL is missing")
 	}
-	_ = c.post(ctx, base+"/control/install/configure", c.configureBody(c.adminUser(), c.cfg.ShieldAdminPassword))
-	return c.ensureShieldUpstreams(ctx)
+	// The install API is only available before setup. Record intent before
+	// configuring: once AdGuard accepts the credentials this API disappears.
+	const pending = "shield_initial_blocklists_pending"
+	if err := c.getAuthJSON(ctx, base+"/control/install/get_addresses", &struct{}{}); err == nil {
+		if err := c.settings.SetSetting(ctx, pending, "true"); err != nil {
+			return err
+		}
+		if err := c.post(ctx, base+"/control/install/configure", c.configureBody(c.adminUser(), c.cfg.ShieldAdminPassword)); err != nil {
+			return err
+		}
+	}
+	if err := c.ensureShieldUpstreams(ctx); err != nil {
+		return err
+	}
+	seed, err := c.settings.GetSetting(ctx, pending)
+	if err != nil || seed == "" {
+		return err
+	}
+	if err := c.seedShieldBlocklists(ctx, base); err != nil {
+		return err
+	}
+	return c.settings.SetSetting(ctx, pending, "")
+}
+
+// URLs from the AdGuard Hostlists Registry. Some AdGuard versions ship with
+// the DNS filter already subscribed.
+var defaultShieldBlocklists = []struct {
+	Name string `json:"name"`
+	URL  string `json:"url"`
+}{
+	{"AdGuard DNS filter", "https://adguardteam.github.io/HostlistsRegistry/assets/filter_1.txt"},
+	{"Malicious URL Blocklist (URLHaus)", "https://adguardteam.github.io/HostlistsRegistry/assets/filter_11.txt"},
+}
+
+func (c *Client) seedShieldBlocklists(ctx context.Context, base string) error {
+	var status struct {
+		Filters []struct {
+			URL string `json:"url"`
+		} `json:"filters"`
+	}
+	if err := c.getAuthJSON(ctx, base+"/control/filtering/status", &status); err != nil {
+		return err
+	}
+	subscribed := make(map[string]bool, len(status.Filters))
+	for _, filter := range status.Filters {
+		subscribed[filter.URL] = true
+	}
+	for _, list := range defaultShieldBlocklists {
+		if subscribed[list.URL] {
+			continue
+		}
+		if err := c.postAuthJSON(ctx, base+"/control/filtering/add_url", list); err != nil {
+			return fmt.Errorf("subscribe to %s: %w", list.Name, err)
+		}
+	}
+	return nil
 }
 
 func (c *Client) shieldUpstreams() []string {
@@ -194,23 +274,23 @@ func (c *Client) ensureShieldUpstreams(ctx context.Context) error {
 	if base == "" {
 		return nil
 	}
-	raw, err := c.getAuth(ctx, base+"/control/dns_info")
-	if err != nil {
+	var dnsCfg map[string]any
+	if err := c.getAuthJSON(ctx, base+"/control/dns_info", &dnsCfg); err != nil {
 		return err
 	}
-	var dnsCfg map[string]any
-	if err := json.Unmarshal(raw, &dnsCfg); err != nil {
-		return fmt.Errorf("parse adguard dns_info: %w", err)
+	if dnsCfg == nil {
+		return fmt.Errorf("empty AdGuard dns_info")
 	}
 	if !isStockUpstreams(dnsCfg["upstream_dns"]) {
 		return nil
 	}
-	dnsCfg["upstream_dns"] = c.shieldUpstreams()
-	body, err := json.Marshal(dnsCfg)
-	if err != nil {
+	// A gateway policy may explicitly choose the stock resolver.
+	saved, err := c.settings.GetSetting(ctx, settingPreviousResolvers)
+	if err != nil || saved != "" {
 		return err
 	}
-	return c.postAuth(ctx, base+"/control/dns_config", body)
+	dnsCfg["upstream_dns"] = c.shieldUpstreams()
+	return c.postAuthJSON(ctx, base+"/control/dns_config", dnsCfg)
 }
 
 // isStockUpstreams reports whether AdGuard still runs its shipped default
@@ -233,6 +313,8 @@ func isStockUpstreams(v any) bool {
 // password-change API on a configured instance, so this attempts the install API;
 // the gateway stays the source of truth for the stored value.
 func (c *Client) SetAdminPassword(ctx context.Context, user, password string) error {
+	c.shieldMu.Lock()
+	defer c.shieldMu.Unlock()
 	if c.cfg.FirewallProvider != config.FirewallAdGuardHome || password == "" {
 		return nil
 	}
@@ -290,26 +372,37 @@ func (c *Client) CheckLicense(ctx context.Context) (bool, error) {
 	return out.Licensed, nil
 }
 
-func (c *Client) getAuth(ctx context.Context, url string) ([]byte, error) {
+func (c *Client) getAuthJSON(ctx context.Context, url string, result any) error {
 	url = strings.TrimSpace(url)
 	if url == "" {
-		return nil, fmt.Errorf("empty URL")
+		return fmt.Errorf("empty URL")
 	}
 	req, err := http.NewRequestWithContext(ctx, http.MethodGet, url, nil)
 	if err != nil {
-		return nil, err
+		return err
 	}
 	req.SetBasicAuth(c.adminUser(), c.cfg.ShieldAdminPassword)
 	resp, err := c.http.Do(req)
 	if err != nil {
-		return nil, err
+		return err
 	}
 	defer resp.Body.Close()
-	raw, _ := io.ReadAll(io.LimitReader(resp.Body, 1<<20))
 	if resp.StatusCode/100 != 2 {
-		return nil, fmt.Errorf("%s: %d %s", url, resp.StatusCode, strings.TrimSpace(string(raw)))
+		raw, _ := io.ReadAll(io.LimitReader(resp.Body, 512))
+		return fmt.Errorf("%s: %d %s", url, resp.StatusCode, strings.TrimSpace(string(raw)))
 	}
-	return raw, nil
+	if err := json.NewDecoder(resp.Body).Decode(result); err != nil {
+		return fmt.Errorf("parse %s: %w", url, err)
+	}
+	return nil
+}
+
+func (c *Client) postAuthJSON(ctx context.Context, url string, value any) error {
+	body, err := json.Marshal(value)
+	if err != nil {
+		return err
+	}
+	return c.postAuth(ctx, url, body)
 }
 
 func (c *Client) postAuth(ctx context.Context, url string, body []byte) error {

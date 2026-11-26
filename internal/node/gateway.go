@@ -82,17 +82,17 @@ func (g *GatewayBridge) BuildHello(_ string) gatewayclient.Hello {
 			PublicKey: g.svc.wg.ServerPublicKey(),
 		},
 	}
-	if g.svc.stealth != nil && g.svc.stealth.Enabled() {
-		p := g.svc.stealth.Params()
+	if p := g.svc.stealth.ActiveParams(); p.Enabled {
 		obfs := ""
 		if cfg.Hysteria2ObfsPassword != "" {
 			obfs = "salamander"
 		}
 		eps.VLESSReality = gatewayclient.VLESSEndpoint{
-			Port:      cfg.VLESSPortInt(),
-			PublicKey: p.RealityPublicKey,
-			ShortIDs:  []string{p.RealityShortID},
-			SNI:       p.SNI,
+			BootstrapUUID: p.VLESSBootstrapUUID,
+			Port:          cfg.VLESSPortInt(),
+			PublicKey:     p.RealityPublicKey,
+			ShortIDs:      []string{p.RealityShortID},
+			SNI:           p.SNI,
 		}
 		eps.Hysteria2 = gatewayclient.Hysteria2Endpoint{
 			Port: cfg.Hysteria2PortInt(),
@@ -283,7 +283,9 @@ func (g *GatewayBridge) HandleCommand(ctx context.Context, cmd gatewayclient.Com
 			res.Error = "firewall not configured"
 			return res
 		}
-		if err := g.fw.Sync(ctx, cmd.Args); err != nil {
+		var err error
+		res.PolicyVersion, err = g.fw.Sync(ctx, cmd.Args)
+		if err != nil {
 			res.OK = false
 			res.Error = err.Error()
 		}

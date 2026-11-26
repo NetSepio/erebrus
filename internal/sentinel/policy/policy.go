@@ -19,6 +19,21 @@ type Rule struct {
 	Enabled  bool   `json:"enabled"`
 }
 
+// NormalizedAction maps both gateway action spellings to the action each DNS provider applies.
+func (r Rule) NormalizedAction() string {
+	action := strings.ToLower(strings.TrimSpace(r.Action))
+	switch action {
+	case "domain_block", "wildcard_domain_block":
+		return "block"
+	case "domain_allow":
+		return "allow"
+	case "dns_rewrite":
+		return "rewrite"
+	default:
+		return action
+	}
+}
+
 // Policy is the payload for POST /policy/apply and POST /rules/sync.
 type Policy struct {
 	OrgID     string   `json:"org_id"`
@@ -66,11 +81,10 @@ func Validate(p Policy) error {
 			continue
 		}
 		target := strings.TrimPrefix(strings.TrimSpace(rule.Target), "*.")
-		if !validDomain(target) {
+		if strings.TrimSpace(target) != target || !validDomain(target) {
 			return fmt.Errorf("invalid policy domain %q", rule.Target)
 		}
-		action := strings.ToLower(strings.TrimSpace(rule.Action))
-		if action == "rewrite" || action == "dns_rewrite" {
+		if rule.NormalizedAction() == "rewrite" {
 			if net.ParseIP(strings.TrimSpace(rule.Value)) == nil {
 				return fmt.Errorf("invalid rewrite address for %q", rule.Target)
 			}
@@ -117,18 +131,17 @@ func (w *Writer) render(p Policy) (blocks, allows, rewrites, upstreams string) {
 			continue
 		}
 		target := dnsZone(r.Target)
-		action := strings.ToLower(strings.TrimSpace(r.Action))
-		switch action {
-		case "block", "domain_block", "wildcard_domain_block":
+		switch r.NormalizedAction() {
+		case "block":
 			if strings.HasPrefix(strings.TrimSpace(r.Target), "*.") {
 				wild := strings.TrimPrefix(strings.TrimSpace(r.Target), "*.")
 				blocks += fmt.Sprintf("local-zone: %q always_nxdomain\n", dnsZone(wild))
 			} else {
 				blocks += fmt.Sprintf("local-zone: %q always_nxdomain\n", target)
 			}
-		case "allow", "domain_allow":
+		case "allow":
 			allows += fmt.Sprintf("local-zone: %q transparent\n", target)
-		case "rewrite", "dns_rewrite":
+		case "rewrite":
 			val := strings.TrimSpace(r.Value)
 			if val == "" {
 				val = strings.TrimSpace(r.Action)

@@ -5,6 +5,9 @@ import (
 	"crypto/rand"
 	"encoding/base64"
 	"encoding/hex"
+	"fmt"
+	"strconv"
+	"time"
 
 	"github.com/google/uuid"
 	"golang.zx2c4.com/wireguard/wgctrl/wgtypes"
@@ -12,28 +15,82 @@ import (
 
 // settings keys for the node-wide stealth carrier secrets.
 const (
-	keyRealityPrivate = "stealth_reality_private_key"
-	keyRealityPublic  = "stealth_reality_public_key"
-	keyRealityShortID = "stealth_reality_short_id"
-	keyVLESSUUID      = "stealth_vless_uuid"
-	keyHysteria2Pass  = "stealth_hysteria2_password"
+	keyRealityPrivate     = "stealth_reality_private_key"
+	keyRealityPublic      = "stealth_reality_public_key"
+	keyRealityShortID     = "stealth_reality_short_id"
+	keyVLESSUUID          = "stealth_vless_uuid"
+	keyVLESSBootstrapUUID = "stealth_vless_bootstrap_uuid"
+	keyHysteria2Pass      = "stealth_hysteria2_password"
+
+	// A client whose only route to the gateway is the bootstrap carrier cannot
+	// fetch a fresh descriptor after its own stops being accepted. The retired
+	// descriptor is therefore kept in plaintext, and honoured, for one grace
+	// window. It takes both halves: the REALITY short-id is checked during the
+	// handshake, so a retired UUID offered without the short-id it was
+	// published alongside never reaches VLESS authentication at all. The audit
+	// archive holds hashes only and cannot serve this.
+	keyVLESSBootstrapPrev      = "stealth_vless_bootstrap_uuid_previous"
+	keyRealityShortIDPrev      = "stealth_reality_short_id_previous"
+	keyVLESSBootstrapPrevUntil = "stealth_vless_bootstrap_previous_until"
+
+	// The descriptor the listener last bound with. A rotation whose restart
+	// fails leaves a credential the network never saw as the current one, and
+	// across a process restart there is otherwise nothing to tell the two
+	// apart: the next rotation would retire the unpublished one and drop the
+	// descriptor clients are actually holding.
+	keyServedBootstrapUUID = "stealth_served_bootstrap_uuid"
+	keyServedShortID       = "stealth_served_reality_short_id"
 )
 
 // SettingsStore is the subset of the node store the stealth manager needs.
 type SettingsStore interface {
 	GetSetting(ctx context.Context, key string) (string, error)
 	SetSetting(ctx context.Context, key, value string) error
+	SetSettings(ctx context.Context, values map[string]string) error
 }
 
 // Secrets are the node-wide credentials shared by every client of the stealth
 // carriers. Per-client authentication still happens inside WireGuard, so these
 // secrets only gate access to the obfuscated transport, not to the VPN itself.
 type Secrets struct {
-	RealityPrivateKey string // base64 RawURL, x25519
-	RealityPublicKey  string // base64 RawURL, x25519
-	RealityShortID    string // 8 hex chars
-	VLESSUUID         string
-	Hysteria2Password string
+	RealityPrivateKey  string // base64 RawURL, x25519
+	RealityPublicKey   string // base64 RawURL, x25519
+	RealityShortID     string // 8 hex chars
+	VLESSUUID          string
+	VLESSBootstrapUUID string
+	Hysteria2Password  string
+
+	// The previously active bootstrap descriptor — its UUID and the REALITY
+	// short-id it was published with — and the unix second it stops being
+	// accepted. Empty until the first rotation.
+	VLESSBootstrapPrevUUID  string
+	RealityShortIDPrev      string
+	VLESSBootstrapPrevUntil int64
+
+	// The descriptor the listener last bound with, which is what a rotation
+	// retires. Falls back to the current one on a node that has not served
+	// since this was recorded, where the current descriptor is what it has
+	// been publishing all along.
+	ServedUUID    string
+	ServedShortID string
+}
+
+// PreviousDescriptor returns the retired bootstrap credential and the REALITY
+// short-id it was published with, while that descriptor is still inside its
+// grace window. Either half may be unchanged — rotating the short-id alone
+// keeps the UUID — but a descriptor identical to the live one is not a retired
+// one and nothing extra is kept for it.
+func (s *Secrets) PreviousDescriptor(now time.Time) (uuid, shortID string, ok bool) {
+	if s == nil || s.VLESSBootstrapPrevUntil == 0 || now.Unix() >= s.VLESSBootstrapPrevUntil {
+		return "", "", false
+	}
+	if s.VLESSBootstrapPrevUUID == "" && s.RealityShortIDPrev == "" {
+		return "", "", false
+	}
+	if s.VLESSBootstrapPrevUUID == s.VLESSBootstrapUUID && s.RealityShortIDPrev == s.RealityShortID {
+		return "", "", false
+	}
+	return s.VLESSBootstrapPrevUUID, s.RealityShortIDPrev, true
 }
 
 // loadOrCreateSecrets reads the stealth secrets from the store, generating and
@@ -70,6 +127,35 @@ func loadOrCreateSecrets(ctx context.Context, st SettingsStore) (*Secrets, error
 	}
 	if s.VLESSUUID, err = getOrSet(ctx, st, keyVLESSUUID, uuid.NewString()); err != nil {
 		return nil, err
+	}
+
+	if s.VLESSBootstrapUUID, err = getOrSet(ctx, st, keyVLESSBootstrapUUID, uuid.NewString()); err != nil {
+		return nil, err
+	}
+	// Absent before the first rotation, and never generated.
+	if s.VLESSBootstrapPrevUUID, err = st.GetSetting(ctx, keyVLESSBootstrapPrev); err != nil {
+		return nil, err
+	}
+	if s.RealityShortIDPrev, err = st.GetSetting(ctx, keyRealityShortIDPrev); err != nil {
+		return nil, err
+	}
+	if s.ServedUUID, err = st.GetSetting(ctx, keyServedBootstrapUUID); err != nil {
+		return nil, err
+	}
+	if s.ServedShortID, err = st.GetSetting(ctx, keyServedShortID); err != nil {
+		return nil, err
+	}
+	if s.ServedUUID == "" && s.ServedShortID == "" {
+		s.ServedUUID, s.ServedShortID = s.VLESSBootstrapUUID, s.RealityShortID
+	}
+	until, err := st.GetSetting(ctx, keyVLESSBootstrapPrevUntil)
+	if err != nil {
+		return nil, err
+	}
+	if until != "" {
+		if s.VLESSBootstrapPrevUntil, err = strconv.ParseInt(until, 10, 64); err != nil {
+			return nil, fmt.Errorf("stealth bootstrap grace deadline: %w", err)
+		}
 	}
 
 	// Hysteria2 auth password is always node-generated and persisted; the

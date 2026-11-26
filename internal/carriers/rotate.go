@@ -48,15 +48,20 @@ func (r *Rotator) Rotate(ctx context.Context, opt Options) error {
 		return err
 	}
 
-	if err := r.Stealth.RotateAllSecrets(ctx); err != nil {
+	// The retired bootstrap credential keeps working for the same window the
+	// archived hashes record, so clients can still reach the gateway for the
+	// replacement descriptor.
+	if err := r.Stealth.RotateAllSecrets(ctx, opt.GracePeriod); err != nil {
 		return fmt.Errorf("rotate secrets: %w", err)
 	}
 
 	// Record new active credentials (hashes only).
+	p := r.Stealth.Params()
 	for _, item := range []struct{ transport, material string }{
-		{"vless_reality", r.Stealth.Params().VLESSUUID},
-		{"hysteria2", r.Stealth.Params().Hysteria2Password},
-		{"reality_short_id", r.Stealth.Params().RealityShortID},
+		{"vless_reality", p.VLESSUUID},
+		{"vless_bootstrap", p.VLESSBootstrapUUID},
+		{"hysteria2", p.Hysteria2Password},
+		{"reality_short_id", p.RealityShortID},
 	} {
 		if item.material == "" {
 			continue
@@ -89,6 +94,7 @@ func (r *Rotator) archiveCurrent(ctx context.Context, scope, peerID string, expi
 	now := time.Now().Unix()
 	for _, item := range []struct{ transport, material string }{
 		{"vless_reality", p.VLESSUUID},
+		{"vless_bootstrap", p.VLESSBootstrapUUID},
 		{"hysteria2", p.Hysteria2Password},
 		{"reality_short_id", p.RealityShortID},
 	} {
